@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Local Citation Network</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="index.css">
+        <link rel="stylesheet" href="lib/buefy.min.css">
+        <link rel="stylesheet" href="lib/vis-network.min.css">
+        <script src="lib/vue.js"></script>
+        <script src="lib/buefy.min.js"></script>
+        <script src="lib/axios.min.js"></script>
+        <script src="lib/vis-network.min.js"></script>
+        <style>
+			html {
+				overflow-y: auto;
+				font-size: 14px
+			}
+			
+            /* Flexible height management */
+            section#app {
+                height: 100vh;
+            }
+            
+            .columns  {
+                height: 85%;
+                padding: 1rem 1.5rem 0 1.5rem;
+				padding: 0rem 0rem 0 0rem;
+				margin: 0 0 0 0
+            }
+
+            .b-tabs:not(:last-child) {
+                margin: 0;
+            }
+
+            .b-tabs .tab-content {
+                height: 100%;
+                padding: 1rem
+            }
+
+            .tab-item {
+                height: 100%;
+                overflow-x: hidden;
+                overflow-y:auto
+            }
+
+            /* Hoverable h2 tabs */
+
+            h2.title {
+                color: #999999;
+            }
+
+            li.is-active h2.title {
+                color: #000000;
+            }
+
+            /* Icon replacements */
+
+            .mdi-upload:before {
+                content: "⇪";
+                font: 1.5em bold sans-serif;
+            }
+
+            .mdi-chevron-right:before {
+                content: "❯";
+                font-style: normal;
+            }
+
+            .mdi-arrow-up:before {
+                content: "↑";
+                font: 1.5em bold sans-serif;
+            }
+        </style>
+    </head>
+
+    <body>
+        <section id="app">
+            <nav class="navbar" role="navigation" aria-label="main navigation" style="border-bottom: 1px solid #dbdbdb; overflow-x: auto; transform:rotateX(180deg);">
+				<div style="transform:rotateX(180deg); display: flex">
+					<a class="navbar-item" href="https://bulma.io">
+						<h1 class="title is-3">Local Citation Network</h1>
+					</a>
+				
+					<ul class="buttons" style="flex-wrap: nowrap">
+						<li class="navbar-item"><b-button @click="clickButtonAdd" rounded>+</b-button></li>
+						<li v-for="item, index in graphs" :key="index" class="navbar-item">
+							<b-button :type="(index==currentGraphIndex) ? 'is-primary' : ''" :title="item.title" @click="currentGraphIndex=index" rounded>
+								{{ item.label }}
+								<a title="Close tab" class="delete" style="margin-top:2px" @click.stop="clickCloseTab(index)"></a> <!-- .stop prevents event propagation to parent @click event -->
+							</b-button>
+						</li>
+					</ul>
+				</div>
+            </nav>
+
+            <div class="section columns">
+                <b-tabs v-model="showSuggested" class="column is-two-thirds" size="is-small">
+                    <b-tab-item>
+                        <template slot="header"><h2 class="title is-4">References ({{ inputArticles.length }})</h2></template>
+                        <div class="content">
+							<p v-if="currentGraph.sourceMA">
+                            References of the following source article:<br>
+                            {{ currentGraph.sourceMA.entities[0].E.ANF.map(x=>x.FN + ' ' + x.LN).join(', ') }}. <a :href="'https://doi.org/' + currentGraph.sourceMA.entities[0].E.DOI" target="_blank"><em>{{ currentGraph.sourceMA.entities[0].E.DN }}</em></a>. {{ currentGraph.sourceMA.entities[0].E.BV }}. {{ currentGraph.sourceMA.entities[0].Y }}
+							</p>
+							<p v-else>
+                            Custom Microsoft Academic search with the following term (max. 50 results): <br>
+                            {{ currentGraph.label }}
+							</p>
+                        </div>
+                        <b-table :data="inputArticles" default-sort="inDegree" default-sort-direction="desc" :selected.sync="selectedInputArticle" hoverable striped narrowed focusable>
+                            <template slot-scope="props">
+                                <!-- id is for scrolling to row when network node is clicked -->
+                                <b-table-column :id="props.row.Id" field="DN" label="Title" sortable>
+                                    <a :href="'https://doi.org/' + props.row.DOI" target="_blank">{{ props.row.DN }}</a>
+                                </b-table-column>
+                                <b-table-column field="ANF" label="First Author" sortable>
+                                    <b-tooltip dashed multilined :label="props.row.ANF.map(x=>x.FN + ' ' + x.LN).join(', ')" position="is-right" type="is-dark">
+                                        {{ props.row.ANF[0].LN }}
+                                    </b-tooltip>
+                                </b-table-column>
+                                <b-table-column field="Y" label="Year" sortable>{{ props.row.Y }}</b-table-column>
+                                <b-table-column field="BV" label="Journal" sortable>{{ props.row.BV }}</b-table-column>
+                                <b-table-column field="ECC" label="Citations" meta="Estimated global citations" sortable>
+                                    <template slot="header" slot-scope="{ column }">
+                                        <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                                            {{ column.label }}
+                                        </b-tooltip>
+                                    </template>
+                                    <b-tooltip label="Open citations in Microsoft Academic" dashed position="is-left" type="is-dark">
+                                        <a :href="'https://academic.microsoft.com/paper/' + props.row.Id + '/citedby'" target="_blank">{{ props.row.ECC }}</a>
+                                    </b-tooltip>
+                                </b-table-column>
+                                <b-table-column field="inDegree" label="Deg" meta="InDegree: Number of incoming edges in graph (citations)" sortable>
+                                    <template slot="header" slot-scope="{ column }">
+                                        <b-tooltip :label="column.meta" dashed  position="is-left" type="is-dark">
+                                            {{ column.label }}
+                                        </b-tooltip>
+                                    </template> 
+                                    {{ props.row.inDegree }}
+                                </b-table-column>
+                                <b-table-column field="numRefs" label="Refs" meta="References in paper" sortable>
+                                    <template slot="header" slot-scope="{ column }">
+                                        <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                                            {{ column.label }}
+                                        </b-tooltip>
+                                    </template> 
+                                    <!--<a :href="'https://academic.microsoft.com/paper/' + props.row.Id + '/reference'">{{ props.row.numRefs }}</a>-->
+                                    <b-tooltip label="Open new graph for these references" position="is-left" type="is-dark">
+                                        <b-button @click.stop="clickOpenReferences(props.row.Id)" type="is-primary" size="is-small"
+                                            :inverted="(selectedInputArticle == props.row) ? true : false"
+                                            :disabled="(props.row.numRefs == 0) ? true : false">
+                                            {{ props.row.numRefs }} ↻
+                                        </b-button>
+                                    </b-tooltip>
+                                </b-table-column>
+                            </template>
+                        </b-table>
+                    </b-tab-item>
+                    <b-tab-item>
+                        <template slot="header"><h2 class="title is-4">Suggested articles ({{ suggestedArticles.length }})</h2></template>
+                        <b-table :data="suggestedArticles" default-sort="inDegree" default-sort-direction="desc" :selected.sync="selectedSuggestedArticle" hoverable striped narrowed focusable>
+                            <template slot-scope="props">
+                                <!-- id is for scrolling to row when network node is clicked -->
+                                <b-table-column :id="props.row.Id" field="DN" label="Title" sortable>
+                                    <a :href="'https://doi.org/' + props.row.DOI" target="_blank">{{ props.row.DN }}</a>
+                                </b-table-column>
+                                <b-table-column field="ANF" label="First Author" sortable>
+                                    <b-tooltip dashed multilined :label="props.row.ANF.map(x=>x.FN + ' ' + x.LN).join(', ')" position="is-right" type="is-dark">
+                                        {{ props.row.ANF[0].LN }}
+                                    </b-tooltip>
+                                </b-table-column>
+                                <b-table-column field="Y" label="Year" sortable>{{ props.row.Y }}</b-table-column>
+                                <b-table-column field="BV" label="Journal" sortable>{{ props.row.BV }}</b-table-column>
+                                <b-table-column field="ECC" label="Citations" meta="Estimated global citations" sortable>
+                                    <template slot="header" slot-scope="{ column }">
+                                        <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                                            {{ column.label }}
+                                        </b-tooltip>
+                                    </template>
+                                    <b-tooltip label="Open citations in Microsoft Academic" dashed position="is-left" type="is-dark">
+                                        <a :href="'https://academic.microsoft.com/paper/' + props.row.Id + '/citedby'" target="_blank">{{ props.row.ECC }}</a>
+                                    </b-tooltip>
+                                </b-table-column>
+                                <b-table-column field="inDegree" label="Deg" meta="InDegree: Number of incoming edges in graph (citations)" sortable>
+                                    <template slot="header" slot-scope="{ column }">
+                                        <b-tooltip :label="column.meta" dashed  position="is-left" type="is-dark">
+                                            {{ column.label }}
+                                        </b-tooltip>
+                                    </template> 
+                                    {{ props.row.inDegree }}
+                                </b-table-column>
+                                <b-table-column field="numRefs" label="Refs" meta="References in paper" sortable>
+                                    <template slot="header" slot-scope="{ column }">
+                                        <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                                            {{ column.label }}
+                                        </b-tooltip>
+                                    </template> 
+                                    <!--<a :href="'https://academic.microsoft.com/paper/' + props.row.Id + '/reference'">{{ props.row.numRefs }}</a>-->
+                                    <b-tooltip label="Open new graph for these references" position="is-left" type="is-dark">
+                                        <b-button @click.stop="clickOpenReferences(props.row.Id)" type="is-primary" size="is-small"
+                                            :inverted="(selectedSuggestedArticle == props.row) ? true : false"
+                                            :disabled="(props.row.numRefs == 0) ? true : false">
+                                            {{ props.row.numRefs }} ↻
+                                        </b-button>
+                                    </b-tooltip>
+                                </b-table-column>
+                            </template>
+                        </b-table>
+                    </b-tab-item>
+                </b-tabs>
+
+                <b-tabs class="column" size="is-small">
+                    <b-tab-item>
+                        <template slot="header">
+                            <h2 class="title is-4">Reference network</h2>
+                        </template>
+                        <div id="referenceNetwork" style="height: 100%; overflow:auto"></div>
+                        <span style="position:absolute; top: 0px">newer</span>
+                        <span style="position:absolute; bottom: 0px">older</span>
+                    </b-tab-item>
+                </b-tabs>
+            </div>
+            <b-loading :is-full-page="true" :active.sync="isLoading"></b-loading>
+        </section>
+
+        <script src="index.js"></script>
+    </body>
+</html>
