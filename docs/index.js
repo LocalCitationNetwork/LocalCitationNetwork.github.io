@@ -52,7 +52,7 @@ function crossrefResponseToArticleArray (data) {
 
 /* Microsoft Academic (MA) API  */
 
-function microsoftAcademicEvaluate (expression, response, count, apiKey = '') {
+function microsoftAcademicEvaluate (expression, response, count, apiKey = window.atob('NDZiZjdiZmVlMjJhNGU4MjlkMTdhMWY1NzFiMWFjMTY=')) {
   let body = {
     expr: expression,
     model: 'latest',
