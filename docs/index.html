@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Local Citation Network</title>
+    <meta charset="utf-8">
+    <meta name="description" content="This web app aims to help scientists with their literature review using reference data from Microsoft Academic and Crossref. It visualizes citation networks defined by the references of a given set of input articles and the most cited references are suggested for further review.">
+    <meta name="author" content="Tim Woelfle">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="lib/buefy.min.css">
+    <link rel="stylesheet" href="lib/vis-network.min.css">
+    <script src="lib/vue.js"></script>
+    <script src="lib/buefy.min.js"></script>
+    <script src="lib/axios.min.js"></script>
+    <script src="lib/vis-network.min.js"></script>
+    <style>
+      html {
+        font-size: 14px
+      }
+      
+      /* Flexible height management */
+      section#app {
+        height: 100vh;
+      }
+    
+      .columns  {
+        height: 85%;
+        padding: 1rem 1.5rem 0 1.5rem;
+        padding: 0rem 0rem 0 0rem;
+        margin: 0 0 0 0
+      }
+
+      .b-tabs:not(:last-child) {
+        margin: 0;
+      }
+
+      .b-tabs .tab-content {
+        height: 100%;
+        padding: 1rem
+      }
+
+      .tab-item {
+        height: 100%;
+        overflow-x: hidden;
+        overflow-y:auto
+      }
+      
+      /* Menu */
+      
+      h1.title:after {
+        content: "beta";
+        font-size: 0.4em;
+        color: #999
+      }
+    
+      li.navbar-item {
+        padding: 0.5rem 0.2rem
+      }
+
+      label.upload {
+        display: inline;
+      }
+
+      /* Hoverable h2 tabs */
+
+      li h2.title {
+        color: #999999;
+      }
+
+      li.is-active h2.title {
+        color: #000000;
+      }
+
+      /* Icon replacements */
+
+      .mdi-chevron-right:before {
+        content: "❯";
+        font-style: normal;
+      }
+
+      .mdi-arrow-up:before {
+        content: "↑";
+        font: 1.5em bold sans-serif;
+      }
+
+      .mdi-magnify:before {
+        content: "🔍";
+        font: 1.3em bold sans-serif;
+      }
+
+      .mdi-plus:before {
+        content: "+";
+        font: 1.5em bold sans-serif;
+      }
+
+      .mdi-questionmark:before {
+        content: "?";
+        font: 1.5em bold sans-serif;
+      }
+      
+      .mdi-folder:before {
+        content: "📁";
+        font: 1.3em bold sans-serif;
+      }
+
+      .mdi-delete:before {
+        content: "🗑";
+        font: 1.5em bold sans-serif;
+      }
+
+      .mdi-floppy:before {
+        content: "💾";
+        font: 1.4em bold sans-serif;
+      }
+
+      .mdi-diamond-minus-cross:before {
+        content: "❖"; /* ⚙️ */
+        font: 1.7em bold sans-serif;
+      }
+
+      .mdi-envelope:before {
+        content: "📧";
+        font: 1.5em bold sans-serif;
+      }
+
+      .mdi-bird:before {
+        content: "🐦";
+        font: 1.5em bold sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <section id="app">
+      <nav class="navbar" role="navigation" aria-label="main navigation" style="border-bottom: 1px solid #dbdbdb; overflow-x:auto; overflow-y: hidden">
+        <div class="navbar-brand">
+          <a class="navbar-item" href="">
+            <h1 class="title">Local Citation Network</h1>
+          </a>
+        </div>
+          
+        <div class="navbar-menu">
+          <div class="navbar-start">
+            <ul class="buttons">
+              <li v-for="item, index in graphs" :key="index" class="navbar-item">
+                <b-button :type="(index==currentGraphIndex) ? 'is-primary' : ''" :title="item.tabTitle" @click="currentGraphIndex=index" rounded>
+                  {{ item.tabLabel }}
+                  <a title="Close tab" class="delete" @click.stop="clickCloseTab(index)"></a> <!-- .stop prevents event propagation to parent @click event -->
+                </b-button>
+              </li>
+              <li><b-button @click="clickButtonAdd" loading rounded v-if="isLoading" style="width:100px" alt="To cancel loading activate 'Autosave results locally' (disk icon on the right) and refresh page."></b-button></li>
+            </ul>
+          </div>
+          
+          <div class="navbar-end">
+            <ul class="buttons" style="flex-wrap: nowrap">
+              <li class="navbar-item"><b-button @click="clickButtonAdd" rounded type="is-dark" title="Add network based on references from a single source DOI" icon-right="plus" :disabled="isLoading ? true : false"></b-button></li>
+              <li class="navbar-item"><b-upload v-model="file" :disabled="isLoading ? true : false"><a class="button is-dark is-rounded" title="Scan text file for DOIs" :disabled="isLoading ? true : false"><b-icon icon="folder"></b-icon></a></b-upload></li>
+              <li class="navbar-item"><b-button @click="clickCloseAllTabs" rounded type="is-dark" title="Close all tabs" icon-right="delete"></b-button></li>
+              <li class="navbar-item"><b-button @click="clickToggleAutosave" rounded :type="(autosaveResults) ? '' : 'is-dark'" title="Autosave results locally" icon-right="floppy"></b-button></li>
+              <li class="navbar-item"><b-button @click="clickToggleMA" rounded :type="(useMA) ? '' : 'is-dark'" title="Toggle Microsoft Academic / Crossref API" icon-right="diamond-minus-cross"></b-button></li>
+              <li class="navbar-item"><b-button @click="showFAQ = !showFAQ" rounded type="is-dark" title="Frequently asked questions" icon-right="questionmark"></b-button></li>
+              <li class="navbar-item"><a @click="indexFAQ = 'contact'; showFAQ = true;" href="#contact" class="button is-dark is-rounded" title="Contact app creator"><b-icon icon="envelope"></b-icon></a></li>
+            </ul>
+          </div>
+        </div>
+      </nav>
+
+      <div class="section columns" v-show="currentGraphIndex !== undefined">
+        <b-tabs v-model="showSuggested" class="column is-three-fifths" size="is-small">
+          <b-tab-item>
+            <template slot="header">
+              <h2 class="title is-4">Input articles ({{ currentGraph.input.length }})</h2>
+            </template>
+            <div class="content">
+              <template v-if="currentGraph.source.title">
+                <p>
+                  Based on the references of the following source article
+                  <b-tooltip dashed multilined position="is-bottom" type="is-dark"
+                    label="Copy this link's address and share! (Right-click => 'Copy Link Location')"
+                    v-if="currentGraph.source.doi">
+                    <a :href="'https://timwoelfle.github.io/Local-Citation-Network/?sourceDOI=' + currentGraph.source.doi"> (link to share)</a>
+                  </b-tooltip>:
+                </p>
+                <p>
+                  <b-tooltip dashed multilined position="is-bottom" type="is-dark"
+                    :label="authorString(currentGraph.source.authors)"
+                    v-if="currentGraph.source.authors.length > 5">
+                    {{ authorStringShort(currentGraph.source.authors) }}.
+                  </b-tooltip>
+                  <template v-else>
+                    {{ authorStringShort(currentGraph.source.authors) }}.
+                  </template>
+                  <a :href="'https://doi.org/' + currentGraph.source.doi" target="_blank"><em>{{ currentGraph.source.title }}</em></a>. {{ currentGraph.source.journal }}. {{ currentGraph.source.year }}.
+                  <span :title="currentGraph.source.abstract"
+                    v-if="currentGraph.source.abstract"
+                    style="border-bottom: 1px dashed #b5b5b5; cursor: help">
+                    (Abstract)
+                  </span>
+                </p>
+              </template>
+              <p v-else>
+                Based on DOIs from the following file: {{ currentGraph.tabLabel }}<br>
+              </p>
+              <p>
+                Data retrieved through <a @click="indexFAQ = 'apis-used'; showFAQ = true;" href="#apis-used">{{ currentGraph.API }}</a> API on {{ new Date(currentGraph.timestamp).toLocaleDateString() }}
+                <b-tooltip dashed multilined type="is-dark" position="is-bottom" :label="completenessLabel">
+                  <a @click="indexFAQ = 'completeness'; showFAQ = true;" href="#completeness"
+                    :style="'color: ' + ((completenessPercent > 40) ? '' : '#ff3860')">
+                    (estimated completeness: {{ completenessPercent }}%).
+                  </a>
+                </b-tooltip>
+              </p>
+            </div>
+            <b-field>
+              <b-select v-model="filterColumn">
+                <option value="titleAbstract">Title & Abstract</option>
+                <option value="authors">Authors</option>
+                <option value="year">Year</option>
+                <option value="journal">Journal</option>
+              </b-select>
+              <b-input v-model="filterString" icon="magnify" placeholder="Filter articles..." expanded></b-input>
+              <span class="button is-static">{{ inputArticlesFiltered.length + " / " + currentGraph.input.length }}</span>
+            </b-field>
+            <b-table :data="inputArticlesFiltered" default-sort="inDegree" default-sort-direction="desc" :selected.sync="selectedInputArticle"
+              :has-detailed-visible="row => (row.abstract || (currentGraph.source.citationContext && currentGraph.source.citationContext[row.id]))"
+              detailed hoverable striped narrowed focusable>
+              <template slot="detail" slot-scope="props">
+                <div class="content">
+                  <p v-html="props.row.abstract"></p>
+                  <template v-if="currentGraph.source.citationContext && currentGraph.source.citationContext[props.row.id]">
+                    <h4 class="title is-6">Citation context in {{ currentGraph.source.authors[0].LN + ' ' + currentGraph.source.year }}:</h4>
+                    <ul>
+                      <li v-for="context in currentGraph.source.citationContext[props.row.id]"><q cite="'https://doi.org/' + props.row.doi">{{ context }}</q> -{{ currentGraph.source.authors[0].LN + ' ' + currentGraph.source.year }}</li>
+                    </ul>
+                  </template>
+                </div>
+              </template>
+              <template slot-scope="props">
+                <!-- id is for scrolling to row when network node is clicked -->
+                <b-table-column :id="props.row.id" field="title" label="Title" sortable>
+                  <template v-if="props.row.doi">
+                    <a :href="'https://doi.org/' + props.row.doi" target="_blank">{{ props.row.title }}</a>
+                  </template>
+                  <template v-else>
+                    {{ props.row.title }}
+                  </template>
+                </b-table-column>
+                <b-table-column field="authors" label="First Author" sortable>
+                  <b-tooltip dashed multilined :label="authorString(props.row.authors)" position="is-right" type="is-dark">
+                    {{ props.row.authors[0].LN }}
+                  </b-tooltip>
+                </b-table-column>
+                <b-table-column field="year" label="Year" sortable>{{ props.row.year }}</b-table-column>
+                <b-table-column field="journal" label="Journal" sortable>{{ props.row.journal }}</b-table-column>
+                <b-table-column field="citationsCount" label="Citations" meta="Estimated global citations (how many papers cite this one)" sortable>
+                  <template slot="header" slot-scope="{ column }">
+                    <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                      {{ column.label }}
+                    </b-tooltip>
+                  </template>
+                  <b-tooltip label="Estimated number of global citations (click to open in Microsoft Academic)" dashed position="is-left" type="is-dark"
+                    v-if="props.row.microsoftAcademicId">
+                    <a :href="'https://academic.microsoft.com/paper/' + props.row.microsoftAcademicId + '/citedby'" target="_blank">{{ props.row.citationsCount }}</a>
+                  </b-tooltip>
+                  <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark"
+                    v-else>
+                    {{ props.row.citationsCount }}
+                  </b-tooltip>
+                </b-table-column>
+                <b-table-column field="inDegree" label="Deg" meta="In-Degree: Number of local citations from input articles (incoming edges in network)"
+                  sortable :custom-sort="sortInDegreeWrapper">
+                  <template slot="header" slot-scope="{ column }">
+                    <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                      {{ column.label }}
+                    </b-tooltip>
+                  </template>
+                  <b-tooltip label="In-Degree: Number of local citations from input articles (incoming edges in network)" dashed position="is-left" type="is-dark">
+                    {{ currentGraph.referenced[props.row.id] ? currentGraph.referenced[props.row.id].length : 0 }}
+                  </b-tooltip>
+                </b-table-column>
+                <b-table-column field="references.length" label="Refs" meta="References in paper" sortable>
+                  <template slot="header" slot-scope="{ column }">
+                    <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                      {{ column.label }}
+                    </b-tooltip>
+                  </template>
+                  <b-tooltip label="Open new graph for the references of this article" position="is-left" type="is-dark">
+                    <b-button @click.stop="clickOpenReferences(props.row)" type="is-primary" size="is-small"
+                      :inverted="(selected === props.row) ? true : false"
+                      :disabled="(isLoading || props.row.references.length === 0) ? true : false">
+                      {{ props.row.references.length }} ↻
+                    </b-button>
+                  </b-tooltip>
+                </b-table-column>
+              </template>
+            </b-table>
+          </b-tab-item>
+          <b-tab-item>
+            <template slot="header">
+              <h2 class="title is-4">Suggested articles (★ {{ currentGraph.suggested.length }})</h2>
+            </template>
+            <div class="content">
+              <p>
+                <a @click="indexFAQ = 'suggested-articles'; showFAQ = true;" href="#suggested-articles">These suggested Articles</a> are the most cited references from the input articles. They can only be older than them.
+              </p>
+            </div>
+            <b-field>
+            <!-- The following b-field and b-table are near identical with those of input articles. Different lines are indicated by comment. -->
+              <b-select v-model="filterColumn">
+                <option value="titleAbstract">Title & Abstract</option>
+                <option value="authors">Authors</option>
+                <option value="year">Year</option>
+                <option value="journal">Journal</option>
+              </b-select>
+              <b-input v-model="filterString" icon="magnify" placeholder="Filter articles..." expanded></b-input>
+              <!-- this line differs from input articles -->
+              <span class="button is-static">{{ suggestedArticlesFiltered.length + " / " + currentGraph.suggested.length }}</span>
+            </b-field>
+            <!-- 'data' and 'selected.sync' differ from input articles. The 'has-detailed-visible' is shorter than for input articles as there's no possible citationContext for suggested articles -->
+            <b-table :data="suggestedArticlesFiltered" default-sort="inDegree" default-sort-direction="desc" :selected.sync="selectedSuggestedArticle"
+              :has-detailed-visible="row => row.abstract"
+              detailed hoverable striped narrowed focusable>
+              <template slot="detail" slot-scope="props">
+                <div class="content">
+                  <p v-html="props.row.abstract"></p>
+                </div>
+                <!-- there's no possible citationContext for suggested articles -->
+              </template>
+              <template slot-scope="props">
+                <!-- id is for scrolling to row when network node is clicked -->
+                <b-table-column :id="props.row.id" field="title" label="Title" sortable>
+                  <template v-if="props.row.doi">
+                    <a :href="'https://doi.org/' + props.row.doi" target="_blank">{{ props.row.title }}</a>
+                  </template>
+                  <template v-else>
+                    {{ props.row.title }}
+                  </template>
+                </b-table-column>
+                <b-table-column field="authors" label="First Author" sortable>
+                  <b-tooltip dashed multilined :label="authorString(props.row.authors)" position="is-right" type="is-dark">
+                    {{ props.row.authors[0].LN }}
+                  </b-tooltip>
+                </b-table-column>
+                <b-table-column field="year" label="Year" sortable>{{ props.row.year }}</b-table-column>
+                <b-table-column field="journal" label="Journal" sortable>{{ props.row.journal }}</b-table-column>
+                <b-table-column field="citationsCount" label="Citations" meta="Estimated global citations (how many papers cite this one)" sortable>
+                  <template slot="header" slot-scope="{ column }">
+                    <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                      {{ column.label }}
+                    </b-tooltip>
+                  </template>
+                  <b-tooltip label="Estimated number of global citations (click to open in Microsoft Academic)" dashed position="is-left" type="is-dark"
+                    v-if="props.row.microsoftAcademicId">
+                    <a :href="'https://academic.microsoft.com/paper/' + props.row.microsoftAcademicId + '/citedby'" target="_blank">{{ props.row.citationsCount }}</a>
+                  </b-tooltip>
+                  <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark"
+                    v-else>
+                    {{ props.row.citationsCount }}
+                  </b-tooltip>
+                </b-table-column>
+                <b-table-column field="inDegree" label="Deg" meta="In-Degree: Number of local citations from input articles (incoming edges in network)"
+                  sortable :custom-sort="sortInDegreeWrapper">
+                  <template slot="header" slot-scope="{ column }">
+                    <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                      {{ column.label }}
+                    </b-tooltip>
+                  </template>
+                  <b-tooltip label="In-Degree: Number of local citations from input articles (incoming edges in network)" dashed position="is-left" type="is-dark">
+                    {{ currentGraph.referenced[props.row.id] ? currentGraph.referenced[props.row.id].length : 0 }}
+                  </b-tooltip>
+                </b-table-column>
+                <b-table-column field="references.length" label="Refs" meta="References in paper" sortable>
+                  <template slot="header" slot-scope="{ column }">
+                    <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                      {{ column.label }}
+                    </b-tooltip>
+                  </template>
+                  <b-tooltip label="Open new graph for the references of this article" position="is-left" type="is-dark">
+                    <b-button @click.stop="clickOpenReferences(props.row)" type="is-primary" size="is-small"
+                      :inverted="(selected === props.row) ? true : false"
+                      :disabled="(isLoading || props.row.references.length === 0) ? true : false">
+                      {{ props.row.references.length }} ↻
+                    </b-button>
+                  </b-tooltip>
+                </b-table-column>
+              </template>
+            </b-table>
+          </b-tab-item>
+        </b-tabs>
+
+        <b-tabs class="column" size="is-small">
+          <b-tab-item>
+            <template slot="header"><h2 class="title is-4">Citation network</h2></template>
+            
+            <div id="referenceNetworkDiv" style="height: 100%; cursor: pointer"></div>
+            <span style="position:absolute; top: 0px">newer</span>
+            <span style="position:absolute; top: 0px; right: 0px"> <a @click="indexFAQ = 'read-network'; showFAQ = true;" href="#read-network">(how to read the network)</a></span>
+            <span style="position:absolute; bottom: 0px">older</span>
+            <span style="position:absolute; bottom: 0px; right: 0px">(zoom by scrolling)</span>
+          </b-tab-item>
+        </b-tabs>
+      </div>
+    
+      <section class="hero is-fullheight" v-show="currentGraphIndex === undefined">
+        <div class="hero-body ">
+          <div class="container has-text-centered">
+            <b-loading :active.sync="isLoading"></b-loading>
+            <h2 class="title">
+              Click <b-button @click="clickButtonAdd" rounded type="is-dark" title="Add network based on references from a single source DOI" icon-right="plus"></b-button> to enter source DOI<br>or scan a text file for DOIs instead <b-upload v-model="file"><a class="button is-dark is-rounded" title="Scan text file for DOIs"><b-icon icon="folder"></b-icon></a></b-upload>!
+            </h2>
+            (<a @click="loadExamples">Load examples instead</a> or see <a @click="showFAQ=true">Frequently asked questions</a>)
+          </div>
+        </div>
+      </section>
+            
+      <b-modal :active.sync="showFAQ" :width="840" scroll="keep">
+        <div class="card">
+          <div class="card-header-title">
+            <h3 class="title is-3">Instructions</h3>
+          </div>
+        </div>
+        <b-collapse class="card" id="about" :open="indexFAQ === 'about'" @open="indexFAQ = 'about'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">What is this web app about?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              This web app aims to help scientists with their literature review using metadata from <a href="https://academic.microsoft.com" target="_blank">Microsoft Academic</a> and <a href="https://crossref.org" target="_blank">Crossref</a>. Academic papers cite one another, thus creating a <a href="https://en.wikipedia.org/wiki/Citation_graph" target="_blank">citation network (= graph)</a>. Each node (= vertex) represents an article and each edge (= link / arrow) represents a reference / citation. Citation graphs are a topic of <a @click="indexFAQ = 'bibliometrics'" href="#bibliometrics">bibliometrics, for which other great software exists as well</a>.
+            </p>
+            <p>
+              This web app visualizes subsets of the global citation network that I call "local citation networks", defined by the references of a given set of input articles. In addition, the most cited references missing in the set of input articles are suggested for further review.
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="how-to-use" :open="indexFAQ === 'how-to-use'" @open="indexFAQ = 'how-to-use'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">How to use this web app?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              There are basically two ways to create new networks: First, based on the references of a given paper. This could be a review or just an interesting paper you'd like to dig deeper into. Either click the + button at the top right and enter the <a href="https://en.wikipedia.org/wiki/Digital_object_identifier" target="_blank">digital object identifier (DOI)</a> of the source article, or click the blue reference-button of an interesting citation in the Refs-column of the tables if you already have opened a network.
+            </p>
+            <p>
+              The second way to create a new network is to scan a text file for DOIs, which allows you to create your own unique lists of input articles. For example, this could be a .ris / .bib / .json file exported by your reference manager (e.g. <a href="https://www.zotero.org/" target="_blank">Zotero</a> or EndNote). In theory, you can scan any plain text file (PDFs and Microsoft Office files don't work). However, if the DOIs are embedded in sentences or URLs and have a trailing fullstop (.) or slash (/), the system will have difficulties extracting them correctly and might not find all of them.
+            </p>
+            <p>
+              Up to 5 tabs can be open at the same time, representing a different local citation network each. Only one query can be processed at a time, which is why some buttons are disabled when a query is still going on. Microsoft Academic seems to be able to process quite large numbers of references (I've successfully tried up to 500) but Crossref's API returns an error when trying to process too many references (depending on the length of the search string, around >110 DOIs).
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="read-network" :open="indexFAQ === 'read-network'" @open="indexFAQ = 'read-network'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">How to read the network?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              Zoom by scrolling and pan by dragging. Each node (= vertex) represents an article. They are ordered by year from top (newer) to bottom (older), with each year colored differently. The size of the nodes depends on their "in-degree", the number of citations the paper received from the input articles, acting as a metric for importance in this specific context. The local "in-degree" is often but not always proportional to the global citation count, particularly in cross-sections of scientific fields. Circle-shaped nodes represent input articles and star-shaped (★) nodes represent <a @click="indexFAQ = 'suggested-articles'" href="#suggested-articles">suggested articles</a>, which are cited by the input articles but not part of them themselves.
+            </p>
+            <p>
+              Each edge (= link / arrow) represents a reference and citation at the same time: They are references from their outgoing nodes and citations for their incoming nodes. Usually papers can only cite older papers, hence edges tend to point downwards (or sidewards for citations of the same year). Technically this is called a <a href="https://en.wikipedia.org/wiki/Directed_acyclic_graph" target="_blank">directed acyclic graph</a> and that's why nodes tend to be bigger (cited more) towards the bottom, because they have had more time to become influential. This approach helps with identifying seminal (usually older) papers but cannot suggest new state-of-the-art research.
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="suggested-articles" :open="indexFAQ === 'suggested-articles'" @open="indexFAQ = 'suggested-articles'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">Where do the suggested articles come from?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              Suggested articles are the (locally) most cited references of the input articles. In order to create the local citation network, this web apps attempts to retrieve reference-lists from all input articles (usually some are missed, <a @click="indexFAQ = 'completeness'" href="#completeness">see completeness</a>) and then orders these references by number of local citations (in-degree, <a @click="indexFAQ = 'read-network'" href="#read-network">see network</a>). Some of the top references might be among the input articles, depending on how connected they are. However, some of the top references usually aren't among the input articles and then become suggested articles (they must have at least two citations among the input articles). Currently the number of suggested articles varies from 0 to 10, with 10 being an arbitrary cutoff that could potentially be lifted in the future.
+            </p>
+            <p>
+              Keep in mind that because of the nature of this approach, suggested articles are always older than the source article. This can help identifying seminal papers of the field but not newer state-of-the-art research.
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="switch-api" :open="indexFAQ === 'switch-api'" @open="indexFAQ = 'switch-api'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">Which API should be used and how to switch?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              Microsoft Academic is used by default because it is usually more comprehensive than Crossref. If the Microsoft-button (❖) in the top-right menu is white, Microsoft Academic is being used and if it's black, Crossref is being used. Toggle by clicking. If the Microsoft Academic API is down or the key's monthly quota is exceeded, it will automatically be turned off. <a href="https://msr-apis.portal.azure-api.net/products/project-academic-knowledge" target="_blank">Get your own free key here</a> and enter in the dialogue to have your own quota of 10,000 transactions per month! The key stays on your local machine and is only shared with Microsoft.
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="autosave" :open="indexFAQ === 'autosave'" @open="indexFAQ = 'autosave'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">What does "Autosave results locally" do?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              When activated, this option caches your recent networks (up to 5 tabs) and your settings (including your personal Microsoft Academic API key) locally in your browser in the so-called localStorage. When you revisit this web app, you can pick up where you left. When deactivated, this data is deleted.
+            </p>
+          </div>
+        </b-collapse>
+        
+        <div class="card">
+          <div class="card-header-title">
+            <h3 class="title is-3">Troubleshooting</h3>
+          </div>
+        </div>
+        <b-collapse class="card" id="supported-browsers" :open="indexFAQ === 'supported-browsers'" @open="indexFAQ = 'supported-browsers'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">This web app is not working!? Which browsers are supported?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              I've tested with current versions of Firefox, Safari and Chrome (as of November 2019) and made sure this web app runs in these. Microsoft Edge and Microsoft Internet Explorer are unfortunately not supported and do not work at all right now. This web app is meant for desktop use and not optimized for smartphones, which have not been tested at all. I'm a single person and created this web app in my spare time for free and for fun, so I don't have the time and resources to test all possible devices, web browsers and scenarios. This web app is <a @click="indexFAQ = 'open-source'" href="#open-source">open source</a>, feel free to support it by extending compatibility or optimizing mobile / tablet use! If you find a bug or problem with the newest versions of Firefox / Safari / Chrome, please <a href="https://github.com/timwoelfle/Local-Citation-Network/issues" target="_blank" title="Report bug on GitHub">report it on GitHub</a> or <a @click="indexFAQ = 'contact'" href="#contact">contact me</a>.
+             </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="slow-queries" :open="indexFAQ === 'slow-queries'" @open="indexFAQ = 'slow-queries'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">The queries have turned very slow!? / How to cancel loading?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              Both the Microsoft Academic API and the Crossref API are public with varying response speeds depending on their overall usage and workload. In addition, I hypothesize they might be throttling individual users (as identified by IP address) when they perform too many queries in a row. Checking your internet connection, only querying what's really important, <a @click="indexFAQ = 'switch-api'" href="#switch-api">switching to the other API</a> and trying again later might help!
+            </p>
+            <p>
+              Sometimes (particularly with unstable internet connections) queries seem to run forever. In case you want to cancel loading, activate 'Autosave results locally' (<a @click="indexFAQ = 'autosave'" href="#autosave">see autosave</a>) and refresh page. You can deactivate autosave afterwards again.
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="completeness" :open="indexFAQ === 'completeness'" @open="indexFAQ = 'completeness'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">Is the data complete? / Some references are missing!?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              The data is usually incomplete. Some DOIs cannot be found at all in Microsoft Academic / Crossref and for those that are found, often some metadata like authors, abstracts or reference-lists are missing (particularly in Crossref). For the citation network, the completeness of the reference-lists is most important. Usually Microsoft Academic's data is more complete, which is currently turned <em>{{ useMA ? 'on' : 'off' }}</em> (<a @click="indexFAQ = 'switch-api'" href="#switch-api">how to toggle</a>).
+            </p>
+            <p>
+              The estimated completeness can be seen above the search bar in the "Input articles" tab and is calculated in the following way: For Microsoft Academic it is the fraction of input articles that have reference-lists themselves (multiplied with the fraction of DOIs found in Micrsoft Academic in case of an input file).
+            </p>
+            <p>
+              Crossref allows more subtle calculation, as it often also provides the total reference count, which is often larger than the reference-list of DOIs (older references often don't have DOIs and neither do some specific books or papers). The estimated completeness is thus calculated as the product of three fractions:
+            </p>
+            <ol>
+              <li>Source reference completeness: (Number of input articles found in Crossref) / (Total reference count of source or total number of DOIs in file)</li>
+              <li>(Number of input articles that have reference-lists themselves) / (Number of input articles)</li>
+              <li>Average input articles' reference completeness among those input articles that do have reference-lists: (Length of reference-list) / (Total reference count)</li>
+            </ol>
+          </div>
+        </b-collapse>
+
+        <div class="card">
+          <div class="card-header-title">
+            <h3 class="title is-3">Background</h3>
+          </div>
+        </div>
+        <b-collapse class="card" id="bibliometrics" :open="indexFAQ === 'bibliometrics'" @open="indexFAQ = 'bibliometrics'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">What is bibliometrics? What other software can you recommend?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              Bibliometrics is a part of information science that uses <a href="https://en.wikipedia.org/wiki/Bibliometrics" target="_blank">statistical methods to analyze publications</a>. It emcompasses scientometrics, which is specifically looking at scientific publications, and citation analysis.
+            </p>
+            <p>
+              Other great software to help with bibliometric / scientometric analyses include <a href="https://harzing.com/resources/publish-or-perish" target="_blank">Anne-Wil Harzing's Publish or Perish</a>, which allows sophisticated queries of a plethora of APIs including Microsoft Academic and Crossref but also Google Scholar, Scopus and Web of Science. If you're looking to create more complex networks than this web app allows, check out the Leiden University's great <a href="https://www.vosviewer.com/" target="_blank">VOSviewer</a> and <a href="https://www.citnetexplorer.nl/" target="_blank">CitNetExplorer</a>, which allow you to create and customize everything from citation networks to author networks, university networks and journal networks. VOSviewer also allows text mining and co-occurrence networks.
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="apis-used" :open="indexFAQ === 'apis-used'" @open="indexFAQ = 'apis-used'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">Where is the data coming from, which API is used?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              The data is coming either from <a href="https://academic.microsoft.com" target="_blank">Microsoft Academic</a> (default as more comprehensive) or <a href="https://crossref.org">Crossref</a> (fallback). Microsoft Academic is a freely available academic search-engine based on their proprietory <a href="https://www.microsoft.com/en-us/research/project/microsoft-academic-graph/" target="_blank">Microsoft Academic Graph</a> (similar to Clarivate's Web of Science and Elsevier's Scopus, both of which require paid subscriptions). <a href="https://doi.org/10.1007/s11192-016-2026-y" target="_blank" title="Harzing, 2016">Several</a> <a href="https://doi.org/10.1007%2Fs11192-017-2535-3" target="_blank" title="Hug, 2017">publications</a> <a href="https://doi.org/10.1007/s11192-016-2185-x" target="_blank" title="Harzing, 2017">have</a> <a href="https://doi.org/10.1007%2Fs11192-017-2567-8" target="_blank" title="Haunschild, 2017">analyzed</a> the quality and coverage of Microsoft Academic, with overall very promising results. <a href="https://doi.org/10.1007/s11192-017-2247-8" target="_blank">Hug et al. (2017)</a> have said: "The citation analyses in MA [Microsoft Academic] and Scopus yield uniform results". Microsoft Academic's API needs a personalized key to use, which is free for up to 10,000 transactions per month. This web app comes with a test key but it's faster and more reliable to <a href="https://msr-apis.portal.azure-api.net/products/project-academic-knowledge" target="_blank">get your own free key here</a>!
+            </p>
+            <p>
+              Crossref is a not-for-profit organization that collects metadata from scholarly journals and publications. Unfortunately, not all publishers share their metadata with them, which is why the information is usually incomplete (particularly reference-lists and abstracts are often missing). If you notice a journal that always lacks some metadata, feel free to write them and suggest better integration with Crossref, which is only in the journal's best interest! <a href="https://www.crossref.org/services/metadata-delivery/rest-api/" target="_blank">Crossref's API</a> is freely available.
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="google-scholar" :open="indexFAQ === 'google-scholar'" @open="indexFAQ = 'google-scholar'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">Why aren't you using Google Scholar or Semantic Scholar's API?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              Unfortunately Google Scholar doesn't share their data and discourages webscraping. Consequently, it doesn't have an API.
+            </p>
+            <p>
+              Semantic Scholar has a <a href="http://api.semanticscholar.org/">free API</a>, which is great. Unfortunately however, it is too limited: It doesn't allow to retrieve information on multiple DOIs at once and enforces a rate limit, effectively rendering it unsuitable for this project's usecase.
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="idea" :open="indexFAQ === 'idea'" @open="indexFAQ = 'idea'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">I have an idea! Can you implement XYZ?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              It's great to see you're getting involved! While I see numerous ways to extend this project myself, I don't have much time to work on it anymore unfortunately. However, this web app is <a @click="indexFAQ = 'open-source'" href="#open-source">open source</a> and I'd be very happy to see others extend this project! In the meantime, check out <a @click="indexFAQ = 'bibliometrics'" href="#bibliometrics">these great applications</a>, which might already provide what you're looking for.
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="open-source" :open="indexFAQ === 'open-source'" @open="indexFAQ = 'open-source'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">I'd like to contribute! Is this open source and are you looking for help?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              Yes, great! This project is open source (GPL-3) and <a href="https://github.com/timwoelfle/Local-Citation-Network" target="_blank">the source can be found on GitHub</a>. I don't have much more time to work on this project, so I'm actively looking for help and contributors. Bugfixes are always welcome but please <a @click="indexFAQ = 'contact'" href="#contact">contact me</a> before any large pull-requests so we can coordinate.
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="privacy" :open="indexFAQ === 'privacy'" @open="indexFAQ = 'privacy'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">Does this web app use cookies? What's the privacy policy?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              No, this web app doesn't use any cookies. No user-tracking or fingerprinting is performed and no usage-data is collected by the author of this web app. Optionally, so-called localStorage can be used to cache results and settings locally when "Autosave results locally" is manually turned on (<a @click="indexFAQ = 'autosave'" href="#autosave">see autosave</a>).
+            </p>
+            <p>
+              This web app is running locally on your computer and only contacts the API servers of Microsoft Academic / Crossref during runtime. Microsoft has a <a href="https://privacy.microsoft.com/en-gb/privacystatement" target="_blank" title="Microsoft's general privacy statement">general privacy statement</a>, I haven't found anything specific to the Microsoft Academic API. Crossref also has a <a href="https://www.crossref.org/privacy/" target="_blank" title="Crossref's general privacy statement">general privacy statement</a>. This web app is hosted by GitHub pages, see their <a href="https://help.github.com/en/github/site-policy/github-privacy-statement#github-pages" target="_blank" title="GitHub Pages privacy statement">privacy statement here</a>.
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="technicalities" :open="indexFAQ === 'technicalities'" @open="indexFAQ = 'technicalities'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">Technicalities: Which JavaScript libraries are used and why no CDN?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              This web app uses <a href="completeness" target="_blank">Vue.js</a>, <a href="https://buefy.org/" target="_blank">Buefy</a>, <a href="https://github.com/axios/axios" target="_blank">Axios</a> and <a href="https://visjs.org/" target="_blank">vis.js Network</a>. I opted against using content delivery networks (CDN) to speed up delivery of these JavaScript libraries and thus initial loading-time, because of the <a href="https://en.wikipedia.org/wiki/Content_delivery_network#Security_and_privacy" target="_blank">potential user-tracking by CDNs</a>. If you're interested, this rising problem is partly countered by the great browser-plugin <a href="https://decentraleyes.org/" target="_blank">Decentraleyes</a> (<a href="https://git.synz.io/Synzvato/decentraleyes/wikis/Frequently-Asked-Questions" target="_blank" title="FAQ Decentraleyes">see their FAQ</a> for more details).
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="contact" :open="indexFAQ === 'contact'" @open="indexFAQ = 'contact'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">Who are you, why did you create this and how can I contact you?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              I'm Tim Wölfle from Germany and started creating this project during the literature review for my Master's thesis. I've often manually scanned reference lists of papers to identify seminal articles and thought this must be automized. You can contact me on <a href="https://twitter.com/timwoelfle" target="_blank">Twitter</a> or by <a href="mailto:local-citation-network@timwoelfle.de">e-mail</a>.
+            </p>
+          </div>
+        </b-collapse>
+      </b-modal>
+    </section>
+
+    <script src="index.js"></script>
+    <script>
+      if ((!!window.MSInputMethodContext && !!document.documentMode) || navigator.userAgent.indexOf('MSIE') !== -1 || navigator.userAgent.indexOf('Edge') !== -1) {
+        window.alert('Unfortunately, this web app currently does not support Microsoft Edge and Microsoft Internet Explorer. Please use current Firefox, Safari or Chrome.')
+      }
+    </script>
+  </body>
+</html>
