@@ -3,6 +3,8 @@
   <head>
     <title>Local Citation Network</title>
     <meta charset="utf-8">
+    <meta name="description" content="This web app aims to help scientists with their literature review using reference data from Microsoft Academic and Crossref. It visualizes citation networks defined by the references of a given set of input articles and the most cited references are suggested for further review.">
+    <meta name="author" content="Tim Woelfle">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="lib/buefy.min.css">
     <link rel="stylesheet" href="lib/vis-network.min.css">
@@ -175,7 +177,7 @@
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Copy this link's address and share! (Right-click => 'Copy Link Location')"
                     v-if="currentGraph.source.doi">
-                    <a :href="'https://timwoelfle.github.io/Local-Citation-Network?sourceDOI=' + currentGraph.source.doi"> (link to share)</a>
+                    <a :href="'https://timwoelfle.github.io/Local-Citation-Network/?sourceDOI=' + currentGraph.source.doi"> (link to share)</a>
                   </b-tooltip>:
                 </p>
                 <p>
@@ -422,10 +424,10 @@
           </div>
           <div class="card-content content">
             <p>
-              This web app aims to help scientists with their literature review using metadata from <a href="https://academic.microsoft.com" target="_blank">Microsoft Academic</a> and <a href="https://crossref.org" target="_blank">Crossref</a>. Academic papers cite one another, thus creating a <a href="https://en.wikipedia.org/wiki/Citation_graph" target="_blank">citation network (= graph)</a>. Each node (= vertex) represents an article and each edge (= link / arrow) represents a citation, that is a directed link between two articles. As papers can only cite older papers, in theory the citation network is a <a href="https://en.wikipedia.org/wiki/Directed_acyclic_graph" target="_blank">directed acyclic graph</a>. Citation graphs are a topic of <a href="https://en.wikipedia.org/wiki/Bibliometrics" target="_blank">bibliometrics</a>.
+              This web app aims to help scientists with their literature review using metadata from <a href="https://academic.microsoft.com" target="_blank">Microsoft Academic</a> and <a href="https://crossref.org" target="_blank">Crossref</a>. Academic papers cite one another, thus creating a <a href="https://en.wikipedia.org/wiki/Citation_graph" target="_blank">citation network (= graph)</a>. Each node (= vertex) represents an article and each edge (= link / arrow) represents a reference / citation. Citation graphs are a topic of <a @click="indexFAQ = 'bibliometrics'" href="#bibliometrics">bibliometrics, for which other great software exists as well</a>.
             </p>
             <p>
-              This web app visualizes subsets of the global citation network that I call "local citation networks", defined by citations of a given set of input articles. In addition, the cited references missing in the set of input articles are suggested for further review.
+              This web app visualizes subsets of the global citation network that I call "local citation networks", defined by the references of a given set of input articles. In addition, the most cited references missing in the set of input articles are suggested for further review.
             </p>
           </div>
         </b-collapse>
@@ -451,10 +453,10 @@
           </div>
           <div class="card-content content">
             <p>
-              Zoom by scrolling and pan by dragging. Each node (= vertex) represents an article. They are ordered by year from top (newer) to bottom (older), with each year colored differently. The size of the nodes depends on their "in-degree", the number of citations the paper received from the defined set of input articles, acting as a metric for importance in this specific context. The local "in-degree" is often but not always proportional to the global citation count, particularly in cross-sections of scientific fields. Circle-shaped nodes represent input articles and star-shaped (★) nodes represent <a @click="indexFAQ = 'suggested-articles'" href="#suggested-articles">suggested articles</a>, that are often cited by the input articles but not part of them themselves.
+              Zoom by scrolling and pan by dragging. Each node (= vertex) represents an article. They are ordered by year from top (newer) to bottom (older), with each year colored differently. The size of the nodes depends on their "in-degree", the number of citations the paper received from the input articles, acting as a metric for importance in this specific context. The local "in-degree" is often but not always proportional to the global citation count, particularly in cross-sections of scientific fields. Circle-shaped nodes represent input articles and star-shaped (★) nodes represent <a @click="indexFAQ = 'suggested-articles'" href="#suggested-articles">suggested articles</a>, which are cited by the input articles but not part of them themselves.
             </p>
             <p>
-              Each edge (= link / arrow) represents a reference and citation at the same time: They are references from their outgoing nodes and citations for their incoming nodes. Usually papers can only cite older papers, hence edges tend to point downwards (or sidewards for citations of the same year). This is why nodes tend to be bigger (cited more) towards the bottom, because they have had more time to become influential. This approach helps with identifying seminal (usually older) papers but cannot suggest new state-of-the-art research.
+              Each edge (= link / arrow) represents a reference and citation at the same time: They are references from their outgoing nodes and citations for their incoming nodes. Usually papers can only cite older papers, hence edges tend to point downwards (or sidewards for citations of the same year). Technically this is called a <a href="https://en.wikipedia.org/wiki/Directed_acyclic_graph" target="_blank">directed acyclic graph</a> and that's why nodes tend to be bigger (cited more) towards the bottom, because they have had more time to become influential. This approach helps with identifying seminal (usually older) papers but cannot suggest new state-of-the-art research.
             </p>
           </div>
         </b-collapse>
@@ -547,6 +549,19 @@
             <h3 class="title is-3">Background</h3>
           </div>
         </div>
+        <b-collapse class="card" id="bibliometrics" :open="indexFAQ === 'bibliometrics'" @open="indexFAQ = 'bibliometrics'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">What is bibliometrics? What other software can you recommend?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              Bibliometrics is a part of information science that uses <a href="https://en.wikipedia.org/wiki/Bibliometrics" target="_blank">statistical methods to analyze publications</a>. It emcompasses scientometrics, which is specifically looking at scientific publications, and citation analysis.
+            </p>
+            <p>
+              Other great software to help with bibliometric / scientometric analyses include <a href="https://harzing.com/resources/publish-or-perish" target="_blank">Anne-Wil Harzing's Publish or Perish</a>, which allows sophisticated queries of a plethora of APIs including Microsoft Academic and Crossref but also Google Scholar, Scopus and Web of Science. If you're looking to create more complex networks than this web app allows, check out the Leiden University's great <a href="https://www.vosviewer.com/" target="_blank">VOSviewer</a> and <a href="https://www.citnetexplorer.nl/" target="_blank">CitNetExplorer</a>, which allow you to create and customize everything from citation networks to author networks, university networks and journal networks. VOSviewer also allows text mining and co-occurrence networks.
+            </p>
+          </div>
+        </b-collapse>
         <b-collapse class="card" id="apis-used" :open="indexFAQ === 'apis-used'" @open="indexFAQ = 'apis-used'" animation="none">
           <div slot="trigger" slot-scope="props" class="card-header" role="buton">
             <h4 class="card-header-title">Where is the data coming from, which API is used?</h4>
@@ -573,27 +588,13 @@
             </p>
           </div>
         </b-collapse>
-        
-        <b-collapse class="card" id="privacy" :open="indexFAQ === 'privacy'" @open="indexFAQ = 'privacy'" animation="none">
-          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-            <h4 class="card-header-title">Does this web app use cookies? What's the privacy policy?</h4>
-          </div>
-          <div class="card-content content">
-            <p>
-              No, this web app doesn't use any cookies. No user-tracking or fingerprinting is performed and no usage-data is collected by the author of this web app. Optionally, so-called localStorage can be used to cache results and settings locally when "Autosave results locally" is manually turned on (<a @click="indexFAQ = 'autosave'" href="#autosave">see autosave</a>).
-            </p>
-            <p>
-              This web app is running locally on your computer and only contacts the API servers of Microsoft Academic / Crossref during runtime. Microsoft has a <a href="https://privacy.microsoft.com/en-gb/privacystatement" target="_blank" title="Microsoft's general privacy statement">general privacy statement</a>, I haven't found anything specific to the Microsoft Academic API. Crossref also has a <a href="https://www.crossref.org/privacy/" target="_blank" title="Crossref's general privacy statement">general privacy statement</a>. This web app is hosted by GitHub pages, see their <a href="https://help.github.com/en/github/site-policy/github-privacy-statement#github-pages" target="_blank" title="GitHub Pages privacy statement">privacy statement here</a>.
-            </p>
-          </div>
-        </b-collapse>
         <b-collapse class="card" id="idea" :open="indexFAQ === 'idea'" @open="indexFAQ = 'idea'" animation="none">
           <div slot="trigger" slot-scope="props" class="card-header" role="buton">
             <h4 class="card-header-title">I have an idea! Can you implement XYZ?</h4>
           </div>
           <div class="card-content content">
             <p>
-              It's great to see you're getting involved! While I see numerous ways to extend this project myself, I don't have much time to work on it anymore unfortunately. However, this project is <a @click="indexFAQ = 'open-source'" href="#open-source">open source</a> and I'd be very happy to see others extend this project!
+              It's great to see you're getting involved! While I see numerous ways to extend this project myself, I don't have much time to work on it anymore unfortunately. However, this web app is <a @click="indexFAQ = 'open-source'" href="#open-source">open source</a> and I'd be very happy to see others extend this project! In the meantime, check out <a @click="indexFAQ = 'bibliometrics'" href="#bibliometrics">these great applications</a>, which might already provide what you're looking for.
             </p>
           </div>
         </b-collapse>
@@ -604,6 +605,19 @@
           <div class="card-content content">
             <p>
               Yes, great! This project is open source (GPL-3) and <a href="https://github.com/timwoelfle/Local-Citation-Network" target="_blank">the source can be found on GitHub</a>. I don't have much more time to work on this project, so I'm actively looking for help and contributors. Bugfixes are always welcome but please <a @click="indexFAQ = 'contact'" href="#contact">contact me</a> before any large pull-requests so we can coordinate.
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="privacy" :open="indexFAQ === 'privacy'" @open="indexFAQ = 'privacy'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">Does this web app use cookies? What's the privacy policy?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              No, this web app doesn't use any cookies. No user-tracking or fingerprinting is performed and no usage-data is collected by the author of this web app. Optionally, so-called localStorage can be used to cache results and settings locally when "Autosave results locally" is manually turned on (<a @click="indexFAQ = 'autosave'" href="#autosave">see autosave</a>).
+            </p>
+            <p>
+              This web app is running locally on your computer and only contacts the API servers of Microsoft Academic / Crossref during runtime. Microsoft has a <a href="https://privacy.microsoft.com/en-gb/privacystatement" target="_blank" title="Microsoft's general privacy statement">general privacy statement</a>, I haven't found anything specific to the Microsoft Academic API. Crossref also has a <a href="https://www.crossref.org/privacy/" target="_blank" title="Crossref's general privacy statement">general privacy statement</a>. This web app is hosted by GitHub pages, see their <a href="https://help.github.com/en/github/site-policy/github-privacy-statement#github-pages" target="_blank" title="GitHub Pages privacy statement">privacy statement here</a>.
             </p>
           </div>
         </b-collapse>
