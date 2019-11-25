@@ -1,4 +1,4 @@
-/* Local Citation Network v0.9 (GPL-3) */
+/* Local Citation Network v0.92 (GPL-3) */
 /* by Tim Wölfle */
 /* https://timwoelfle.github.io/Local-Citation-Network */
 
@@ -39,7 +39,7 @@ function crossrefResponseToArticleArray (data) {
       id: article.DOI.toLowerCase(),
       doi: article.DOI.toLowerCase(),
       title: String(article.title), // most of the time title is an array with length=1, but I've also seen pure strings
-      authors: (article.author && article.author.length) ? article.author.map(x => ({ LN: x.family || x.name, FN: x.given })) : [{ LN: article.author || undefined }],
+      authors: (article.author && article.author.length) ? article.author.map(x => ({ LN: x.family || x.name, FN: x.given, affil: String(x.affiliation) || undefined })) : [{ LN: article.author || undefined }],
       year: article.issued['date-parts'] && article.issued['date-parts'][0] && article.issued['date-parts'][0][0],
       journal: String(article['container-title']),
       references: references || [],
@@ -58,7 +58,7 @@ function microsoftAcademicEvaluate (expression, response, count, apiKey = window
     model: 'latest',
     count: count,
     offset: 0,
-    attributes: ['Id', 'DOI', 'DN', 'AA.DAuN', 'Y', 'BV', 'RId', 'ECC', 'CitCon', 'IA'].join(',')
+    attributes: ['Id', 'DOI', 'DN', 'AA.DAuN', 'AA.DAfN', 'Y', 'BV', 'RId', 'ECC', 'CitCon', 'IA'].join(',')
   }
 
   // Encode request body as URLencoded
@@ -97,10 +97,11 @@ function microsoftAcademicResponseToArticleArray (data) {
       microsoftAcademicId: article.Id,
       doi: (article.DOI) ? article.DOI.toLowerCase() : undefined, // some articles don't have DOIs
       title: article.DN,
-      authors: article.AA.map(name => {
-        if (!name.DAuN) return { LN: String(name) }
-        const lastSpace = name.DAuN.lastIndexOf(' ')
-        return { LN: name.DAuN.substr(lastSpace + 1), FN: name.DAuN.substr(0, lastSpace) }
+      authors: article.AA.map(author => {
+        if (!author.DAuN) return { LN: String(author) }
+        const lastSpace = author.DAuN.lastIndexOf(' ')
+        // Unfortunately, Microsoft Academic often has multiple author Ids for the same author name when affiliations differ => this leads to seeming redundancies
+        return { LN: author.DAuN.substr(lastSpace + 1), FN: author.DAuN.substr(0, lastSpace), affil: author.DAfN || undefined }
       }),
       year: article.Y,
       journal: article.BV,
@@ -126,7 +127,7 @@ function revertAbstractFromInvertedIndex (InvertedIndex) {
 /* vis.js Reference graph */
 
 // I've tried keeping referenceNetwork in Vue's data, but it slowed things down a lot -- better keep it as global variable as network is not rendered through Vue anyway
-let referenceNetwork = []
+let referenceNetwork, authorNetwork
 
 function initReferenceNetwork (app) {
   const nodeIds = app.inputArticlesIds.concat(app.suggestedArticlesIds)
@@ -197,6 +198,7 @@ function initReferenceNetwork (app) {
   }
   referenceNetwork = new vis.Network(document.getElementById('referenceNetworkDiv'), { nodes: nodes, edges: edges }, options)
   referenceNetwork.on('click', networkOnClick)
+  referenceNetwork.on('resize', function () { referenceNetwork.fit() })
 
   function networkOnClick (params) {
     let selectedNode
@@ -214,6 +216,118 @@ function initReferenceNetwork (app) {
         app.selectedSuggestedArticle = app.currentGraph.suggested[app.suggestedArticlesIds.indexOf(selectedNode)]
       }
     }
+  }
+}
+
+function initAuthorNetwork (app, minPublications = undefined) {
+  // authorGroups[0] is source
+  // Unfortunately, Microsoft Academic often has multiple author Ids for the same author name when affiliations differ => this leads to seeming redundancies, which makes the new Set() necessary to have each author name be unique
+  // (I know this can cause trouble with non-unique author names actually shared by two people publishing in similar fields but I'm currently not taking this into account)
+  let authorGroups = [app.currentGraph.source].concat(app.currentGraph.input).concat(app.currentGraph.suggested).map(article => article.authors ? Array.from(new Set(article.authors.map(x => x.FN + ' ' + x.LN))) : [])
+  const authors = {}
+  let authorsWithMinPubs = []
+  const links = {}
+
+  // Get authors from more than one publication
+  authorGroups.flat().forEach(author => { authors[author] = (authors[author] || 0) + 1 })
+
+  if (!minPublications) {
+    minPublications = 2
+    authorsWithMinPubs = Object.keys(authors).filter(author => authors[author] >= minPublications)
+    while (authorsWithMinPubs.length > 50) {
+      minPublications++
+      authorsWithMinPubs = Object.keys(authors).filter(author => authors[author] >= minPublications)
+    }
+    app.minPublications = minPublications
+  } else {
+    authorsWithMinPubs = Object.keys(authors).filter(author => authors[author] >= minPublications)
+  }
+
+  authorGroups = authorGroups.map(group => group.filter(author => authorsWithMinPubs.includes(author)))
+
+  authorGroups.forEach(group => group.forEach(indiv1 => group.forEach(indiv2 => {
+    if (indiv1 === indiv2) return false
+
+    // Is there already a link for this pair? If so, make it stronger
+    if (links[indiv1] && links[indiv1][indiv2]) return links[indiv1][indiv2]++
+    if (links[indiv2] && links[indiv2][indiv1]) return links[indiv2][indiv1]++
+
+    // Create new link
+    if (!links[indiv1]) links[indiv1] = {}
+    links[indiv1][indiv2] = 1
+  })))
+
+  const edges = Object.keys(links).map(indiv1 => Object.keys(links[indiv1]).map(indiv2 => {
+    return { from: indiv1, to: indiv2, value: links[indiv1][indiv2], title: indiv1 + ' & ' + indiv2 + '<br>(' + links[indiv1][indiv2] / 2 + ' collaboration(s) among source, input & suggested articles)' }
+  })).flat(2)
+
+  const nodes = authorsWithMinPubs.map(author => {
+    return {
+      id: author,
+      title: author + ((authorGroups[0].includes(author)) ? ' ((co)author of source article)<br>(' : '<br>(') + (authorGroups[0].includes(author) ? authors[author] - 1 : authors[author]) + ' publication(s) among input & suggested articles)',
+      group: authorGroups.map(group => group.includes(author)).indexOf(true),
+      label: author.substr(author.lastIndexOf(' ') + 1),
+      size: authors[author] * 3,
+      shape: (authorGroups[0].includes(author)) ? 'diamond' : 'dot'
+    }
+  })
+
+  // create a network
+  const options = {
+    nodes: {
+      font: {
+        size: 20
+      }
+
+    },
+    edges: {
+      color: {
+        color: 'rgba(200,200,200,0.3)'
+      },
+      smooth: false
+    },
+    physics: {
+      maxVelocity: 20
+    },
+    interaction: {
+      dragNodes: true,
+      multiselect: true,
+      hideEdgesOnDrag: true,
+      hideEdgesOnZoom: true
+    },
+    configure: false
+  }
+  authorNetwork = new vis.Network(document.getElementById('authorNetwork'), { nodes: nodes, edges: edges }, options)
+  authorNetwork.on('click', networkOnClick)
+  authorNetwork.on('resize', function () { authorNetwork.fit() })
+
+  function networkOnClick (params) {
+    app.filterColumn = 'authors'
+
+    // If no node is clicked...
+    if (!params.nodes.length) {
+      // Maybe an edge?
+      if (params.edges.length) {
+        const edge = authorNetwork.body.data.edges.get(params.edges[0])
+        app.highlightNodes([edge.from, edge.to])
+        app.filterString = '(?=.*' + edge.from + ')(?=.*' + edge.to + ')'
+        return app.filterString
+        // Otherwise reset filterString
+      } else {
+        app.filterString = undefined
+        return false
+      }
+    }
+
+    // If just one node is selected perform simple filter for that author
+    if (params.nodes.length === 1) {
+      app.filterString = params.nodes[0]
+      // If more than one node are selected, perform "boolean and" in regular expression through lookaheads, which means order isn't important (see https://www.ocpsoft.org/tutorials/regular-expressions/and-in-regex/)
+    } else {
+      app.filterString = '(?=.*' + params.nodes.join(')(?=.*') + ')'
+    }
+
+    app.highlightNodes(params.nodes)
   }
 }
 
@@ -242,6 +356,8 @@ const vm = new Vue({
     selectedSuggestedArticle: undefined,
     currentGraphIndex: undefined,
     showSuggested: 0,
+    showAuthorNetwork: 0,
+    minPublications: 2,
     isLoading: false,
     showFAQ: false,
     indexFAQ: 'about'
@@ -293,7 +409,10 @@ const vm = new Vue({
   },
   watch: {
     // Initialize graph when new tab is opened / tab is changed
-    currentGraph: function () {
+    currentGraphIndex: function () {
+    // Reset filterString when tab is changed
+      this.filterString = undefined
+
       // Don't know how to prevent this from firing (and thus causing a reinit) when closing a tab (only noticeable by a short flicker of the network, thus not a real issue)
       if (this.graphs.length) {
         this.init()
@@ -301,7 +420,7 @@ const vm = new Vue({
     },
     // User provided a new DOI for source article
     // Here's what happens afterwards, in total 3 API calls:
-    // newSourceDOI (watcher) => callAPI() for source article => setNewSource() => callAPI() for Input articles & callAPI() for Suggested articles => currentGraph (watcher) => init()
+    // watch:newSourceDOI => callAPI() for source article => setNewSource() => callAPI() for Input articles & callAPI() for Suggested articles => watch:currentGraph => init()
     newSourceDOI: function () {
       if (!this.newSourceDOI || !this.newSourceDOI.trim()) return false
 
@@ -323,8 +442,8 @@ const vm = new Vue({
       }
     },
     // User provided a file which is searched for DOIs
-    // Here's what happens afterwards, in total 2 API calls (similar to newSourceDOI (watcher) except that the first of three API calls to grab the source is omitted):
-    // file (watcher) => setNewSource() => callAPI() for Input articles & callAPI() for Suggested articles => currentGraph (watcher) => init()
+    // Here's what happens afterwards, in total 2 API calls (similar to watch:newSourceDOI except that the first of three API calls to grab the source is omitted):
+    // watch:file => setNewSource() => callAPI() for Input articles & callAPI() for Suggested articles => watch:currentGraph => init()
     file: function () {
       if (!this.file || !this.file.name) return false
       this.isLoading = true
@@ -339,10 +458,17 @@ const vm = new Vue({
       if (!this.selected) return false
 
       // Highlight the right network node
-      this.highlightNode()
+      this.highlightNodes()
 
       // Scroll to right row
       if (document.getElementById(this.selected.id)) document.getElementById(this.selected.id).scrollIntoView({ behavior: 'smooth', block: 'center' })
+    },
+    showAuthorNetwork: function () {
+      this.highlightNodes()
+    },
+    minPublications: function () {
+      initAuthorNetwork(this, this.minPublications)
+      this.highlightNodes()
     }
   },
   methods: {
@@ -466,22 +592,33 @@ const vm = new Vue({
         }
       })
     },
-    highlightNode: function () {
-      let selectedNode = []; let connectedNodes = []
+    highlightNodes: function (selectedNodes = undefined) {
+      const network = (this.showAuthorNetwork) ? authorNetwork : referenceNetwork
 
+      // When nodes are clicked in authorNetwork, the selectedNodes are supplied by argument, otherwise they depend on table selection and are figured out here
+      if (!selectedNodes) {
       // Highlight selected node if one is selected
-      if (referenceNetwork.body.data.nodes.getIds().includes(this.selected.id)) {
-        selectedNode = [this.selected.id]
-        connectedNodes = referenceNetwork.getConnectedNodes(selectedNode)
-        referenceNetwork.selectNodes(selectedNode)
-      } else {
-        referenceNetwork.selectNodes([])
+        if (this.showAuthorNetwork) {
+          selectedNodes = []
+          this.selected.authors.map(x => x.FN + ' ' + x.LN).forEach(author => {
+            if (network.body.data.nodes.getIds().includes(author)) {
+              selectedNodes.push(author)
+            }
+          })
+        } else {
+          if (network.body.data.nodes.getIds().includes(this.selected.id)) {
+            selectedNodes = [this.selected.id]
+          }
+        }
       }
 
+      network.selectNodes(selectedNodes)
+      const connectedNodes = network.getConnectedNodes(selectedNodes)
+
       // Code loosely adapted from: https://github.com/visjs/vis-network/blob/master/examples/network/exampleApplications/neighbourhoodHighlight.html
-      const updatedNodes = referenceNetwork.body.data.nodes.get().map(function (node) {
-        node.color = (selectedNode.includes(node.id) || connectedNodes.includes(node.id)) ? undefined : 'rgba(200,200,200,0.3)'
-        if (selectedNode.includes(node.id)) {
+      const updatedNodes = network.body.data.nodes.get().map(function (node) {
+        node.color = (selectedNodes.includes(node.id) || connectedNodes.includes(node.id)) ? undefined : 'rgba(200,200,200,0.3)'
+        if (selectedNodes.includes(node.id)) {
           if (node.hiddenLabel !== undefined) {
             node.label = node.hiddenLabel
             node.hiddenLabel = undefined
@@ -495,7 +632,7 @@ const vm = new Vue({
         return node
       })
 
-      referenceNetwork.body.data.nodes.update(updatedNodes)
+      network.body.data.nodes.update(updatedNodes)
     },
     init: function () {
       // Sort input & suggested articles by InDegree (descending)
@@ -506,9 +643,12 @@ const vm = new Vue({
       this.selectedInputArticle = this.currentGraph.input[0]
       this.selectedSuggestedArticle = this.currentGraph.suggested[0]
 
-      // Reference Network is handled by vis.js outside of Vue through this global function
+      // Networks are handled by vis.js outside of Vue through these two global init function
+      // Initializing both networks now incurs higher CPU usage now but then tab changes are quicker compared to init at watcher:showAuthorNetwork (especially when going back and forth)
+      initAuthorNetwork(this)
       initReferenceNetwork(this)
-      this.highlightNode()
+      // Sometimes this call to highlightNodes() leads to two calls in short frequency (because watch:selected will often be called right afterwards) but this call is still necessary (apparently mostly when loading new graphs)
+      this.highlightNodes()
     },
     // compareFunction for array.sort(), in this case descending by default (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort)
     sortInDegree: function (a, b) {
@@ -563,12 +703,12 @@ const vm = new Vue({
       }
     },
     filterArticles: function (articles) {
-      const re = new RegExp(this.filterString, 'i')
+      const re = new RegExp(this.filterString, 'gi')
       switch (this.filterColumn) {
         case 'titleAbstract':
           return articles.filter(article => article.title.match(re) || (article.abstract && article.abstract.match(re)))
         case 'authors':
-          return articles.filter(article => article.authors.filter(author => (author.FN + ' ' + author.LN).match(re)).length)
+          return articles.filter(article => article.authors.map(author => (author.FN + ' ' + author.LN)).join(', ').match(re))
         case 'year':
           return articles.filter(article => String(article.year).match(re))
         case 'journal':

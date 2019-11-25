@@ -7,7 +7,6 @@
     <meta name="author" content="Tim Woelfle">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="lib/buefy.min.css">
-    <link rel="stylesheet" href="lib/vis-network.min.css">
     <script src="lib/vue.js"></script>
     <script src="lib/buefy.min.js"></script>
     <script src="lib/axios.min.js"></script>
@@ -387,15 +386,24 @@
           </b-tab-item>
         </b-tabs>
 
-        <b-tabs class="column" size="is-small">
+        <b-tabs v-model="showAuthorNetwork" class="column" size="is-small" :animated="false">
           <b-tab-item>
             <template slot="header"><h2 class="title is-4">Citation network</h2></template>
             
-            <div id="referenceNetworkDiv" style="height: 100%; cursor: pointer"></div>
+            <div id="referenceNetworkDiv" style="height: 100%; cursor: pointer;"></div>
             <span style="position:absolute; top: 0px">newer</span>
-            <span style="position:absolute; top: 0px; right: 0px"> <a @click="indexFAQ = 'read-network'; showFAQ = true;" href="#read-network">(how to read the network)</a></span>
+            <span style="position:absolute; top: 0px; right: 0px"> <a @click="indexFAQ = 'citation-network'; showFAQ = true;" href="#citation-network">(how to read this network)</a></span>
             <span style="position:absolute; bottom: 0px">older</span>
             <span style="position:absolute; bottom: 0px; right: 0px">(zoom by scrolling)</span>
+          </b-tab-item>
+          <b-tab-item>
+            <template slot="header"><h2 class="title is-4">Author network</h2></template>
+            <div id="authorNetwork" style="height: 100%; cursor: pointer;"></div>
+            <span style="position:absolute; top: 0px; right: 0px"> <a @click="indexFAQ = 'author-network'; showFAQ = true;" href="#author-network">(how to read this network)</a></span>
+            <b-field :label="'(only authors with a minimum of ' + minPublications + ' local articles are shown)'" custom-class="small"
+              style="position:absolute; bottom: 0px;">
+              <b-slider v-model="minPublications" lazy :min="2" :max="10" ticks size="is-small"></b-slider>
+            </b-field>
           </b-tab-item>
         </b-tabs>
       </div>
@@ -447,9 +455,22 @@
             </p>
           </div>
         </b-collapse>
-        <b-collapse class="card" id="read-network" :open="indexFAQ === 'read-network'" @open="indexFAQ = 'read-network'" animation="none">
+        <b-collapse class="card" id="suggested-articles" :open="indexFAQ === 'suggested-articles'" @open="indexFAQ = 'suggested-articles'" animation="none">
           <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-            <h4 class="card-header-title">How to read the network?</h4>
+            <h4 class="card-header-title">Where do the suggested articles come from?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              Suggested articles are the (locally) most cited references of the input articles. In order to create the local citation network, this web apps attempts to retrieve reference-lists from all input articles (usually some are missed, <a @click="indexFAQ = 'completeness'" href="#completeness">see completeness</a>) and then orders these references by number of local citations (in-degree, <a @click="indexFAQ = 'citation-network'" href="#citation-network">see network</a>). Some of the top references might be among the input articles, depending on how connected they are. However, some of the top references usually aren't among the input articles and then become suggested articles (they must have at least two citations among the input articles). Currently the number of suggested articles varies from 0 to 10, with 10 being an arbitrary cutoff that could potentially be lifted in the future.
+            </p>
+            <p>
+              Keep in mind that because of the nature of this approach, suggested articles are always older than the source article. This can help identifying seminal papers of the field but not newer state-of-the-art research.
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="citation-network" :open="indexFAQ === 'citation-network'" @open="indexFAQ = 'citation-network'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">How to read the citation network?</h4>
           </div>
           <div class="card-content content">
             <p>
@@ -460,16 +481,19 @@
             </p>
           </div>
         </b-collapse>
-        <b-collapse class="card" id="suggested-articles" :open="indexFAQ === 'suggested-articles'" @open="indexFAQ = 'suggested-articles'" animation="none">
+        <b-collapse class="card" id="author-network" :open="indexFAQ === 'author-network'" @open="indexFAQ = 'author-network'" animation="none">
           <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-            <h4 class="card-header-title">Where do the suggested articles come from?</h4>
+            <h4 class="card-header-title">How to read the author network?</h4>
           </div>
           <div class="card-content content">
             <p>
-              Suggested articles are the (locally) most cited references of the input articles. In order to create the local citation network, this web apps attempts to retrieve reference-lists from all input articles (usually some are missed, <a @click="indexFAQ = 'completeness'" href="#completeness">see completeness</a>) and then orders these references by number of local citations (in-degree, <a @click="indexFAQ = 'read-network'" href="#read-network">see network</a>). Some of the top references might be among the input articles, depending on how connected they are. However, some of the top references usually aren't among the input articles and then become suggested articles (they must have at least two citations among the input articles). Currently the number of suggested articles varies from 0 to 10, with 10 being an arbitrary cutoff that could potentially be lifted in the future.
+              This "local" author network shows the commonest authors among the source, input and suggested articles. Depending on the discipline, the number of (co)authors among a set of multiple articles can quickly rise to the hundreds, which is why this author network only shows authors with a minimum number of local articles (not to be mistaken with their global number of publications, which is usually much higher). The default minimum number of local articles is determined so that this network shows no more than 50 authors, but it can be changed with the slider at the bottom from 2 to 10.
             </p>
             <p>
-              Keep in mind that because of the nature of this approach, suggested articles are always older than the source article. This can help identifying seminal papers of the field but not newer state-of-the-art research.
+              Each node (= vertex) represents an author. The size depends on their number of local articles and the color depends on the author-cluster they first appear in. Diamond-shaped (◆) nodes are also authors of the source article whose references define the input articles. Click authors to filter input & suggested articles, ctrl+click to filter for more than one author.
+            </p>
+            <p>
+              Each edge (= link) represents a collaboration between two authors among the source, input and suggested articles, the width indicating the number of collaborations. Click edges to filter input & suggested articles.
             </p>
           </div>
         </b-collapse>
@@ -644,11 +668,11 @@
       </b-modal>
     </section>
 
-    <script src="index.js"></script>
     <script>
       if ((!!window.MSInputMethodContext && !!document.documentMode) || navigator.userAgent.indexOf('MSIE') !== -1 || navigator.userAgent.indexOf('Edge') !== -1) {
         window.alert('Unfortunately, this web app currently does not support Microsoft Edge and Microsoft Internet Explorer. Please use current Firefox, Safari or Chrome.')
       }
     </script>
+    <script src="index.js"></script>
   </body>
 </html>
