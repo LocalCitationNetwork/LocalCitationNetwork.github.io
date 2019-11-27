@@ -158,6 +158,7 @@
               <li class="navbar-item"><b-button @click="clickToggleMA" rounded :type="(useMA) ? '' : 'is-dark'" title="Toggle Microsoft Academic / Crossref API" icon-right="diamond-minus-cross"></b-button></li>
               <li class="navbar-item"><b-button @click="showFAQ = !showFAQ" rounded type="is-dark" title="Frequently asked questions" icon-right="questionmark"></b-button></li>
               <li class="navbar-item"><a @click="indexFAQ = 'contact'; showFAQ = true;" href="#contact" class="button is-dark is-rounded" title="Contact app creator"><b-icon icon="envelope"></b-icon></a></li>
+			  <li class="navbar-item"><a href="https://twitter.com/timwoelfle/status/1197559021177311235" target="_blank" class="button is-dark is-rounded" title="Retweet"><b-icon icon="bird"></b-icon></a></li>
             </ul>
           </div>
         </div>
@@ -407,7 +408,7 @@
           </b-tab-item>
         </b-tabs>
       </div>
-    
+      
       <section class="hero is-fullheight" v-show="currentGraphIndex === undefined">
         <div class="hero-body ">
           <div class="container has-text-centered">
@@ -624,7 +625,7 @@
         </b-collapse>
         <b-collapse class="card" id="open-source" :open="indexFAQ === 'open-source'" @open="indexFAQ = 'open-source'" animation="none">
           <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-            <h4 class="card-header-title">I'd like to contribute! Is this open source and are you looking for help?</h4>
+            <h4 class="card-header-title">I'd like to contribute! Is this open source and are you looking for help? / Is this on GitHub?</h4>
           </div>
           <div class="card-content content">
             <p>
