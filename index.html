@@ -300,7 +300,7 @@
             </template>
             <div class="content">
               <p>
-                <a @click="indexFAQ = 'suggested-articles'; showFAQ = true;" href="#suggested-articles">These suggested Articles</a> are the most cited references from the input articles. They can only be older than them.
+                <a @click="indexFAQ = 'suggested-articles'; showFAQ = true;" href="#suggested-articles">These suggested articles</a> are the most cited references from the input articles. They can only be older than them.
               </p>
             </div>
             <b-field>
@@ -583,8 +583,11 @@
               Bibliometrics is a part of information science that uses <a href="https://en.wikipedia.org/wiki/Bibliometrics" target="_blank">statistical methods to analyze publications</a>. It emcompasses scientometrics, which is specifically looking at scientific publications, and citation analysis.
             </p>
             <p>
-              Other great software to help with bibliometric / scientometric analyses include <a href="https://harzing.com/resources/publish-or-perish" target="_blank">Anne-Wil Harzing's Publish or Perish</a>, which allows sophisticated queries of a plethora of APIs including Microsoft Academic and Crossref but also Google Scholar, Scopus and Web of Science. If you're looking to create more complex networks than this web app allows, check out the Leiden University's great <a href="https://www.vosviewer.com/" target="_blank">VOSviewer</a> and <a href="https://www.citnetexplorer.nl/" target="_blank">CitNetExplorer</a>, which allow you to create and customize everything from citation networks to author networks, university networks and journal networks. VOSviewer also allows text mining and co-occurrence networks.
+              A highly recommended tool very similar to this one is <a href="http://citationgecko.com/" target="_blank">Citation Gecko</a> (based on Crossref), which I didn't know when creating Local Citation Network. The main difference is that you start with a small number of seed articles (5-6 are recommended) and incrementally increase the network by adding recommended articles to the pool of seed articles. Recommended articles include all references and even global citations.
             </p>
+			<p>
+			  Other great software to help with bibliometric / scientometric analyses include <a href="https://harzing.com/resources/publish-or-perish" target="_blank">Anne-Wil Harzing's Publish or Perish</a>, which allows sophisticated queries of a plethora of APIs including Microsoft Academic and Crossref but also Google Scholar, Scopus and Web of Science. If you're looking to create more complex networks than this web app allows, check out the Leiden University's great <a href="https://www.vosviewer.com/" target="_blank">VOSviewer</a> and <a href="https://www.citnetexplorer.nl/" target="_blank">CitNetExplorer</a>, which allow you to create and customize everything from citation networks to author networks, university networks and journal networks. VOSviewer also allows text mining and co-occurrence networks.
+			</p>
           </div>
         </b-collapse>
         <b-collapse class="card" id="apis-used" :open="indexFAQ === 'apis-used'" @open="indexFAQ = 'apis-used'" animation="none">
