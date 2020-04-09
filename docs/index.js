@@ -1,4 +1,4 @@
-/* Local Citation Network v0.92 (GPL-3) */
+/* Local Citation Network v0.93 (GPL-3) */
 /* by Tim Wölfle */
 /* https://timwoelfle.github.io/Local-Citation-Network */
 
@@ -770,6 +770,12 @@ const vm = new Vue({
       const scriptTag = document.createElement('script')
       scriptTag.setAttribute('src', 'examples.js')
       document.getElementsByTagName('head')[0].appendChild(scriptTag)
+    },
+    toggleArticle: function () {
+      // Make sure article can even be toggled (compare with :has-detailed-visible in b-table in index.html)
+      if (this.selected.abstract || (this.currentGraph.source.citationContext && this.currentGraph.source.citationContext[this.selected.id])) {
+        (this.showSuggested) ? this.$refs.suggestedArticlesTable.toggleDetails(this.selectedSuggestedArticle) : this.$refs.inputArticlesTable.toggleDetails(this.selectedInputArticle)
+      }
     }
   },
   created: function () {

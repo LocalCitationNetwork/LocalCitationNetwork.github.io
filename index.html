@@ -220,8 +220,10 @@
               <b-input v-model="filterString" icon="magnify" placeholder="Filter articles..." expanded></b-input>
               <span class="button is-static">{{ inputArticlesFiltered.length + " / " + currentGraph.input.length }}</span>
             </b-field>
-            <b-table :data="inputArticlesFiltered" default-sort="inDegree" default-sort-direction="desc" :selected.sync="selectedInputArticle"
+            <b-table ref="inputArticlesTable" :data="inputArticlesFiltered" default-sort="inDegree" default-sort-direction="desc" :selected.sync="selectedInputArticle"
               :has-detailed-visible="row => (row.abstract || (currentGraph.source.citationContext && currentGraph.source.citationContext[row.id]))"
+			  @keyup.native.arrow-left="toggleArticle"
+			  @keyup.native.arrow-right="toggleArticle"
               detailed hoverable striped narrowed focusable>
               <template slot="detail" slot-scope="props">
                 <div class="content">
@@ -316,8 +318,10 @@
               <span class="button is-static">{{ suggestedArticlesFiltered.length + " / " + currentGraph.suggested.length }}</span>
             </b-field>
             <!-- 'data' and 'selected.sync' differ from input articles. The 'has-detailed-visible' is shorter than for input articles as there's no possible citationContext for suggested articles -->
-            <b-table :data="suggestedArticlesFiltered" default-sort="inDegree" default-sort-direction="desc" :selected.sync="selectedSuggestedArticle"
+            <b-table ref="suggestedArticlesTable" :data="suggestedArticlesFiltered" default-sort="inDegree" default-sort-direction="desc" :selected.sync="selectedSuggestedArticle"
               :has-detailed-visible="row => row.abstract"
+			  @keyup.native.arrow-left="toggleArticle"
+			  @keyup.native.arrow-right="toggleArticle"
               detailed hoverable striped narrowed focusable>
               <template slot="detail" slot-scope="props">
                 <div class="content">
