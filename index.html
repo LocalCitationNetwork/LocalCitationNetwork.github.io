@@ -13,34 +13,32 @@
     <script src="lib/vis-network.min.js"></script>
     <style>
       html {
-        font-size: 14px
+        font-size: 10pt;
+        overflow-y: auto;
+        scrollbar-width: thin;
       }
       
       /* Flexible height management */
-      section#app {
-        height: 100vh;
-      }
-    
-      .columns  {
-        height: 85%;
-        padding: 1rem 1.5rem 0 1.5rem;
-        padding: 0rem 0rem 0 0rem;
-        margin: 0 0 0 0
-      }
-
-      .b-tabs:not(:last-child) {
+      
+      .columns {
+        padding: 0;
         margin: 0;
       }
-
-      .b-tabs .tab-content {
-        height: 100%;
-        padding: 1rem
+      
+      .column, .b-tabs .tab-content, .b-tabs:not(:last-child), .columns:not(:last-child) {
+        margin-bottom: 0;
+        padding-bottom: 0;
       }
 
       .tab-item {
-        height: 100%;
+        height: calc(100vh - 9rem);
         overflow-x: hidden;
-        overflow-y:auto
+        overflow-y:auto;
+        scrollbar-width: thin;
+      }
+      
+      section.hero.is-fullheight {
+        min-height: 90vh;
       }
       
       /* Menu */
@@ -65,7 +63,7 @@
         color: #999999;
       }
 
-      li.is-active h2.title {
+      li.is-active h2.title, li h2.title:hover {
         color: #000000;
       }
 
@@ -86,16 +84,16 @@
         font: 1.3em bold sans-serif;
       }
 
+      .mdi-close:before {
+        content: "×";
+        font: 1.3em bold sans-serif;
+      }
+
       .mdi-plus:before {
         content: "+";
         font: 1.5em bold sans-serif;
       }
 
-      .mdi-questionmark:before {
-        content: "?";
-        font: 1.5em bold sans-serif;
-      }
-      
       .mdi-folder:before {
         content: "📁";
         font: 1.3em bold sans-serif;
@@ -116,6 +114,11 @@
         font: 1.7em bold sans-serif;
       }
 
+      .mdi-questionmark:before {
+        content: "?";
+        font: 1.5em bold sans-serif;
+      }
+      
       .mdi-envelope:before {
         content: "📧";
         font: 1.5em bold sans-serif;
@@ -125,47 +128,55 @@
         content: "🐦";
         font: 1.5em bold sans-serif;
       }
+
+      /* Vis.js Network tooltip */
+
+      div.vis-tooltip {
+        font-size: 0.8em;
+        white-space: normal;
+        max-width: 250px;
+        word-wrap: break-word;
+        padding: 5px;
+      }
     </style>
   </head>
   <body>
     <section id="app">
-      <nav class="navbar" role="navigation" aria-label="main navigation" style="border-bottom: 1px solid #dbdbdb; overflow-x:auto; overflow-y: hidden">
-        <div class="navbar-brand">
+      <b-navbar style="border-bottom: 1px solid #dbdbdb; overflow-x:auto; overflow-y: hidden; scrollbar-width: thin">
+        <template slot="brand">
           <a class="navbar-item" href="">
             <h1 class="title">Local Citation Network</h1>
           </a>
-        </div>
+        </template>
           
-        <div class="navbar-menu">
-          <div class="navbar-start">
-            <ul class="buttons">
-              <li v-for="item, index in graphs" :key="index" class="navbar-item">
-                <b-button :type="(index==currentGraphIndex) ? 'is-primary' : ''" :title="item.tabTitle" @click="currentGraphIndex=index" rounded>
-                  {{ item.tabLabel }}
-                  <a title="Close tab" class="delete" @click.stop="clickCloseTab(index)"></a> <!-- .stop prevents event propagation to parent @click event -->
-                </b-button>
-              </li>
-              <li><b-button @click="clickButtonAdd" loading rounded v-if="isLoading" style="width:100px" alt="To cancel loading activate 'Autosave results locally' (disk icon on the right) and refresh page."></b-button></li>
-            </ul>
-          </div>
+        <template slot="start">
+          <ul class="buttons">
+            <b-navbar-item tag="li" v-for="item, index in graphs" :key="index" class="navbar-item">
+              <b-button :type="(index==currentGraphIndex) ? 'is-primary' : ''" :title="item.tabTitle" @click="currentGraphIndex=index" rounded>
+                {{ item.tabLabel }}
+                <a title="Close tab" class="delete" @click.stop="clickCloseTab(index)"></a> <!-- .stop prevents event propagation to parent @click event -->
+              </b-button>
+            </b-navbar-item>
+            <b-navbar-item tag="li"><b-button @click="clickButtonAdd" loading rounded v-if="isLoading" style="width:100px" alt="To cancel loading activate 'Autosave results locally' (disk icon on the right) and refresh page."></b-button></b-navbar-item>
+          </ul>
+        </template>
           
-          <div class="navbar-end">
-            <ul class="buttons" style="flex-wrap: nowrap">
-              <li class="navbar-item"><b-button @click="clickButtonAdd" rounded type="is-dark" title="Add network based on references from a single source DOI" icon-right="plus" :disabled="isLoading ? true : false"></b-button></li>
-              <li class="navbar-item"><b-upload v-model="file" :disabled="isLoading ? true : false"><a class="button is-dark is-rounded" title="Scan text file for DOIs" :disabled="isLoading ? true : false"><b-icon icon="folder"></b-icon></a></b-upload></li>
-              <li class="navbar-item"><b-button @click="clickCloseAllTabs" rounded type="is-dark" title="Close all tabs" icon-right="delete"></b-button></li>
-              <li class="navbar-item"><b-button @click="clickToggleAutosave" rounded :type="(autosaveResults) ? '' : 'is-dark'" title="Autosave results locally" icon-right="floppy"></b-button></li>
-              <li class="navbar-item"><b-button @click="clickToggleMA" rounded :type="(useMA) ? '' : 'is-dark'" title="Toggle Microsoft Academic / Crossref API" icon-right="diamond-minus-cross"></b-button></li>
-              <li class="navbar-item"><b-button @click="showFAQ = !showFAQ" rounded type="is-dark" title="Frequently asked questions" icon-right="questionmark"></b-button></li>
-              <li class="navbar-item"><a @click="indexFAQ = 'contact'; showFAQ = true;" href="#contact" class="button is-dark is-rounded" title="Contact app creator"><b-icon icon="envelope"></b-icon></a></li>
-			  <li class="navbar-item"><a href="https://twitter.com/timwoelfle/status/1197559021177311235" target="_blank" class="button is-dark is-rounded" title="Retweet"><b-icon icon="bird"></b-icon></a></li>
-            </ul>
-          </div>
-        </div>
-      </nav>
+        <template slot="end">
+          <ul class="buttons">
+            <b-navbar-item tag="li"><b-button @click="clickButtonAdd" rounded type="is-dark" title="Add network based on references from a single source DOI" icon-right="plus" :disabled="isLoading ? true : false"></b-button></b-navbar-item>
+            <b-navbar-item tag="li"><b-upload v-model="file" :disabled="isLoading ? true : false"><a class="button is-dark is-rounded" title="Scan text file for DOIs" :disabled="isLoading ? true : false"><b-icon icon="folder"></b-icon></a></b-upload></b-navbar-item>
+            <b-navbar-item tag="li"><b-button @click="clickCloseAllTabs" rounded type="is-dark" title="Close all tabs" icon-right="delete"></b-button></b-navbar-item>
+            <b-navbar-item tag="li"><b-button @click="clickToggleAutosave" rounded :type="(autosaveResults) ? '' : 'is-dark'" title="Autosave results locally" icon-right="floppy"></b-button></b-navbar-item>
+            <b-navbar-item tag="li"><b-button @click="clickToggleMA" rounded :type="(useMA) ? '' : 'is-dark'" title="Toggle Microsoft Academic / Crossref API" icon-right="diamond-minus-cross"></b-button></b-navbar-item>
+            <b-navbar-item tag="li"><b-button @click="showFAQ = !showFAQ" rounded type="is-dark" title="Frequently asked questions" icon-right="questionmark"></b-button></b-navbar-item>
+            <b-navbar-item tag="li"><a @click="indexFAQ = 'contact'; showFAQ = true;" href="#contact" class="button is-dark is-rounded" title="Contact app creator"><b-icon icon="envelope"></b-icon></a></b-navbar-item>
+            <b-navbar-item tag="li"><a href="https://twitter.com/timwoelfle/" target="_blank" class="button is-dark is-rounded" title="Twitter"><b-icon icon="bird"></b-icon></a></b-navbar-item>
+          </ul>
+        </template>
+      </b-navbar>
 
       <div class="section columns" v-show="currentGraphIndex !== undefined">
-        <b-tabs v-model="showSuggested" class="column is-three-fifths" size="is-small">
+        <b-tabs v-model="showSuggested" class="column is-three-fifths" size="is-small" :style="'display: ' + ((fullscreenNetwork) ? 'none' : 'block')">
           <b-tab-item>
             <template slot="header">
               <h2 class="title is-4">Input articles ({{ currentGraph.input.length }})</h2>
@@ -177,19 +188,19 @@
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Copy this link's address and share! (Right-click => 'Copy Link Location')"
                     v-if="currentGraph.source.doi">
-                    <a :href="'https://timwoelfle.github.io/Local-Citation-Network/?sourceDOI=' + currentGraph.source.doi"> (link to share)</a>
+                    <a :href="'?sourceDOI=' + currentGraph.source.doi.toUpperCase()" @click="e =>  e.preventDefault()"> (link to share)</a>
                   </b-tooltip>:
                 </p>
                 <p>
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     :label="authorString(currentGraph.source.authors)"
                     v-if="currentGraph.source.authors.length > 5">
-                    {{ authorStringShort(currentGraph.source.authors) }}.
+                    {{ authorStringShort(currentGraph.source.authors) }},
                   </b-tooltip>
                   <template v-else>
-                    {{ authorStringShort(currentGraph.source.authors) }}.
+                    {{ authorStringShort(currentGraph.source.authors) }},
                   </template>
-                  <a :href="'https://doi.org/' + currentGraph.source.doi" target="_blank"><em>{{ currentGraph.source.title }}</em></a>. {{ currentGraph.source.journal }}. {{ currentGraph.source.year }}.
+                  <a :href="'https://doi.org/' + currentGraph.source.doi" target="_blank"><em>{{ currentGraph.source.title }}</em></a>. {{ currentGraph.source.journal }} {{ currentGraph.source.year }}.
                   <span :title="currentGraph.source.abstract"
                     v-if="currentGraph.source.abstract"
                     style="border-bottom: 1px dashed #b5b5b5; cursor: help">
@@ -198,7 +209,12 @@
                 </p>
               </template>
               <p v-else>
-                Based on DOIs from the following file: {{ currentGraph.tabLabel }}<br>
+                Based on DOIs from the following file / list: {{ currentGraph.tabLabel }}
+                <b-tooltip dashed multilined position="is-bottom" type="is-dark"
+                  label="Copy this link's address and share! (Right-click => 'Copy Link Location')"
+                  v-if="currentGraph.source.references">
+                  <a :href="'?name=' + currentGraph.tabLabel + '&listOfDOIs=' + currentGraph.source.references.join(',')" @click="e =>  e.preventDefault()"> (link to share)</a>
+                </b-tooltip>
               </p>
               <p>
                 Data retrieved through <a @click="indexFAQ = 'apis-used'; showFAQ = true;" href="#apis-used">{{ currentGraph.API }}</a> API on {{ new Date(currentGraph.timestamp).toLocaleDateString() }}
@@ -217,17 +233,20 @@
                 <option value="year">Year</option>
                 <option value="journal">Journal</option>
               </b-select>
-              <b-input v-model="filterString" icon="magnify" placeholder="Filter articles..." expanded></b-input>
+              <b-input v-model="filterString" icon="magnify" placeholder="Filter articles..." expanded
+                :icon-right="filterString ? 'close' : undefined"
+                icon-right-clickable
+                @icon-right-click="filterString=''"></b-input>
               <span class="button is-static">{{ inputArticlesFiltered.length + " / " + currentGraph.input.length }}</span>
             </b-field>
             <b-table ref="inputArticlesTable" :data="inputArticlesFiltered" default-sort="inDegree" default-sort-direction="desc" :selected.sync="selectedInputArticle"
               :has-detailed-visible="row => (row.abstract || (currentGraph.source.citationContext && currentGraph.source.citationContext[row.id]))"
-			  @keyup.native.arrow-left="toggleArticle"
-			  @keyup.native.arrow-right="toggleArticle"
+              @keyup.native.arrow-left="toggleArticle"
+              @keyup.native.arrow-right="toggleArticle"
               detailed hoverable striped narrowed focusable>
               <template slot="detail" slot-scope="props">
                 <div class="content">
-                  <p v-html="props.row.abstract"></p>
+                  <p v-html="formatAbstract(props.row.abstract)"></p>
                   <template v-if="currentGraph.source.citationContext && currentGraph.source.citationContext[props.row.id]">
                     <h4 class="title is-6">Citation context in {{ currentGraph.source.authors[0].LN + ' ' + currentGraph.source.year }}:</h4>
                     <ul>
@@ -238,7 +257,10 @@
               </template>
               <template slot-scope="props">
                 <!-- id is for scrolling to row when network node is clicked -->
-                <b-table-column :id="props.row.id" field="title" label="Title" sortable>
+                <b-table-column field="numberInSourceReferences" label="#" :visible="Boolean(props.row.numberInSourceReferences)" sortable>
+                  {{ props.row.numberInSourceReferences }}
+                </b-table-column>
+                <b-table-column :id="props.row.id" label="Title">
                   <template v-if="props.row.doi">
                     <a :href="'https://doi.org/' + props.row.doi" target="_blank">{{ props.row.title }}</a>
                   </template>
@@ -246,14 +268,17 @@
                     {{ props.row.title }}
                   </template>
                 </b-table-column>
-                <b-table-column field="authors" label="First Author" sortable>
-                  <b-tooltip dashed multilined :label="authorString(props.row.authors)" position="is-right" type="is-dark">
+                <b-table-column field="authors" label="First Author">
+                  <b-tooltip dashed multilined :label="authorString(props.row.authors)" position="is-left" type="is-dark">
                     {{ props.row.authors[0].LN }}
                   </b-tooltip>
                 </b-table-column>
-                <b-table-column field="year" label="Year" sortable>{{ props.row.year }}</b-table-column>
-                <b-table-column field="journal" label="Journal" sortable>{{ props.row.journal }}</b-table-column>
-                <b-table-column field="citationsCount" label="Citations" meta="Estimated global citations (how many papers cite this one)" sortable>
+                <b-table-column field="year" label="Year" sortable>
+                  <b-tooltip dashed :label="props.row.journal" position="is-left" type="is-dark">
+                    {{ props.row.year }}
+                  </b-tooltip>
+                </b-table-column>
+                <b-table-column field="citationsCount" label="Cit" meta="Estimated global citations (how many papers cite this one)" sortable>
                   <template slot="header" slot-scope="{ column }">
                     <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                       {{ column.label }}
@@ -279,7 +304,7 @@
                     {{ currentGraph.referenced[props.row.id] ? currentGraph.referenced[props.row.id].length : 0 }}
                   </b-tooltip>
                 </b-table-column>
-                <b-table-column field="references.length" label="Refs" meta="References in paper" sortable>
+                <b-table-column field="references.length" label="Ref" meta="References in paper" sortable>
                   <template slot="header" slot-scope="{ column }">
                     <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                       {{ column.label }}
@@ -313,19 +338,22 @@
                 <option value="year">Year</option>
                 <option value="journal">Journal</option>
               </b-select>
-              <b-input v-model="filterString" icon="magnify" placeholder="Filter articles..." expanded></b-input>
+              <b-input v-model="filterString" icon="magnify" placeholder="Filter articles..." expanded
+                :icon-right="filterString ? 'close' : undefined"
+                icon-right-clickable
+                @icon-right-click="filterString=''"></b-input>
               <!-- this line differs from input articles -->
               <span class="button is-static">{{ suggestedArticlesFiltered.length + " / " + currentGraph.suggested.length }}</span>
             </b-field>
             <!-- 'data' and 'selected.sync' differ from input articles. The 'has-detailed-visible' is shorter than for input articles as there's no possible citationContext for suggested articles -->
             <b-table ref="suggestedArticlesTable" :data="suggestedArticlesFiltered" default-sort="inDegree" default-sort-direction="desc" :selected.sync="selectedSuggestedArticle"
               :has-detailed-visible="row => row.abstract"
-			  @keyup.native.arrow-left="toggleArticle"
-			  @keyup.native.arrow-right="toggleArticle"
+              @keyup.native.arrow-left="toggleArticle"
+              @keyup.native.arrow-right="toggleArticle"
               detailed hoverable striped narrowed focusable>
               <template slot="detail" slot-scope="props">
                 <div class="content">
-                  <p v-html="props.row.abstract"></p>
+                  <p v-html="formatAbstract(props.row.abstract)"></p>
                 </div>
                 <!-- there's no possible citationContext for suggested articles -->
               </template>
@@ -339,14 +367,17 @@
                     {{ props.row.title }}
                   </template>
                 </b-table-column>
-                <b-table-column field="authors" label="First Author" sortable>
-                  <b-tooltip dashed multilined :label="authorString(props.row.authors)" position="is-right" type="is-dark">
+                <b-table-column field="authors" label="First Author">
+                  <b-tooltip dashed multilined :label="authorString(props.row.authors)" position="is-left" type="is-dark">
                     {{ props.row.authors[0].LN }}
                   </b-tooltip>
                 </b-table-column>
-                <b-table-column field="year" label="Year" sortable>{{ props.row.year }}</b-table-column>
-                <b-table-column field="journal" label="Journal" sortable>{{ props.row.journal }}</b-table-column>
-                <b-table-column field="citationsCount" label="Citations" meta="Estimated global citations (how many papers cite this one)" sortable>
+                <b-table-column field="year" label="Year" sortable>
+                  <b-tooltip dashed :label="props.row.journal" position="is-left" type="is-dark">
+                    {{ props.row.year }}
+                  </b-tooltip>
+                </b-table-column>
+                <b-table-column field="citationsCount" label="Cit." meta="Estimated global citations (how many papers cite this one)" sortable>
                   <template slot="header" slot-scope="{ column }">
                     <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                       {{ column.label }}
@@ -361,7 +392,7 @@
                     {{ props.row.citationsCount }}
                   </b-tooltip>
                 </b-table-column>
-                <b-table-column field="inDegree" label="Deg" meta="In-Degree: Number of local citations from input articles (incoming edges in network)"
+                <b-table-column field="inDegree" label="Deg." meta="In-Degree: Number of local citations from input articles (incoming edges in network)"
                   sortable :custom-sort="sortInDegreeWrapper">
                   <template slot="header" slot-scope="{ column }">
                     <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -372,7 +403,7 @@
                     {{ currentGraph.referenced[props.row.id] ? currentGraph.referenced[props.row.id].length : 0 }}
                   </b-tooltip>
                 </b-table-column>
-                <b-table-column field="references.length" label="Refs" meta="References in paper" sortable>
+                <b-table-column field="references.length" label="Ref." meta="References in paper" sortable>
                   <template slot="header" slot-scope="{ column }">
                     <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                       {{ column.label }}
@@ -396,15 +427,16 @@
             <template slot="header"><h2 class="title is-4">Citation network</h2></template>
             
             <div id="referenceNetworkDiv" style="height: 100%; cursor: pointer;"></div>
-            <span style="position:absolute; top: 0px">newer</span>
-            <span style="position:absolute; top: 0px; right: 0px"> <a @click="indexFAQ = 'citation-network'; showFAQ = true;" href="#citation-network">(how to read this network)</a></span>
-            <span style="position:absolute; bottom: 0px">older</span>
-            <span style="position:absolute; bottom: 0px; right: 0px">(zoom by scrolling)</span>
+            <span style="position:absolute; top: 0px"><a @click="fullscreenNetwork = !fullscreenNetwork;">({{ (fullscreenNetwork) ? 'show tables' : 'fullscreen network' }})</a></span>
+            <span style="position:absolute; top: 0px; right: 0px">↑ newer articles</span>
+            <span style="position:absolute; bottom: 0px"><a @click="indexFAQ = 'citation-network'; showFAQ = true;" href="#citation-network">(how to read this network)</a></span>
+            <span style="position:absolute; bottom: 0px; right: 0px">↓ older articles</span>
           </b-tab-item>
           <b-tab-item>
             <template slot="header"><h2 class="title is-4">Co-authorship network</h2></template>
             <div id="authorNetwork" style="height: 100%; cursor: pointer;"></div>
-            <span style="position:absolute; top: 0px; right: 0px"> <a @click="indexFAQ = 'author-network'; showFAQ = true;" href="#author-network">(how to read this network)</a></span>
+            <span style="position:absolute; top: 0px"><a @click="fullscreenNetwork = !fullscreenNetwork;">({{ (fullscreenNetwork) ? 'show tables' : 'fullscreen network' }})</a></span>
+            <span style="position:absolute; top: 0px; right: 0px"><a @click="indexFAQ = 'author-network'; showFAQ = true;" href="#author-network">(how to read this network)</a></span>
             <b-field :label="'(only authors with a minimum of ' + minPublications + ' local articles are shown)'" custom-class="small"
               style="position:absolute; bottom: 0px;">
               <b-slider v-model="minPublications" lazy :min="2" :max="10" ticks size="is-small"></b-slider>
@@ -414,7 +446,7 @@
       </div>
       
       <section class="hero is-fullheight" v-show="currentGraphIndex === undefined">
-        <div class="hero-body ">
+        <div class="hero-body">
           <div class="container has-text-centered">
             <b-loading :active.sync="isLoading"></b-loading>
             <h2 class="title">
@@ -424,7 +456,7 @@
           </div>
         </div>
       </section>
-            
+      
       <b-modal :active.sync="showFAQ" :width="840" scroll="keep">
         <div class="card">
           <div class="card-header-title">
@@ -589,9 +621,9 @@
             <p>
               A highly recommended tool very similar to this one is <a href="http://citationgecko.com/" target="_blank">Citation Gecko</a> (based on Crossref), which I didn't know when creating Local Citation Network. The main difference is that you start with a small number of seed articles (5-6 are recommended) and incrementally increase the network by adding recommended articles to the pool of seed articles. Recommended articles include all references and even global citations.
             </p>
-			<p>
-			  Other great software to help with bibliometric / scientometric analyses include <a href="https://harzing.com/resources/publish-or-perish" target="_blank">Anne-Wil Harzing's Publish or Perish</a>, which allows sophisticated queries of a plethora of APIs including Microsoft Academic and Crossref but also Google Scholar, Scopus and Web of Science. If you're looking to create more complex networks than this web app allows, check out the Leiden University's great <a href="https://www.vosviewer.com/" target="_blank">VOSviewer</a> and <a href="https://www.citnetexplorer.nl/" target="_blank">CitNetExplorer</a>, which allow you to create and customize everything from citation networks to author networks, university networks and journal networks. VOSviewer also allows text mining and co-occurrence networks.
-			</p>
+            <p>
+              Other great software to help with bibliometric / scientometric analyses include <a href="https://harzing.com/resources/publish-or-perish" target="_blank">Anne-Wil Harzing's Publish or Perish</a>, which allows sophisticated queries of a plethora of APIs including Microsoft Academic and Crossref but also Google Scholar, Scopus and Web of Science. If you're looking to create more complex networks than this web app allows, check out the Leiden University's great <a href="https://www.vosviewer.com/" target="_blank">VOSviewer</a> and <a href="https://www.citnetexplorer.nl/" target="_blank">CitNetExplorer</a>, which allow you to create and customize everything from citation networks to author networks, university networks and journal networks. VOSviewer also allows text mining and co-occurrence networks.
+            </p>
           </div>
         </b-collapse>
         <b-collapse class="card" id="apis-used" :open="indexFAQ === 'apis-used'" @open="indexFAQ = 'apis-used'" animation="none">
@@ -673,6 +705,27 @@
             </p>
           </div>
         </b-collapse>
+
+      </b-modal>
+
+      <b-modal :active.sync="editListOfDOIs" has-modal-card>
+        <div class="modal-card">
+          <header class="modal-card-head">
+            <content>
+              <h4 class="modal-card-title">Import list of DOIs</h4>
+              <p>Leaving rows empty can help preserve original numbering.</p>
+            </content>
+          </header>
+          <section style="position: relative; height:300px">
+            <textarea id="rownumber" readonly="true" style="overflow-y: scroll; height: 100%; width: 80px; text-align: right; position: absolute; padding-right: 20px; color: grey; resize: none;" onscroll="this.scrollTop = document.getElementById('dois').scrollTop">{{ Array.from(editedListOfDOIs.split('\n').keys()).map(x=>x+1).join('\n') }}</textarea>
+            <textarea id="dois" style="height: 100%; width: calc(100% - 50px); position: absolute; left: 50px; padding: 0px 10px; resize: none" spellcheck="false" onscroll="document.getElementById('rownumber').scrollTop = this.scrollTop" oninput="document.getElementById('rownumber').value = Array.from(this.value.split('\n').keys()).map(x=>x+1).join('\n')" v-model.lazy="editedListOfDOIs"></textarea>
+          </section>
+          <footer class="modal-card-foot">
+            <button class="button" type="button" @click="editListOfDOIs=false">Cancel</button>
+            <button class="button is-primary" @click="importList">Import with name: </button>
+            <b-input v-model.lazy="listName" maxlength="100" :has-counter="false" style="width: 100%"></b-input>
+          </footer>
+        </div>
       </b-modal>
     </section>
 

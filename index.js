@@ -1,4 +1,4 @@
-/* Local Citation Network v0.93 (GPL-3) */
+/* Local Citation Network v0.94 (GPL-3) */
 /* by Tim Wölfle */
 /* https://timwoelfle.github.io/Local-Citation-Network */
 
@@ -30,14 +30,16 @@ function crossrefWorks (expression, response, count) {
   })
 }
 
-function crossrefResponseToArticleArray (data) {
+function crossrefResponseToArticleArray (data, sourceReferences) {
   return data.message.items.map(function (article) {
     // filter is necessary because some references don't have DOIs in CrossRef (https://stackoverflow.com/questions/28607451/removing-undefined-values-from-array)
-    const references = (typeof article.reference === 'object') ? article.reference.map(x => x.DOI).filter(Boolean).map(x => x.toLowerCase()) : []
+    const references = (typeof article.reference === 'object') ? article.reference.map(x => (x.DOI) ? x.DOI.toUpperCase() : undefined) : []
 
     return {
-      id: article.DOI.toLowerCase(),
-      doi: article.DOI.toLowerCase(),
+      id: article.DOI.toUpperCase(),
+      // Crossref actually returns references in the original order (as opposed to MA)
+      numberInSourceReferences: (sourceReferences.length) ? sourceReferences.indexOf(article.DOI.toUpperCase()) + 1 : undefined,
+      doi: article.DOI.toUpperCase(),
       title: String(article.title), // most of the time title is an array with length=1, but I've also seen pure strings
       authors: (article.author && article.author.length) ? article.author.map(x => ({ LN: x.family || x.name, FN: x.given, affil: String(x.affiliation) || undefined })) : [{ LN: article.author || undefined }],
       year: article.issued['date-parts'] && article.issued['date-parts'][0] && article.issued['date-parts'][0][0],
@@ -90,12 +92,14 @@ function microsoftAcademicEvaluate (expression, response, count, apiKey = '') {
 }
 
 // API attributes documentation: https://docs.microsoft.com/en-us/azure/cognitive-services/academic-knowledge/paperentityattributes
-function microsoftAcademicResponseToArticleArray (data) {
+function microsoftAcademicResponseToArticleArray (data, sourceReferences) {
   return data.entities.map(function (article) {
     return {
       id: article.Id,
       microsoftAcademicId: article.Id,
-      doi: (article.DOI) ? article.DOI.toLowerCase() : undefined, // some articles don't have DOIs
+      // Microsoft Academic returns reference lists of papers as arrays sorted by "relevance" (close to global number of citations), not by order of references in original publication
+      numberInSourceReferences: (article.DOI) ? ((sourceReferences.length) ? sourceReferences.indexOf(article.DOI.toUpperCase()) + 1 : undefined) : undefined,
+      doi: (article.DOI) ? article.DOI.toUpperCase() : undefined, // some articles don't have DOIs
       title: article.DN,
       authors: article.AA.map(author => {
         if (!author.DAuN) return { LN: String(author) }
@@ -116,12 +120,7 @@ function microsoftAcademicResponseToArticleArray (data) {
 function revertAbstractFromInvertedIndex (InvertedIndex) {
   const abstract = []
   Object.keys(InvertedIndex).forEach(word => InvertedIndex[word].forEach(i => { abstract[i] = word }))
-  for (let i = 0; i < abstract.length; i++) {
-    if (abstract[i] === undefined) {
-      abstract[i] = '<br>'
-    }
-  }
-  return abstract.join(' ').replace(/ <br> /g, '<br>')
+  return abstract.join(' ').replace('  ', ' ').trim()
 }
 
 /* vis.js Reference graph */
@@ -156,12 +155,12 @@ function initReferenceNetwork (app) {
 
   const nodes = articles.map(article => ({
     id: article.id,
-    title: article.authors[0].LN + ', ' + article.year,
+    title: vm.authorStringShort(article.authors) + ', <i>' + article.title + '</i>. ' + article.journal + ' ' + article.year + '.',
     level: years.indexOf(article.year),
     group: article.year,
     size: (inDegree[article.id] || 0 + 2) * 10,
     shape: (app.inputArticlesIds.includes(article.id)) ? 'dot' : 'star',
-    label: article.authors[0].LN + ',\n' + article.year
+    label: article.authors[0].LN + '\n' + article.year
   }))
 
   // Create network
@@ -198,6 +197,7 @@ function initReferenceNetwork (app) {
   }
   referenceNetwork = new vis.Network(document.getElementById('referenceNetworkDiv'), { nodes: nodes, edges: edges }, options)
   referenceNetwork.on('click', networkOnClick)
+  referenceNetwork.on('doubleClick', networkOnDoubleClick)
   referenceNetwork.on('resize', function () { referenceNetwork.fit() })
 
   function networkOnClick (params) {
@@ -215,6 +215,17 @@ function initReferenceNetwork (app) {
         app.showSuggested = 1
         app.selectedSuggestedArticle = app.currentGraph.suggested[app.suggestedArticlesIds.indexOf(selectedNode)]
       }
+    }
+  }
+
+  function networkOnDoubleClick (params) {
+    let selectedNode, article
+
+    // Select corresponding row in table
+    if (params.nodes.length > 0) {
+      selectedNode = params.nodes[0]
+      article = app.currentGraph.input[app.inputArticlesIds.indexOf(selectedNode)] || app.currentGraph.suggested[app.suggestedArticlesIds.indexOf(selectedNode)]
+      window.open('https://doi.org/' + article.doi, '_blank')
     }
   }
 }
@@ -348,8 +359,11 @@ const vm = new Vue({
     graphs: [],
     newSourceDOI: undefined,
     file: undefined,
+    listOfDOIs: [],
+    listName: undefined,
 
     // UI
+    fullscreenNetwork: false,
     filterColumn: 'titleAbstract',
     filterString: undefined,
     selectedInputArticle: undefined,
@@ -360,9 +374,14 @@ const vm = new Vue({
     minPublications: 2,
     isLoading: false,
     showFAQ: false,
-    indexFAQ: 'about'
+    indexFAQ: 'about',
+    editListOfDOIs: false
   },
   computed: {
+    editedListOfDOIs: {
+      get: function () { return this.listOfDOIs.join('\n') },
+      set: function (x) { this.listOfDOIs = x.split('\n') }
+    },
     currentGraph: function () {
       if (this.currentGraphIndex === undefined) return { source: {}, input: [], suggested: [] }
       return this.graphs[this.currentGraphIndex]
@@ -424,13 +443,14 @@ const vm = new Vue({
     newSourceDOI: function () {
       if (!this.newSourceDOI || !this.newSourceDOI.trim()) return false
 
-      const DOI = this.newSourceDOI.trim()
+      let DOI = this.newSourceDOI.trim().toUpperCase()
 
-      if (!DOI.match(/10\.\d{4,9}\/+/)) return this.errorMessage(DOI + ' is not a valid DOI, which must be in the form: 10.prefix/suffix where prefix is 4 or more digits and suffix is a string.', 'Invalid DOI')
-
-      const graphDOIs = this.graphs.map(graph => graph.source.doi)
+      // Ignore trailing string (e.g. 'doi:' or 'https://doi.org/')
+      if (!DOI.match(/10\.\d{4,9}\/.+/)) return this.errorMessage(DOI + ' is not a valid DOI, which must be in the form: 10.prefix/suffix where prefix is 4 or more digits and suffix is a string.', 'Invalid DOI')
+      else DOI = DOI.match(/10\.\d{4,9}\/.+/)[0]
 
       // Check if DOI is among open tabs already
+      const graphDOIs = this.graphs.map(graph => graph.source.doi)
       if (graphDOIs.includes(DOI)) {
         this.currentGraphIndex = graphDOIs.indexOf(DOI)
       // Otherwise set new source DOI
@@ -448,9 +468,14 @@ const vm = new Vue({
       if (!this.file || !this.file.name) return false
       this.isLoading = true
       this.file.text().then(text => {
-        const dois = Array.from(new Set(text.match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+/gi)))
+        this.isLoading = false
+        // Using the set [-_;()/:A-Z0-9] twice (fullstop . and semicolon ; only in first set) makes sure that the trailing character is not a fullstop or semicolon
+        const dois = Array.from(new Set(text.match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi))).map(x => x.toUpperCase())
         if (!dois.length) throw new Error('No DOIs found in file.')
-        this.setNewSource({ references: dois, referencesCountTotal: dois.length }, this.file.name, this.file.name)
+        this.listOfDOIs = dois
+        this.listName = this.file.name
+        this.editListOfDOIs = true
+        // this.setNewSource({ references: dois, referencesCountTotal: dois.length }, this.file.name, this.file.name)
       }).catch(e => this.errorMessage('Error with file handling: ' + e))
     },
     // A different node (reference) in the graph has been selected
@@ -469,6 +494,9 @@ const vm = new Vue({
     minPublications: function () {
       initAuthorNetwork(this, this.minPublications)
       this.highlightNodes()
+    },
+    editListOfDOIs: function () {
+      document.getElementById('dois').scrollTop = document.getElementById('dois').scrollTopMax
     }
   },
   methods: {
@@ -485,13 +513,14 @@ const vm = new Vue({
         })
 
         // Get Input articles
-        this.callAPI(source.references, response => {
+        // filter(Boolean) is necessary because references array can contain empty items in order to preserve original order of DOIs from crossref
+        this.callAPI(source.references.filter(Boolean), response => {
           const referenced = {}
-          const inputArticles = this.responseToArray(response.data)
+          const inputArticles = this.responseToArray(response.data, source.references)
           const inputArticlesIds = inputArticles.map(article => article.id)
 
           inputArticles.forEach(function (article) {
-            article.references.forEach(function (refId) {
+            article.references.filter(Boolean).forEach(function (refId) {
               if (!referenced[refId]) referenced[refId] = []
               referenced[refId].push(article.id)
             })
@@ -521,7 +550,7 @@ const vm = new Vue({
           // https://medium.com/@alleto.saburido/set-theory-for-arrays-in-es6-eb2f20a61848
           const suggestedIds = Object.keys(referenced)
           // Only suggest articles that have at least two local citations and that aren't already among input articles
-          // Careful with comparing DOIs!!! They have to be all lower case (performed by crossrefResponseToArticleArray & microsoftAcademicResponseToArticleArray)
+          // Careful with comparing DOIs!!! They have to be all upper case (performed by crossrefResponseToArticleArray & microsoftAcademicResponseToArticleArray)
             .filter(x => referenced[x].length > 1 && !inputArticlesIds.includes(Number(x) || x)) // If x is numeric (i.e. Id from Microsoft Academic), convert to Number, otherwise keep DOIs from Crossref
             .sort((a, b) => referenced[b].length - referenced[a].length).slice(0, 10)
 
@@ -564,7 +593,7 @@ const vm = new Vue({
       this.$buefy.dialog.prompt({
         message: 'Enter DOI of new source article',
         inputAttrs: {
-          placeholder: 'e.g. 10.1126/science.aac4716',
+          placeholder: 'e.g. 10.1126/SCIENCE.AAC4716',
           maxlength: 50
         },
         onConfirm: value => { this.newSourceDOI = value }
@@ -663,7 +692,7 @@ const vm = new Vue({
     callAPI: function (ids, response, count) {
       if (this.useMA) {
         // For Microsoft Academic the user inputs DOIs but the API returns references as proprietory numeric Ids
-        if (String(ids[0]).match(/10\.\d{4,9}\/+/)) {
+        if (String(ids[0]).match(/10\.\d{4,9}\/.+/)) {
           return microsoftAcademicEvaluate('Or(DOI=\'' + ids.join('\',DOI=\'') + '\')', response, count, this.customKeyMA)
         } else {
           return microsoftAcademicEvaluate('Or(Id=' + ids.join(',Id=') + ')', response, count, this.customKeyMA)
@@ -673,11 +702,11 @@ const vm = new Vue({
         return crossrefWorks('doi:' + ids.join(',doi:'), response, count)
       }
     },
-    responseToArray: function (data) {
+    responseToArray: function (data, sourceReferences = false) {
       if (this.useMA) {
-        return microsoftAcademicResponseToArticleArray(data)
+        return microsoftAcademicResponseToArticleArray(data, sourceReferences)
       } else {
-        return crossrefResponseToArticleArray(data)
+        return crossrefResponseToArticleArray(data, sourceReferences)
       }
     },
     errorMessage: function (e, title = 'Error') {
@@ -706,7 +735,7 @@ const vm = new Vue({
       const re = new RegExp(this.filterString, 'gi')
       switch (this.filterColumn) {
         case 'titleAbstract':
-          return articles.filter(article => article.title.match(re) || (article.abstract && article.abstract.match(re)))
+          return articles.filter(article => String(article.numberInSourceReferences).match(new RegExp(this.filterString, 'y')) || article.title.match(re) || (article.abstract && article.abstract.match(re)))
         case 'authors':
           return articles.filter(article => article.authors.map(author => (author.FN + ' ' + author.LN)).join(', ').match(re))
         case 'year':
@@ -775,7 +804,16 @@ const vm = new Vue({
       // Make sure article can even be toggled (compare with :has-detailed-visible in b-table in index.html)
       if (this.selected.abstract || (this.currentGraph.source.citationContext && this.currentGraph.source.citationContext[this.selected.id])) {
         (this.showSuggested) ? this.$refs.suggestedArticlesTable.toggleDetails(this.selectedSuggestedArticle) : this.$refs.inputArticlesTable.toggleDetails(this.selectedInputArticle)
+        if (document.getElementById(this.selected.id)) document.getElementById(this.selected.id).scrollIntoView({ behavior: 'smooth', block: 'start' })
       }
+    },
+    formatAbstract: function (abstract) {
+      return abstract.replace(/Importance:? ?/, '<br><em>Importance:</em> ').replace(/Background:? ?/, '<br><em>Background:</em> ').replace(/Aims?:? ?/, '<br><em>Aims:</em> ').replace(/Goals?:? ?/, '<br><em>Goals:</em> ').replace(/Objectives?:? ?/, '<br><em>Objectives:</em> ').replace(/Main Outcomes? and Measures:? ?/, '<br><em>Main Outcomes and Measures:</em> ').replace(/Methods?:? ?/, '<br><em>Methods:</em> ').replace(/Results?:? ?/, '<br><em>Results:</em> ').replace(/Discussion:? ?/, '<br><em>Discussion:</em> ').replace(/Conclusions?:? ?/, '<br><em>Conclusions:</em> ').replace(/<br>/, '')
+    },
+    importList: function () {
+      this.editListOfDOIs = false
+      this.isLoading = true
+      this.setNewSource({ references: this.listOfDOIs, referencesCountTotal: this.listOfDOIs.length }, this.listName, this.listName)
     }
   },
   created: function () {
@@ -790,8 +828,28 @@ const vm = new Vue({
       console.log("Couldn't load cached networks")
     }
 
+    // Open source DOI from link
     if (urlParams.has('sourceDOI')) {
       this.newSourceDOI = urlParams.get('sourceDOI')
+      // Open list of DOIs from link if tab is not already stored in localStorage
+    } else if (urlParams.has('listOfDOIs')) {
+      let editList = urlParams.has('editList') ? urlParams.get('editList') : false
+      const name = urlParams.has('name') ? urlParams.get('name') : 'Custom'
+      // Safety measure to allow max. 500 DOIs (not sure if Microsoft Academic actually allows this, CrossRef definitely doesn't)
+      const dois = urlParams.get('listOfDOIs').split(',').slice(0, 500)
+
+      // If a custom list with the same name already exists, let user chose new name
+      if (this.graphs.map(x => x.tabLabel).includes(name)) {
+        editList = true
+      }
+
+      this.listOfDOIs = dois
+      this.listName = name
+      if (editList) {
+        this.editListOfDOIs = true
+      } else {
+        this.importList()
+      }
     }
 
     if (this.graphs.length) {
