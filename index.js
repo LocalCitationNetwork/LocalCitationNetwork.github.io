@@ -1,4 +1,4 @@
-/* Local Citation Network v0.94 (GPL-3) */
+/* Local Citation Network v0.95 (GPL-3) */
 /* by Tim Wölfle */
 /* https://timwoelfle.github.io/Local-Citation-Network */
 
@@ -637,6 +637,8 @@ const vm = new Vue({
         } else {
           if (network.body.data.nodes.getIds().includes(this.selected.id)) {
             selectedNodes = [this.selected.id]
+          } else {
+            selectedNodes = []
           }
         }
       }
@@ -850,6 +852,12 @@ const vm = new Vue({
       } else {
         this.importList()
       }
+    }
+    
+    // Linked to FAQ?
+    if (window.location.hash.length) {
+      this.showFAQ = true
+      this.indexFAQ = window.location.hash.substr(1)
     }
 
     if (this.graphs.length) {

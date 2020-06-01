@@ -186,7 +186,7 @@
                 <p>
                   Based on the references of the following source article
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
-                    label="Copy this link's address and share! (Right-click => 'Copy Link Location')"
+                    label="Copy this link's address and share! (Right-click → 'Copy Link Location')"
                     v-if="currentGraph.source.doi">
                     <a :href="'?sourceDOI=' + currentGraph.source.doi.toUpperCase()" @click="e =>  e.preventDefault()"> (link to share)</a>
                   </b-tooltip>:
@@ -211,7 +211,7 @@
               <p v-else>
                 Based on DOIs from the following file / list: {{ currentGraph.tabLabel }}
                 <b-tooltip dashed multilined position="is-bottom" type="is-dark"
-                  label="Copy this link's address and share! (Right-click => 'Copy Link Location')"
+                  label="Copy this link's address and share! (Right-click → 'Copy Link Location')"
                   v-if="currentGraph.source.references">
                   <a :href="'?name=' + currentGraph.tabLabel + '&listOfDOIs=' + currentGraph.source.references.join(',')" @click="e =>  e.preventDefault()"> (link to share)</a>
                 </b-tooltip>
@@ -482,13 +482,29 @@
           </div>
           <div class="card-content content">
             <p>
-              There are basically two ways to create new networks: First, based on the references of a given paper. This could be a review or just an interesting paper you'd like to dig deeper into. Either click the + button at the top right and enter the <a href="https://en.wikipedia.org/wiki/Digital_object_identifier" target="_blank">digital object identifier (DOI)</a> of the source article, or click the blue reference-button of an interesting citation in the Refs-column of the tables if you already have opened a network.
+              There are basically two ways to create new networks: First, based on the references of a given paper. This could be a review or just an interesting paper you'd like to dig deeper into. Either click the + button at the top right and enter the <a href="https://en.wikipedia.org/wiki/Digital_object_identifier" target="_blank">digital object identifier (DOI)</a> of the source article or use the <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">bookmarklet described below</a>.
             </p>
             <p>
-              The second way to create a new network is to scan a text file for DOIs, which allows you to create your own unique lists of input articles. For example, this could be a .ris / .bib / .json file exported by your reference manager (e.g. <a href="https://www.zotero.org/" target="_blank">Zotero</a> or EndNote). In theory, you can scan any plain text file (PDFs and Microsoft Office files don't work). However, if the DOIs are embedded in sentences or URLs and have a trailing fullstop (.) or slash (/), the system will have difficulties extracting them correctly and might not find all of them.
+              The second way to create a new network is to scan a text file for DOIs, which allows you to create your own unique lists of input articles. For example, this could be a .ris / .bib / .json file exported by your reference manager (e.g. <a href="https://www.zotero.org/" target="_blank">Zotero</a> or EndNote). In theory, you can scan any plain text file (PDFs and Microsoft Office files don't work). However, due to the multitude of characters allowed in DOIs, the system might not catch all of them correctly (see <a href="https://www.crossref.org/blog/dois-and-matching-regular-expressions/" target="_blank">this blog post by Crossref for more explanation</a>).
             </p>
             <p>
               Up to 5 tabs can be open at the same time, representing a different local citation network each. Only one query can be processed at a time, which is why some buttons are disabled when a query is still going on. Microsoft Academic seems to be able to process quite large numbers of references (I've successfully tried up to 500) but Crossref's API returns an error when trying to process too many references (depending on the length of the search string, around >110 DOIs).
+            </p>
+          </div>
+        </b-collapse>
+        <b-collapse class="card" id="bookmarklet" :open="indexFAQ === 'bookmarklet'" @open="indexFAQ = 'bookmarklet'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">How to use the bookmarklet to open references of a paper?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              A <a href="https://en.wikipedia.org/wiki/Bookmarklet" target="_blank">bookmarklet</a> is a small program that can be saved as a bookmark in your browser. This particular bookmarklet allows you to open a new network in Local Citation Network directly when surfing many journals' websites (e.g. Nature, Science, Lancet, ...) instead of having to enter the DOI manually. Save the following link as a bookmark (e.g. by dragging it to your bookmarks bar or by right-click → "Bookmark This Link" in Firefox) and then click on it when reading an article (e.g. <a href="https://www.nature.com/articles/s41586-020-2196-x" target="_blank">this one</a>): <a href='javascript:(function(){rootDOI = document.querySelector("meta[name=\"citation_doi\"]") || document.querySelector("meta[name=\"evt-doiPage\"]");if (!rootDOI) return(alert("Unfortunately could not extract references."));else rootDOI = rootDOI.content.toUpperCase();lis = document.querySelectorAll("#references-section ul > li");if (!lis.length) lis = document.querySelectorAll("ol.c-article-references > li");if (!lis.length) lis = document.querySelectorAll("ol.cit-list > li");if (!lis.length) lis = document.querySelectorAll("div.References");if (!lis.length) lis = document.querySelectorAll("ol#referenceContent > li");if (!lis.length) lis = document.querySelectorAll("ol.referenceList > li");if (!lis.length) lis = document.querySelectorAll(".ref-list .ref");if (!lis.length) lis = document.querySelectorAll(".references > li");if (!lis.length) lis = document.querySelectorAll("li.ref");listOfReferenceDOIs = Array.from(lis).map(x => {x = decodeURIComponent(x.innerHTML).match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi);return(x && x.map(y => y.toUpperCase()).filter(y => y !== rootDOI)[0]);});if (listOfReferenceDOIs.length) window.open("https://timwoelfle.github.io/Local-Citation-Network/index.html?name=Custom&editList=true&listOfDOIs=" + listOfReferenceDOIs.join(","));else alert("Unfortunately could not extract references.")}())'>Open in Local Citation Network</a>.
+            </p>
+            <p>
+              The bookmarklet is particularly useful when you want to use Local Citation Network as a "second screen" when you are reading a paper, showing you its references in the correct order and allowing you to view their abstracts and to identify seminal articles as well as additional suggested articles. When using the bookmarklet, the reference list is not obtained through Microsoft Academic itself but scanned directly from the website and then only subsequently this list of references is sent to Microsoft Academic to construct the Citation Network and to obtain suggestions. This way, the original order of references is preserved, which is not the case when using the Microsoft Academic API.
+            </p>
+            <p>
+              Unfortunately, not all journals' websites are supported. If you know how to code, check out the <a href="https://github.com/timwoelfle/Local-Citation-Network/blob/master/bookmarklet.js" target="_blank">code of the bookmarklet on GitHub</a> and extend it to support more journals! In this light it might be worth updating the bookmark in your browser from time to time to benefit from possible improvements.
             </p>
           </div>
         </b-collapse>
@@ -604,6 +620,19 @@
             </ol>
           </div>
         </b-collapse>
+        <b-collapse class="card" id="original-order" :open="indexFAQ === 'original-order'" @open="indexFAQ = 'original-order'" animation="none">
+          <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+            <h4 class="card-header-title">How can I preserve the original order of references in the input article list?</h4>
+          </div>
+          <div class="card-content content">
+            <p>
+              Unfortunately, Microsoft Academic does not seem to save the original order in which references appear in an article, at least it does not return it via its API. However, you can <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">use the bookmarklet</a> to open reference lists in their original order.
+            </p>
+            <p>
+              Alternatively, you can use Crossref, which does save the original order of references. See here <a @click="indexFAQ = 'switch-api'" href="#switch-api">how to switch the API used</a>.
+            </p>
+          </div>
+        </b-collapse>
 
         <div class="card">
           <div class="card-header-title">
@@ -619,7 +648,7 @@
               Bibliometrics is a part of information science that uses <a href="https://en.wikipedia.org/wiki/Bibliometrics" target="_blank">statistical methods to analyze publications</a>. It emcompasses scientometrics, which is specifically looking at scientific publications, and citation analysis.
             </p>
             <p>
-              A highly recommended tool very similar to this one is <a href="http://citationgecko.com/" target="_blank">Citation Gecko</a> (based on Crossref), which I didn't know when creating Local Citation Network. The main difference is that you start with a small number of seed articles (5-6 are recommended) and incrementally increase the network by adding recommended articles to the pool of seed articles. Recommended articles include all references and even global citations.
+              A highly recommended tool similar in spirit to this one is <a href="http://citationgecko.com/" target="_blank">Citation Gecko</a> (based on Crossref), which I didn't know when creating Local Citation Network. The main difference is that you start with a small number of seed articles (5-6 are recommended) and incrementally increase the network by adding recommended articles to the pool of seed articles. Recommended articles include all references and even global citations. Check out this <a href="https://leidenmadtrics.nl/articles/local-citation-network-and-citation-gecko-making-literature-discovery-fun" target="_blank">guest post I've written for the blog Leiden Madtrics comparing the two tools</a>.
             </p>
             <p>
               Other great software to help with bibliometric / scientometric analyses include <a href="https://harzing.com/resources/publish-or-perish" target="_blank">Anne-Wil Harzing's Publish or Perish</a>, which allows sophisticated queries of a plethora of APIs including Microsoft Academic and Crossref but also Google Scholar, Scopus and Web of Science. If you're looking to create more complex networks than this web app allows, check out the Leiden University's great <a href="https://www.vosviewer.com/" target="_blank">VOSviewer</a> and <a href="https://www.citnetexplorer.nl/" target="_blank">CitNetExplorer</a>, which allow you to create and customize everything from citation networks to author networks, university networks and journal networks. VOSviewer also allows text mining and co-occurrence networks.
@@ -713,7 +742,7 @@
           <header class="modal-card-head">
             <content>
               <h4 class="modal-card-title">Import list of DOIs</h4>
-              <p>Leaving rows empty can help preserve original numbering.</p>
+              <p>Empty rows are placeholders when the DOI could not be captured for a reference. They help preserve original numbering.</p>
             </content>
           </header>
           <section style="position: relative; height:300px">
