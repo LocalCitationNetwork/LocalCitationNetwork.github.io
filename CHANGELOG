@@ -1,0 +1,42 @@
+03.2021 v0.96
++ Added support for OpenCitations API (#2 no-identd)
++ Suggest "Outgoing suggestions" for queries performed with OpenCitations API (down-pointing triangle in citation network)
++ Allow users to select the number of "Incoming suggestions" and "Outgoing suggestions" shown (max. 20 each)
++ Allow users to input source article by Microsoft Academic Id, useful for arxiv and conference papers (#1 dukebw)
++ Added "Out-Degree" columns in tables showing the number of input articles cited
+* Renamed "Suggested articles" to "Incoming suggestions", use up-pointing triangle instead of star in citation network
+* Node-size in citation network now depends on sum of in-degree and out-degree, not just in-degree
+* Include source article in "Input articles" table and citation network (as diamond)
+* Show references among suggested articles in citation network (they still don't count towards in- and out-degree though)
+* Include used API in localStorage and "link to share" function
+* Updated examples to showcase all 3 APIs
+* Perform API calls via fetch, remove Axios
+* Bumped Vue to v2.6.12, Buefy to v0.9.4 and vis.js Network to 9.0.3
+! Fixed estimation of "respective average reference completeness" for Crossref
+! Parse DOIs in files more robustly (ignoring whitespace)
+
+01.06.2020 v0.95
++ Added bookmarklet
+
+03.05.2020 v0.94
++ Allows users to send links with lists of DOIs
++ Show numbering of articles when showing custom list (e.g. from file or link) or when using Crossref (which preserves reference numbering from original article, whereas Microsoft Academic doesn't preserve original numbering)
++ Allows users to edit lists of DOIs when reading files
++ Add fullscreen network mode
+* Show title and journal in citation network node labels
+* Open article link in new window when double-clicking articles in citation network
+* Bumped Vue to v2.6.11 and Buefy to v0.8.17
+! Fix layout on smartphones
+! Parse DOIs in files more robustly (ignoring trailing fullstop and semicolon)
+! Default DOIs to uppercase as is standard
+
+09.04.2020 v0.93
++ Arrow keys toggle abstract in articles tables
+* Also bumped Buefy to 0.8.15
+
+25.11.2019 Added Author network v0.92
++ Added Author network
+* Updated FAQ
+* Updated vis.js Network to 6.4.4
+
+21.11.2019 First release v0.9

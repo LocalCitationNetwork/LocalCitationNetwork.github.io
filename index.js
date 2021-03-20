@@ -1,8 +1,8 @@
-/* Local Citation Network v0.95 (GPL-3) */
+/* Local Citation Network v0.96 (GPL-3) */
 /* by Tim Wölfle */
 /* https://timwoelfle.github.io/Local-Citation-Network */
 
-/* global axios, vis, Vue, Buefy, localStorage */
+/* global fetch, localStorage, vis, Vue, Buefy */
 
 'use strict'
 
@@ -11,7 +11,7 @@ const arrAvg = arr => arrSum(arr) / arr.length
 
 /* Crossref API */
 
-function crossrefWorks (expression, response, count) {
+function crossrefWorks (expression, responseFunction, count) {
   // Currently the crossref API doesn't fully support subselection of response, so just obtain full response (in particular reference data: https://gitlab.com/crossref/issues/issues/511)
   let body = {
     filter: expression,
@@ -25,37 +25,80 @@ function crossrefWorks (expression, response, count) {
     return encodeURIComponent(k) + '=' + encodeURIComponent(body[k])
   }).join('&')
 
-  return axios.get('https://api.crossref.org/works?' + body).then(response).catch(function (error) {
-    vm.errorMessage('Error while processing data through Crossref API: ' + error + ' ' + (error.response && error.response.data && error.response.data.message && error.response.data.message[0] && error.response.data.message[0].message))
-  })
+  return fetch('https://api.crossref.org/works?' + body).then(response => {
+    return response.json()
+  }).then(data => {
+    if (data.status === 'failed') {
+      throw new Error(data.message && data.message[0] && data.message[0].message)
+    }
+    responseFunction(data)
+  }).catch(error =>
+    vm.errorMessage('Error while processing data through Crossref API: ' + error)
+  )
 }
 
 function crossrefResponseToArticleArray (data, sourceReferences) {
   return data.message.items.map(function (article) {
-    // filter is necessary because some references don't have DOIs in CrossRef (https://stackoverflow.com/questions/28607451/removing-undefined-values-from-array)
+    // filter is necessary because some references don't have DOIs in Crossref (https://stackoverflow.com/questions/28607451/removing-undefined-values-from-array)
     const references = (typeof article.reference === 'object') ? article.reference.map(x => (x.DOI) ? x.DOI.toUpperCase() : undefined) : []
 
     return {
       id: article.DOI.toUpperCase(),
-      // Crossref actually returns references in the original order (as opposed to MA)
-      numberInSourceReferences: (sourceReferences.length) ? sourceReferences.indexOf(article.DOI.toUpperCase()) + 1 : undefined,
+      // Crossref actually returns references in the original order (as opposed to MA & OC)
+      numberInSourceReferences: (sourceReferences.length) ? (sourceReferences.indexOf(article.DOI.toUpperCase()) + 1) : undefined,
       doi: article.DOI.toUpperCase(),
       title: String(article.title), // most of the time title is an array with length=1, but I've also seen pure strings
       authors: (article.author && article.author.length) ? article.author.map(x => ({ LN: x.family || x.name, FN: x.given, affil: String(x.affiliation) || undefined })) : [{ LN: article.author || undefined }],
       year: article.issued['date-parts'] && article.issued['date-parts'][0] && article.issued['date-parts'][0][0],
       journal: String(article['container-title']),
-      references: references || [],
-      referencesCountTotal: article['references-count'], // Crossref also returns total number of references, including those without DOIs that are thus missing in references
+      references: references || [], // Crossref "references" array contains null positions for references it doesn't have DOIs for, thus preserving the original number of references
       citationsCount: article['is-referenced-by-count'],
       abstract: article.abstract
     }
   })
 }
 
+/* OpenCitations API */
+
+function openCitationsMetadata (expression, responseFunction, count) {
+  // https://opencitations.net/index/api/v1#/metadata/{dois}
+  return fetch('https://opencitations.net/index/api/v1/metadata/' + expression).then(response => {
+    if (!response.ok) {
+      throw new Error(response)
+    }
+    return response.json()
+  }).then(data => {
+    responseFunction(data)
+  }).catch(error => {
+    vm.errorMessage('Error while processing data through OpenCitations API: ' + error)
+  })
+}
+
+function openCitationsResponseToArticleArray (data, sourceReferences) {
+  return data.map(function (article) {
+    const references = (article.reference) ? article.reference.split('; ').map(x => x.toUpperCase()) : []
+
+    return {
+      id: article.doi.toUpperCase(),
+      // OpenCitations doesn't seem to return references in original ordering
+      // Nonetheless, when the input is a listOfDOIs (i.e. file / bookmarklet), the order can be recovered
+      numberInSourceReferences: (sourceReferences.length) ? sourceReferences.indexOf(article.doi.toUpperCase()) + 1 : undefined,
+      doi: article.doi.toUpperCase(),
+      title: String(article.title), // most of the time title is an array with length=1, but I've also seen pure strings
+      authors: article.author.split('; ').map(x => ({ LN: x.split(', ')[0], FN: x.split(', ')[1] })),
+      year: article.year,
+      journal: String(article.source_title),
+      references: references,
+      citations: (article.citation) ? article.citation.split('; ').map(x => x.toUpperCase()) : [],
+      citationsCount: Number(article.citation_count)
+    }
+  })
+}
+
 /* Microsoft Academic (MA) API  */
 
-function microsoftAcademicEvaluate (expression, response, count, apiKey = '') {
-  let body = {
+function microsoftAcademicEvaluate (expression, responseFunction, count, apiKey = '') {
+  const body = {
     expr: expression,
     model: 'latest',
     count: count,
@@ -63,32 +106,40 @@ function microsoftAcademicEvaluate (expression, response, count, apiKey = '') {
     attributes: ['Id', 'DOI', 'DN', 'AA.DAuN', 'AA.DAfN', 'Y', 'BV', 'RId', 'ECC', 'CitCon', 'IA'].join(',')
   }
 
-  // Encode request body as URLencoded
-  body = Object.keys(body).map(function (k) {
-    return encodeURIComponent(k) + '=' + encodeURIComponent(body[k])
-  }).join('&')
+  const init = {
+    method: 'POST',
+    headers: {
+      'Ocp-Apim-Subscription-Key': apiKey,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    // Encode request body as URLencoded
+    body: Object.keys(body).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(body[k])
+    }).join('&')
+  }
 
-  // return axios.get("https://api.labs.cognitive.microsoft.com/academic/v1.0/evaluate?" + body, {
-  return axios.post('https://api.labs.cognitive.microsoft.com/academic/v1.0/evaluate', body, {
-    headers: { 'Ocp-Apim-Subscription-Key': apiKey, 'Content-Type': 'application/x-www-form-urlencoded' }
-  }).then(response).catch(function (error) {
-    if (error.message === 'Network Error') {
-      vm.errorMessage('Error while processing data through Microsoft Academic API. Check your connection or try Crossref.', 'Network Error')
-    } else if (error.response && error.response.status === 401) {
-      vm.useMA = false
-      let errorMessage = 'Try again with Crossref, Microsoft Academic turned off.<br><br>'
-      if (vm.customKeyMA) {
-        errorMessage += 'Custom API key for Microsoft Academic (' + vm.customKeyMA + ') incorrect or monthly quota exhausted. <a href="https://msr-apis.portal.azure-api.net/products/project-academic-knowledge" target="_blank">Get your own free key here!</a>'
-      } else {
-        errorMessage += 'Test API key used by web app has exceeded monthly quota. <a href="https://msr-apis.portal.azure-api.net/products/project-academic-knowledge" target="_blank">Get your own free key here!</a>'
+  return fetch('https://api.labs.cognitive.microsoft.com/academic/v1.0/evaluate', init).then(response => {
+    if (!response.ok) {
+      if (response.status === 401) {
+        vm.API = 'Crossref'
+        let errorMessage = 'Try again with Crossref, Microsoft Academic turned off.<br><br>'
+        if (vm.customKeyMA) {
+          errorMessage += 'Custom API key for Microsoft Academic (' + vm.customKeyMA + ') incorrect or monthly quota exhausted.'
+        } else {
+          errorMessage += 'Test API key used by web app has exceeded monthly quota.'
+        }
+        errorMessage += ' <a href="https://msr-apis.portal.azure-api.net/products/project-academic-knowledge" target="_blank">Get your own free key here!</a> Try again with Crossref or OpenCitations, Microsoft Academic turned off.'
+        vm.customKeyMA = undefined
+        throw new Error(errorMessage)
       }
-      vm.errorMessage(errorMessage, 'Authentication error')
-      vm.customKeyMA = undefined
-    } else {
-      vm.useMA = false
-      vm.errorMessage('Try again with Crossref, Microsoft Academic turned off.<br><br>Error while processing data through Microsoft Academic API: ' + error + ' ' + ((error.response) ? '(' + error.response.statusText + ' ' + (error.response.data && error.response.data.Error && error.response.data.Error.Message) + ')' : ''))
+      throw new Error(response)
     }
-  })
+    return response.json()
+  }).then(data => {
+    responseFunction(data)
+  }).catch(error =>
+    vm.errorMessage('Error while processing data through Microsoft Academic API: ' + error)
+  )
 }
 
 // API attributes documentation: https://docs.microsoft.com/en-us/azure/cognitive-services/academic-knowledge/paperentityattributes
@@ -98,6 +149,7 @@ function microsoftAcademicResponseToArticleArray (data, sourceReferences) {
       id: article.Id,
       microsoftAcademicId: article.Id,
       // Microsoft Academic returns reference lists of papers as arrays sorted by "relevance" (close to global number of citations), not by order of references in original publication
+      // Nonetheless, when the input is a listOfDOIs (i.e. file / bookmarklet), the order can be recovered
       numberInSourceReferences: (article.DOI) ? ((sourceReferences.length) ? sourceReferences.indexOf(article.DOI.toUpperCase()) + 1 : undefined) : undefined,
       doi: (article.DOI) ? article.DOI.toUpperCase() : undefined, // some articles don't have DOIs
       title: article.DN,
@@ -125,21 +177,21 @@ function revertAbstractFromInvertedIndex (InvertedIndex) {
 
 /* vis.js Reference graph */
 
-// I've tried keeping referenceNetwork in Vue's data, but it slowed things down a lot -- better keep it as global variable as network is not rendered through Vue anyway
-let referenceNetwork, authorNetwork
+// I've tried keeping citationNetwork in Vue's data, but it slowed things down a lot -- better keep it as global variable as network is not rendered through Vue anyway
+let citationNetwork, authorNetwork
 
-function initReferenceNetwork (app) {
-  const nodeIds = app.inputArticlesIds.concat(app.suggestedArticlesIds)
+function initCitationNetwork (app) {
+  // This line is necessary because of v-if="currentGraphIndex !== undefined" in the main columns div, which apparently is evaluated after watch:currentGraphIndex is called
+  if (!document.getElementById('citationNetwork')) return setTimeout(function () { app.init() }, 1)
+
+  // Create an array with nodes only for nodes with in- / out-degree >= 1 (no singletons)
+  const articles = app.currentGraph.input.filter(article => app.inDegree(article.id) || app.outDegree(article.id)).concat(app.incomingSuggestionsSliced).concat(app.outgoingSuggestionsSliced)
+  const articlesIds = articles.map(article => article.id)
 
   // Create an array with edges
-  const inDegree = {}
-  const outDegree = {}
-  const edges = app.currentGraph.input.map(function (article) {
+  const edges = articles.map(function (article) {
     return (!article.references) ? [] : article.references.map(function (ref) {
-      if (nodeIds.includes(ref)) {
-        inDegree[ref] = (inDegree[ref]) ? inDegree[ref] + 1 : 1
-        outDegree[article.id] = (outDegree[article.id]) ? outDegree[article.id] + 1 : 1
-
+      if (articlesIds.includes(ref)) {
         return { from: article.id, to: ref }
       } else {
         return []
@@ -147,19 +199,16 @@ function initReferenceNetwork (app) {
     })
   }).flat(2)
 
-  // Create an array with nodes only for nodes with in- / out-degree >= 1 (no singletons)
-  const articles = app.currentGraph.input.concat(app.currentGraph.suggested).map(article => (!inDegree[article.id] && !outDegree[article.id]) ? [] : article).flat()
-
   // Sort by rank of year
   const years = Array.from(new Set(articles.map(article => article.year).sort()))
 
   const nodes = articles.map(article => ({
     id: article.id,
-    title: vm.authorStringShort(article.authors) + ', <i>' + article.title + '</i>. ' + article.journal + ' ' + article.year + '.',
+    title: app.authorStringShort(article.authors) + '. ' + article.title + '. ' + article.journal + '. ' + article.year + '.',
     level: years.indexOf(article.year),
     group: article.year,
-    size: (inDegree[article.id] || 0 + 2) * 10,
-    shape: (app.inputArticlesIds.includes(article.id)) ? 'dot' : 'star',
+    size: arrSum([5, app.inDegree(article.id), app.outDegree(article.id)]) * 5,
+    shape: (app.currentGraph.source.id === article.id) ? 'diamond' : (app.inputArticlesIds.includes(article.id) ? 'dot' : (app.incomingSuggestionsIds.includes(article.id) ? 'triangle' : 'triangleDown')),
     label: article.authors[0].LN + '\n' + article.year
   }))
 
@@ -179,14 +228,19 @@ function initReferenceNetwork (app) {
     edges: {
       color: {
         color: 'rgba(200,200,200,0.3)',
-        inherit: false
+        highlight: 'rgba(0,0,0,0.3)'
       },
       arrows: {
         to: {
           enabled: true,
           scaleFactor: 4
         }
-      }
+      },
+      width: 5
+      // chosen: { edge: function(values, id, selected, hovering) { values.inheritsColor = "from" } },
+    },
+    interaction: {
+      selectConnectedEdges: true
     },
     physics: {
       hierarchicalRepulsion: {
@@ -195,10 +249,10 @@ function initReferenceNetwork (app) {
     },
     configure: false
   }
-  referenceNetwork = new vis.Network(document.getElementById('referenceNetworkDiv'), { nodes: nodes, edges: edges }, options)
-  referenceNetwork.on('click', networkOnClick)
-  referenceNetwork.on('doubleClick', networkOnDoubleClick)
-  referenceNetwork.on('resize', function () { referenceNetwork.fit() })
+  citationNetwork = new vis.Network(document.getElementById('citationNetwork'), { nodes: nodes, edges: edges }, options)
+  citationNetwork.on('click', networkOnClick)
+  citationNetwork.on('doubleClick', networkOnDoubleClick)
+  citationNetwork.on('resize', function () { citationNetwork.fit() })
 
   function networkOnClick (params) {
     let selectedNode
@@ -208,12 +262,15 @@ function initReferenceNetwork (app) {
       selectedNode = params.nodes[0]
       // Input article node was clicked (circle)
       if (app.inputArticlesIds.includes(selectedNode)) {
-        app.showSuggested = 0
+        app.showArticlesTab = 'inputArticles'
         app.selectedInputArticle = app.currentGraph.input[app.inputArticlesIds.indexOf(selectedNode)]
-        // Suggested article node was clicked (star)
+        // Suggested article node was clicked (triangle)
+      } else if (app.incomingSuggestionsIds.includes(selectedNode)) {
+        app.showArticlesTab = 'incomingSuggestions'
+        app.selectedIncomingSuggestionsArticle = app.currentGraph.incomingSuggestions[app.incomingSuggestionsIds.indexOf(selectedNode)]
       } else {
-        app.showSuggested = 1
-        app.selectedSuggestedArticle = app.currentGraph.suggested[app.suggestedArticlesIds.indexOf(selectedNode)]
+        app.showArticlesTab = 'outgoingSuggestions'
+        app.selectedOutgoingSuggestionsArticle = app.currentGraph.outgoingSuggestions[app.outgoingSuggestionsIds.indexOf(selectedNode)]
       }
     }
   }
@@ -224,17 +281,18 @@ function initReferenceNetwork (app) {
     // Select corresponding row in table
     if (params.nodes.length > 0) {
       selectedNode = params.nodes[0]
-      article = app.currentGraph.input[app.inputArticlesIds.indexOf(selectedNode)] || app.currentGraph.suggested[app.suggestedArticlesIds.indexOf(selectedNode)]
+      article = app.currentGraph.input[app.inputArticlesIds.indexOf(selectedNode)] || app.currentGraph.incomingSuggestions[app.incomingSuggestionsIds.indexOf(selectedNode)]
       window.open('https://doi.org/' + article.doi, '_blank')
     }
   }
 }
 
 function initAuthorNetwork (app, minPublications = undefined) {
-  // authorGroups[0] is source
+  if (!document.getElementById('authorNetwork')) return false
+
   // Unfortunately, Microsoft Academic often has multiple author Ids for the same author name when affiliations differ => this leads to seeming redundancies, which makes the new Set() necessary to have each author name be unique
   // (I know this can cause trouble with non-unique author names actually shared by two people publishing in similar fields but I'm currently not taking this into account)
-  let authorGroups = [app.currentGraph.source].concat(app.currentGraph.input).concat(app.currentGraph.suggested).map(article => article.authors ? Array.from(new Set(article.authors.map(x => x.FN + ' ' + x.LN))) : [])
+  let authorGroups = app.currentGraph.input.concat(app.incomingSuggestionsSliced).concat(app.outgoingSuggestionsSliced).map(article => article.authors ? Array.from(new Set(article.authors.map(x => x.FN + ' ' + x.LN))) : [])
   const authors = {}
   let authorsWithMinPubs = []
   const links = {}
@@ -269,17 +327,17 @@ function initAuthorNetwork (app, minPublications = undefined) {
   })))
 
   const edges = Object.keys(links).map(indiv1 => Object.keys(links[indiv1]).map(indiv2 => {
-    return { from: indiv1, to: indiv2, value: links[indiv1][indiv2], title: indiv1 + ' & ' + indiv2 + '<br>(' + links[indiv1][indiv2] / 2 + ' collaboration(s) among source, input & suggested articles)' }
+    return { from: indiv1, to: indiv2, value: links[indiv1][indiv2], title: indiv1 + ' & ' + indiv2 + ' (' + links[indiv1][indiv2] / 2 + ' collaboration(s) among source, input & suggested articles)' }
   })).flat(2)
 
   const nodes = authorsWithMinPubs.map(author => {
     return {
       id: author,
-      title: author + ((authorGroups[0].includes(author)) ? ' ((co)author of source article)<br>(' : '<br>(') + (authorGroups[0].includes(author) ? authors[author] - 1 : authors[author]) + ' publication(s) among input & suggested articles)',
+      title: author + ((app.authorString(app.currentGraph.source.authors).includes(author)) ? ' ((co)author of source article) (' : ' (') + authors[author] + ' publication(s) among input & suggested articles)',
       group: authorGroups.map(group => group.includes(author)).indexOf(true),
       label: author.substr(author.lastIndexOf(' ') + 1),
       size: authors[author] * 3,
-      shape: (authorGroups[0].includes(author)) ? 'diamond' : 'dot'
+      shape: (app.authorString(app.currentGraph.source.authors).includes(author)) ? 'diamond' : 'dot'
     }
   })
 
@@ -350,7 +408,7 @@ const vm = new Vue({
   el: '#app',
   data: {
     // Settings
-    useMA: true, // Use Micrsoft Academic API as default
+    API: 'Microsoft Academic', // Use 'Microsoft Academic' API as default, other options: 'Crossref' and 'OpenCitations'
     customKeyMA: undefined,
     maxTabs: 5,
     autosaveResults: false,
@@ -367,9 +425,12 @@ const vm = new Vue({
     filterColumn: 'titleAbstract',
     filterString: undefined,
     selectedInputArticle: undefined,
-    selectedSuggestedArticle: undefined,
+    selectedIncomingSuggestionsArticle: undefined,
+    selectedOutgoingSuggestionsArticle: undefined,
     currentGraphIndex: undefined,
-    showSuggested: 0,
+    maxIncomingSuggestions: undefined,
+    maxOutgoingSuggestions: undefined,
+    showArticlesTab: 'inputArticles',
     showAuthorNetwork: 0,
     minPublications: 2,
     isLoading: false,
@@ -383,7 +444,7 @@ const vm = new Vue({
       set: function (x) { this.listOfDOIs = x.split('\n') }
     },
     currentGraph: function () {
-      if (this.currentGraphIndex === undefined) return { source: {}, input: [], suggested: [] }
+      if (this.currentGraphIndex === undefined) return {}
       return this.graphs[this.currentGraphIndex]
     },
     inputArticlesFiltered: function (articles) {
@@ -392,44 +453,68 @@ const vm = new Vue({
     inputArticlesIds: function () {
       return this.currentGraph.input.map(article => article.id)
     },
-    suggestedArticlesIds: function () {
-      return this.currentGraph.suggested.map(article => article.id)
+    incomingSuggestionsSliced: function () {
+      return this.currentGraph.incomingSuggestions.slice(0, this.maxIncomingSuggestions)
     },
-    suggestedArticlesFiltered: function (articles) {
-      return this.filterArticles(this.currentGraph.suggested)
+    outgoingSuggestionsSliced: function () {
+      return this.currentGraph.outgoingSuggestions.slice(0, this.maxOutgoingSuggestions)
+    },
+    incomingSuggestionsIds: function () {
+      return this.incomingSuggestionsSliced.map(article => article.id)
+    },
+    outgoingSuggestionsIds: function () {
+      return this.outgoingSuggestionsSliced.map(article => article.id)
+    },
+    incomingSuggestionsFiltered: function () {
+      return this.filterArticles(this.incomingSuggestionsSliced)
+    },
+    outgoingSuggestionsFiltered: function () {
+      return this.filterArticles(this.outgoingSuggestionsSliced)
     },
     selected: function () {
-      return this.showSuggested ? this.selectedSuggestedArticle : this.selectedInputArticle
+      switch (this.showArticlesTab) {
+        case 'inputArticles': return this.selectedInputArticle
+        case 'incomingSuggestions': return this.selectedIncomingSuggestionsArticle
+        case 'outgoingSuggestions': return this.selectedOutgoingSuggestionsArticle
+      }
     },
 
     // The following are for the estimation of the completeness of the data
+    inputArticlesWithoutSource: function () {
+      return this.currentGraph.input.filter(article => article.id != this.currentGraph.source.id)
+    },
     sourceReferencesCompletenessFraction: function () {
-      return (this.currentGraph.source.referencesCountTotal) ? this.currentGraph.input.length / this.currentGraph.source.referencesCountTotal : 1
+      return this.inputArticlesWithoutSource.length / this.currentGraph.source.references.length
     },
     inputHasReferences: function () {
-      return arrSum(this.currentGraph.input.map(x => x.references.length !== 0))
+      return arrSum(this.inputArticlesWithoutSource.map(x => x.references.length !== 0))
     },
     inputReferencesCompletenessFraction: function () {
-      return arrAvg(this.currentGraph.input.filter(x => x.references.length !== 0).map(x => x.references.length / (x.referencesCountTotal || x.references.length)))
+      return arrAvg(this.inputArticlesWithoutSource.filter(x => x.references.length !== 0).map(x => x.references.filter(Boolean).length / x.references.length))
     },
     completenessLabel: function () {
-      let label
-      if (this.currentGraph.source.referencesCountTotal && this.currentGraph.source.referencesCountTotal !== this.currentGraph.input.length) {
-        label = `${this.currentGraph.input.length} of originally ${this.currentGraph.source.referencesCountTotal} references were found in ${this.currentGraph.API} (${Math.round(this.sourceReferencesCompletenessFraction * 100)}%), ${this.inputHasReferences} of which have reference-lists themselves (${Math.round(this.inputHasReferences / this.currentGraph.input.length * 100)}%). `
+      let label = ''
+      // Show number of "original references" only for Crossref for source-based-graphs and for all listOfDOIs (i.e. file / bookmarklet) graphs, for which they can be estimated
+      if (this.currentGraph.API === 'Crossref' || !this.currentGraph.source.id) {
+        if (this.currentGraph.source.id) {
+          label += 'Source and '
+        }
+        label += `${this.inputArticlesWithoutSource.length} of originally ${this.currentGraph.source.references.length} references were found in ${this.currentGraph.API} (${Math.round(this.sourceReferencesCompletenessFraction * 100)}%), ${this.inputHasReferences} of which have reference-lists themselves (${Math.round(this.inputHasReferences / this.inputArticlesWithoutSource.length * 100)}%). `
       } else {
-        label = `${this.inputHasReferences} of ${this.currentGraph.input.length} input articles have reference-lists themselves in ${this.currentGraph.API} (${Math.round(this.inputHasReferences / this.currentGraph.input.length * 100)}%). `
+        label = `${this.inputHasReferences} of ${this.inputArticlesWithoutSource.length} input articles ${this.currentGraph.source.id ? '(excluding source) ' : ''}have reference-lists themselves in ${this.currentGraph.API} (${Math.round(this.inputHasReferences / this.inputArticlesWithoutSource.length * 100)}%). `
       }
+
       if (this.currentGraph.API === 'Crossref') label += `Their respective average reference completeness is ${Math.round(this.inputReferencesCompletenessFraction * 100)}%.`
       return label
     },
     completenessPercent: function () {
-      return Math.round(this.sourceReferencesCompletenessFraction * this.inputHasReferences / this.currentGraph.input.length * this.inputReferencesCompletenessFraction * 100)
+      return Math.round(this.sourceReferencesCompletenessFraction * this.inputHasReferences / this.inputArticlesWithoutSource.length * this.inputReferencesCompletenessFraction * 100)
     }
   },
   watch: {
     // Initialize graph when new tab is opened / tab is changed
     currentGraphIndex: function () {
-    // Reset filterString when tab is changed
+      // Reset filterString when tab is changed
       this.filterString = undefined
 
       // Don't know how to prevent this from firing (and thus causing a reinit) when closing a tab (only noticeable by a short flicker of the network, thus not a real issue)
@@ -438,16 +523,16 @@ const vm = new Vue({
       }
     },
     // User provided a new DOI for source article
-    // Here's what happens afterwards, in total 3 API calls:
-    // watch:newSourceDOI => callAPI() for source article => setNewSource() => callAPI() for Input articles & callAPI() for Suggested articles => watch:currentGraph => init()
     newSourceDOI: function () {
       if (!this.newSourceDOI || !this.newSourceDOI.trim()) return false
 
       let DOI = this.newSourceDOI.trim().toUpperCase()
 
       // Ignore trailing string (e.g. 'doi:' or 'https://doi.org/')
-      if (!DOI.match(/10\.\d{4,9}\/.+/)) return this.errorMessage(DOI + ' is not a valid DOI, which must be in the form: 10.prefix/suffix where prefix is 4 or more digits and suffix is a string.', 'Invalid DOI')
-      else DOI = DOI.match(/10\.\d{4,9}\/.+/)[0]
+      if (DOI.match(/10\.\d{4,9}\/\S+/)) DOI = DOI.match(/10\.\d{4,9}\/\S+/)[0]
+      // Allow the use of the numeric Microsoft Academic ID
+      else if (this.API === 'Microsoft Academic' && Number(DOI)) DOI = Number(DOI)
+      else return this.errorMessage(DOI + ' is not a valid DOI, which must be in the form: 10.prefix/suffix where prefix is 4 or more digits and suffix is a string.', 'Invalid DOI')
 
       // Check if DOI is among open tabs already
       const graphDOIs = this.graphs.map(graph => graph.source.doi)
@@ -456,14 +541,12 @@ const vm = new Vue({
       // Otherwise set new source DOI
       } else {
         this.isLoading = true
-        this.callAPI([DOI], response => {
-          this.setNewSource(this.responseToArray(response.data)[0])
+        this.callAPI([DOI], data => {
+          this.setNewSource(this.responseToArray(data)[0])
         }, 1)
       }
     },
     // User provided a file which is searched for DOIs
-    // Here's what happens afterwards, in total 2 API calls (similar to watch:newSourceDOI except that the first of three API calls to grab the source is omitted):
-    // watch:file => setNewSource() => callAPI() for Input articles & callAPI() for Suggested articles => watch:currentGraph => init()
     file: function () {
       if (!this.file || !this.file.name) return false
       this.isLoading = true
@@ -475,7 +558,6 @@ const vm = new Vue({
         this.listOfDOIs = dois
         this.listName = this.file.name
         this.editListOfDOIs = true
-        // this.setNewSource({ references: dois, referencesCountTotal: dois.length }, this.file.name, this.file.name)
       }).catch(e => this.errorMessage('Error with file handling: ' + e))
     },
     // A different node (reference) in the graph has been selected
@@ -488,84 +570,151 @@ const vm = new Vue({
       // Scroll to right row
       if (document.getElementById(this.selected.id)) document.getElementById(this.selected.id).scrollIntoView({ behavior: 'smooth', block: 'center' })
     },
+    maxIncomingSuggestions: function () {
+      if (this.graphs.length) {
+        initCitationNetwork(this)
+        initAuthorNetwork(this)
+        this.highlightNodes()
+      }
+    },
+    maxOutgoingSuggestions: function () {
+      if (this.graphs.length) {
+        initCitationNetwork(this)
+        initAuthorNetwork(this)
+        this.highlightNodes()
+      }
+    },
     showAuthorNetwork: function () {
       this.highlightNodes()
     },
     minPublications: function () {
       initAuthorNetwork(this, this.minPublications)
       this.highlightNodes()
-    },
-    editListOfDOIs: function () {
-      document.getElementById('dois').scrollTop = document.getElementById('dois').scrollTopMax
     }
   },
   methods: {
     setNewSource: function (source, label = undefined, title = undefined) {
       try {
         // Some papers are in Crossref / MA but don't have references themselves
-        if (!source) throw new Error(`DOI ${this.newSourceDOI} not found in ${(this.useMA) ? 'Microsoft Academic' : 'Crossref'} API, try other API.`)
-        if (!source.references.length) throw new Error(`No references found in ${(this.useMA) ? 'Microsoft Academic' : 'Crossref'} API for paper with DOI: ${this.newSourceDOI}`)
+        if (!source) throw new Error(`DOI ${this.newSourceDOI} not found in ${this.API} API, try other API.`)
+        if (!source.references.length) throw new Error(`No references found in ${this.API} API for paper: ${this.newSourceDOI}`)
+
+        // Reset newSourceDOI (otherwise it cannot be called twice in a row with different APIs)
+        this.newSourceDOI = undefined
 
         this.$buefy.toast.open({
-          message: 'New query sent to ' + ((this.useMA) ? 'Microsoft Academic' : 'Crossref') + '.<br>This may take a while, depending on the number of references and API workload.',
+          message: 'New query sent to ' + this.API + '.<br>This may take a while, depending on the number of references and API workload.',
           duration: 4000,
           queue: false
         })
 
         // Get Input articles
         // filter(Boolean) is necessary because references array can contain empty items in order to preserve original order of DOIs from crossref
-        this.callAPI(source.references.filter(Boolean), response => {
-          const referenced = {}
-          const inputArticles = this.responseToArray(response.data, source.references)
+        this.callAPI(source.references.filter(Boolean), data => {
+          const referencedBy = {}
+          const citing = {}
+          // Only send sourceReferences to responseToArray function when original numbering can be recovered (either for Crossref or listOfDOIs (i.e. file / bookmarklet))
+          let inputArticles = this.responseToArray(data, (this.API === 'Crossref' || !source.id) ? source.references : false)
+          // Don't put source in inputArticles (and thus network) when a list was loaded
+          if (source.id) inputArticles = inputArticles.concat(source)
           const inputArticlesIds = inputArticles.map(article => article.id)
 
-          inputArticles.forEach(function (article) {
-            article.references.filter(Boolean).forEach(function (refId) {
-              if (!referenced[refId]) referenced[refId] = []
-              referenced[refId].push(article.id)
+          function addToCiting (outId, inId) {
+            if (inputArticlesIds.includes(inId)) {
+              if (!citing[outId]) citing[outId] = []
+              if (!citing[outId].includes(inId)) citing[outId].push(inId)
+            }
+          }
+
+          inputArticles.forEach(article => {
+            article.references.filter(Boolean).forEach(refId => {
+              if (!referencedBy[refId]) referencedBy[refId] = []
+              referencedBy[refId].push(article.id)
+
+              addToCiting(article.id, refId)
             })
+            // Currently, only OpenCitations has data on incoming citations
+            if (vm.API === 'OpenCitations') {
+              article.citations.filter(Boolean).forEach(citId => {
+                addToCiting(citId, article.id)
+              })
+            }
           })
+
+          source.isSource = true
 
           // Add new tab
           this.graphs.push({
             source: source,
             input: inputArticles,
-            suggested: [],
-            referenced: referenced,
+            incomingSuggestions: [],
+            outgoingSuggestions: [],
+            referenced: referencedBy,
+            citing: citing,
             tabLabel: label || source.authors[0].LN + ' ' + source.year,
             tabTitle: title || source.title,
-            API: (this.useMA) ? 'Microsoft Academic' : 'Crossref',
+            API: this.API,
             timestamp: Date.now()
           })
 
           // Don't keep more articles in tab-bar than maxTabs
           if (this.graphs.length > this.maxTabs) this.graphs = this.graphs.slice(1)
 
-          // Let user explore input articles while suggested articles are still loading
+          // Let user explore input articles while incoming suggestions (and outgoing suggestions) are still loading
           this.currentGraphIndex = this.graphs.length - 1
           this.isLoading = false
 
-          /* Find suggested articles */
-          // sort articles by number of local citations (InDegree) and pick max top 10
+          /* Find incoming suggestions articles */
+          // sort articles by number of local citations (inDegree) and pick max top 20
           // https://medium.com/@alleto.saburido/set-theory-for-arrays-in-es6-eb2f20a61848
-          const suggestedIds = Object.keys(referenced)
+          const incomingSuggestionsIds = Object.keys(referencedBy)
           // Only suggest articles that have at least two local citations and that aren't already among input articles
           // Careful with comparing DOIs!!! They have to be all upper case (performed by crossrefResponseToArticleArray & microsoftAcademicResponseToArticleArray)
-            .filter(x => referenced[x].length > 1 && !inputArticlesIds.includes(Number(x) || x)) // If x is numeric (i.e. Id from Microsoft Academic), convert to Number, otherwise keep DOIs from Crossref
-            .sort((a, b) => referenced[b].length - referenced[a].length).slice(0, 10)
+            .filter(x => referencedBy[x].length > 1 && !inputArticlesIds.includes(Number(x) || x)) // If x is numeric (i.e. Id from Microsoft Academic), convert to Number, otherwise keep DOIs from Crossref
+            .sort((a, b) => referencedBy[b].length - referencedBy[a].length).slice(0, 20)
 
-          // In case no suggested ids are found
-          if (!suggestedIds.length) {
+          // In case no ids are found
+          if (!incomingSuggestionsIds.length) {
             this.saveState()
-            return false
+          } else {
+            this.callAPI(incomingSuggestionsIds, data => {
+              const incomingSuggestions = this.responseToArray(data)
+              // Careful: Array/object item setting can't be picked up by Vue (https://vuejs.org/v2/guide/list.html#Caveats)
+              this.$set(this.graphs[this.graphs.length - 1], 'incomingSuggestions', incomingSuggestions)
+
+              // Microsoft Academic don't have incoming citation data, thus this has to be completed so that incoming suggestions have correct out-degrees, which are based on 'citing'
+              if (this.API !== 'OpenCitations') {
+                incomingSuggestions.forEach(article => {
+                  article.references.filter(Boolean).forEach(refId => {
+                    addToCiting(article.id, refId)
+                  })
+                })
+                this.$set(this.graphs[this.graphs.length - 1], 'citing', citing)
+              }
+
+              this.init()
+              this.saveState()
+            }, incomingSuggestionsIds.length)
           }
 
-          this.callAPI(suggestedIds, response => {
-            // Careful: Array/object item setting can't be picked up by Vue (https://vuejs.org/v2/guide/list.html#Caveats)
-            this.$set(this.graphs[this.graphs.length - 1], 'suggested', this.responseToArray(response.data))
-            this.init()
-            this.saveState()
-          }, suggestedIds.length)
+          // Top incoming citations (newer)
+          if (this.API === 'OpenCitations') {
+            const outgoingSuggestionsIds = Object.keys(citing)
+              // If - in theoretical cases, I haven't seen one yet - a top incoming citation is already a top reference, don't include it here again
+              .filter(x => citing[x].length > 1 && !inputArticlesIds.includes(Number(x) || x) && !incomingSuggestionsIds.includes(x)) // If x is numeric (i.e. Id from Microsoft Academic), convert to Number, otherwise keep DOIs from Crossref
+              .sort((a, b) => citing[b].length - citing[a].length).slice(0, 20)
+
+            if (!outgoingSuggestionsIds.length) {
+              this.saveState()
+            } else {
+              this.callAPI(outgoingSuggestionsIds, data => {
+                // Careful: Array/object item setting can't be picked up by Vue (https://vuejs.org/v2/guide/list.html#Caveats)
+                this.$set(this.graphs[this.graphs.length - 1], 'outgoingSuggestions', this.responseToArray(data))
+                this.init()
+                this.saveState()
+              }, outgoingSuggestionsIds.length)
+            }
+          }
         }, source.references.length)
       } catch (e) {
         this.errorMessage(e)
@@ -579,9 +728,9 @@ const vm = new Vue({
       if (graphIds.includes(id)) {
         this.currentGraphIndex = graphIds.indexOf(id)
       // Don't load new source through API because data is already in current input (only when source used same API as currently active)
-      } else if ((typeof id === 'number') === this.useMA) {
+      } else if ((typeof id === 'number') & this.API === 'Microsoft Academic') {
         const source = this.currentGraph.input.filter(x => x.id === id)[0] ||
-                       this.currentGraph.suggested.filter(x => x.id === id)[0]
+                       this.currentGraph.incomingSuggestions.filter(x => x.id === id)[0]
         this.isLoading = true
         this.setNewSource(source)
       // Load new source through API when source used different API than currently active
@@ -622,7 +771,9 @@ const vm = new Vue({
       })
     },
     highlightNodes: function (selectedNodes = undefined) {
-      const network = (this.showAuthorNetwork) ? authorNetwork : referenceNetwork
+      const network = (this.showAuthorNetwork) ? authorNetwork : citationNetwork
+
+      if (!network) return false
 
       // When nodes are clicked in authorNetwork, the selectedNodes are supplied by argument, otherwise they depend on table selection and are figured out here
       if (!selectedNodes) {
@@ -666,49 +817,74 @@ const vm = new Vue({
       network.body.data.nodes.update(updatedNodes)
     },
     init: function () {
-      // Sort input & suggested articles by InDegree (descending)
+      // Sort tables
       this.currentGraph.input.sort(this.sortInDegree)
-      this.currentGraph.suggested.sort(this.sortInDegree)
+      this.currentGraph.incomingSuggestions.sort(this.sortInDegree)
+      this.currentGraph.outgoingSuggestions.sort(this.sortOutDegree)
 
-      // Select top article for both tables
+      // Select top article for tables
       this.selectedInputArticle = this.currentGraph.input[0]
-      this.selectedSuggestedArticle = this.currentGraph.suggested[0]
+      this.selectedIncomingSuggestionsArticle = this.currentGraph.incomingSuggestions[0]
+      this.selectedOutgoingSuggestionsArticle = this.currentGraph.outgoingSuggestions[0]
+
+      // Reset maximum number of suggestions
+      this.maxIncomingSuggestions = Math.min(10, this.currentGraph.incomingSuggestions.length)
+      this.maxOutgoingSuggestions = Math.min(10, this.currentGraph.outgoingSuggestions.length)
 
       // Networks are handled by vis.js outside of Vue through these two global init function
-      // Initializing both networks now incurs higher CPU usage now but then tab changes are quicker compared to init at watcher:showAuthorNetwork (especially when going back and forth)
+      // Initializing both networks now incurs higher CPU usage now but then tab changes are quicker compared to init at watch:showAuthorNetwork (especially when going back and forth)
       initAuthorNetwork(this)
-      initReferenceNetwork(this)
+      initCitationNetwork(this)
       // Sometimes this call to highlightNodes() leads to two calls in short frequency (because watch:selected will often be called right afterwards) but this call is still necessary (apparently mostly when loading new graphs)
       this.highlightNodes()
     },
+    inDegree: function (id) {
+      return (this.currentGraph.referenced[id]) ? this.currentGraph.referenced[id].length : 0
+    },
+    outDegree: function (id) {
+      return (this.currentGraph.citing[id]) ? this.currentGraph.citing[id].length : 0
+    },
     // compareFunction for array.sort(), in this case descending by default (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort)
     sortInDegree: function (a, b) {
-      a = (this.currentGraph.referenced[a.id]) ? this.currentGraph.referenced[a.id].length : 0
-      b = (this.currentGraph.referenced[b.id]) ? this.currentGraph.referenced[b.id].length : 0
+      a = this.inDegree(a.id)
+      b = this.inDegree(b.id)
+      return b - a
+    },
+    sortOutDegree: function (a, b) {
+      a = this.outDegree(a.id)
+      b = this.outDegree(b.id)
       return b - a
     },
     // Wrapper for Buefy tables with third argument "ascending"
     sortInDegreeWrapper: function (a, b, ascending) {
       return (ascending) ? this.sortInDegree(b, a) : this.sortInDegree(a, b)
     },
+    sortOutDegreeWrapper: function (a, b, ascending) {
+      return (ascending) ? this.sortOutDegree(b, a) : this.sortOutDegree(a, b)
+    },
     callAPI: function (ids, response, count) {
-      if (this.useMA) {
+      if (this.API === 'Microsoft Academic') {
         // For Microsoft Academic the user inputs DOIs but the API returns references as proprietory numeric Ids
-        if (String(ids[0]).match(/10\.\d{4,9}\/.+/)) {
+        if (String(ids[0]).match(/10\.\d{4,9}\/\S+/)) {
           return microsoftAcademicEvaluate('Or(DOI=\'' + ids.join('\',DOI=\'') + '\')', response, count, this.customKeyMA)
         } else {
           return microsoftAcademicEvaluate('Or(Id=' + ids.join(',Id=') + ')', response, count, this.customKeyMA)
         }
-      } else {
+      } else if (this.API === 'Crossref') {
         // In Crossref the API also returns references as DOIs
         return crossrefWorks('doi:' + ids.join(',doi:'), response, count)
+      } else {
+        // In OpenCitations API also returns references as DOIs
+        return openCitationsMetadata(ids.join('__'), response, count)
       }
     },
     responseToArray: function (data, sourceReferences = false) {
-      if (this.useMA) {
+      if (this.API === 'Microsoft Academic') {
         return microsoftAcademicResponseToArticleArray(data, sourceReferences)
-      } else {
+      } else if (this.API === 'Crossref') {
         return crossrefResponseToArticleArray(data, sourceReferences)
+      } else {
+        return openCitationsResponseToArticleArray(data, sourceReferences)
       }
     },
     errorMessage: function (e, title = 'Error') {
@@ -727,6 +903,7 @@ const vm = new Vue({
       if (this.autosaveResults) {
         localStorage.graphs = JSON.stringify(this.graphs)
         localStorage.autosaveResults = true
+        localStorage.API = this.API
         if (this.customKeyMA) localStorage.customKeyMA = this.customKeyMA
         else localStorage.removeItem('customKeyMA')
       } else {
@@ -764,9 +941,9 @@ const vm = new Vue({
         queue: false
       })
     },
-    clickToggleMA: function () {
-      this.useMA = !this.useMA
-      if (this.useMA) {
+    clickToggleAPI: function () {
+      if (this.API === 'OpenCitations') {
+        this.API = 'Microsoft Academic'
         this.$buefy.dialog.prompt({
           message: 'Use your own Microsoft Academic API key (<a href="https://msr-apis.portal.azure-api.net/products/project-academic-knowledge" target="_blank">create here for free</a>), which is faster and more reliable than the test key! Stays local and is only shared with Microsoft. Leave empty to keep using test key.',
           inputAttrs: {
@@ -779,19 +956,24 @@ const vm = new Vue({
           confirmText: 'Use Microsoft Academic',
           onConfirm: value => {
             this.$buefy.toast.open({
-              message: 'Using Microsoft Academic.',
-              type: 'is-success',
+              message: 'Using Microsoft Academic',
               queue: false
             })
             this.customKeyMA = (value.trim()) ? value.trim() : undefined
           },
           cancelText: 'Use Crossref',
-          onCancel: () => { this.useMA = false }
+          onCancel: () => { this.API = 'Crossref' }
+        })
+      } else if (this.API === 'Microsoft Academic') {
+        this.API = 'Crossref'
+        this.$buefy.toast.open({
+          message: 'Using Crossref',
+          queue: false
         })
       } else {
+        this.API = 'OpenCitations'
         this.$buefy.toast.open({
-          message: 'Microsoft Academic API turned off. Using Crossref as fallback.',
-          type: 'is-danger',
+          message: 'Using OpenCitations',
           queue: false
         })
       }
@@ -805,39 +987,64 @@ const vm = new Vue({
     toggleArticle: function () {
       // Make sure article can even be toggled (compare with :has-detailed-visible in b-table in index.html)
       if (this.selected.abstract || (this.currentGraph.source.citationContext && this.currentGraph.source.citationContext[this.selected.id])) {
-        (this.showSuggested) ? this.$refs.suggestedArticlesTable.toggleDetails(this.selectedSuggestedArticle) : this.$refs.inputArticlesTable.toggleDetails(this.selectedInputArticle)
-        if (document.getElementById(this.selected.id)) document.getElementById(this.selected.id).scrollIntoView({ behavior: 'smooth', block: 'start' })
+        this.$refs[this.showArticlesTab + 'Table'].toggleDetails(this.selected)
+        // if (document.getElementById(this.selected.id)) document.getElementById(this.selected.id).scrollIntoView({ behavior: 'smooth', block: 'start' })
       }
     },
     formatAbstract: function (abstract) {
-      return abstract.replace(/Importance:? ?/, '<br><em>Importance:</em> ').replace(/Background:? ?/, '<br><em>Background:</em> ').replace(/Aims?:? ?/, '<br><em>Aims:</em> ').replace(/Goals?:? ?/, '<br><em>Goals:</em> ').replace(/Objectives?:? ?/, '<br><em>Objectives:</em> ').replace(/Main Outcomes? and Measures:? ?/, '<br><em>Main Outcomes and Measures:</em> ').replace(/Methods?:? ?/, '<br><em>Methods:</em> ').replace(/Results?:? ?/, '<br><em>Results:</em> ').replace(/Discussion:? ?/, '<br><em>Discussion:</em> ').replace(/Conclusions?:? ?/, '<br><em>Conclusions:</em> ').replace(/<br>/, '')
+	  return abstract.replace(/(Importance|Background|Aims?|Goals?|Objectives?|Purpose|Main Outcomes? and Measures?|Methods?|Results?|Discussions?|Conclusions?)/g, '<em>$1</em>')
     },
     importList: function () {
       this.editListOfDOIs = false
       this.isLoading = true
-      this.setNewSource({ references: this.listOfDOIs, referencesCountTotal: this.listOfDOIs.length }, this.listName, this.listName)
+      this.setNewSource({ references: this.listOfDOIs, citations: [] }, this.listName, this.listName)
     }
   },
   created: function () {
     const urlParams = new URLSearchParams(window.location.search)
 
     try {
-      if (localStorage.graphs) this.graphs = JSON.parse(localStorage.graphs)
+      if (localStorage.graphs) {
+        this.graphs = JSON.parse(localStorage.graphs)
+        // Backward compatibility with localStorage content from v0.95 and below (introduced in v0.96)
+        this.graphs.forEach((x, i) => {
+          if (!this.graphs[i].incomingSuggestions) this.graphs[i].incomingSuggestions = this.graphs[i].suggested
+          if (!this.graphs[i].outgoingSuggestions) this.graphs[i].outgoingSuggestions = []
+          if (!this.graphs[i].citing) {
+            this.graphs[i].citing = {}
+            const inputArticlesIds = this.graphs[i].input.map(x => x.id)
+            this.graphs[i].input.concat(this.graphs[i].incomingSuggestions).forEach(article => {
+              article.references.filter(Boolean).forEach(refId => {
+                if (inputArticlesIds.includes(refId)) {
+                  if (!this.graphs[i].citing[article.id]) this.graphs[i].citing[article.id] = []
+                  this.graphs[i].citing[article.id].push(refId)
+                }
+              })
+            })
+          }
+        })
+      }
       if (localStorage.autosaveResults) this.autosaveResults = localStorage.autosaveResults
       if (localStorage.customKeyMA) this.customKeyMA = localStorage.customKeyMA
+      if (localStorage.API) this.API = localStorage.API
     } catch (e) {
       localStorage.clear()
       console.log("Couldn't load cached networks")
     }
 
-    // Open source DOI from link
-    if (urlParams.has('sourceDOI')) {
-      this.newSourceDOI = urlParams.get('sourceDOI')
+    // Set API according to link
+    if (urlParams.has('API') && ['Microsoft Academic', 'Crossref', 'OpenCitations'].includes(urlParams.get('API'))) {
+      this.API = urlParams.get('API')
+    }
+
+    // Open source from link
+    if (urlParams.has('source')) {
+      this.newSourceDOI = urlParams.get('source')
       // Open list of DOIs from link if tab is not already stored in localStorage
     } else if (urlParams.has('listOfDOIs')) {
       let editList = urlParams.has('editList') ? urlParams.get('editList') : false
       const name = urlParams.has('name') ? urlParams.get('name') : 'Custom'
-      // Safety measure to allow max. 500 DOIs (not sure if Microsoft Academic actually allows this, CrossRef definitely doesn't)
+      // Safety measure to allow max. 500 DOIs (not sure if Microsoft Academic actually allows this, Crossref definitely doesn't)
       const dois = urlParams.get('listOfDOIs').split(',').slice(0, 500)
 
       // If a custom list with the same name already exists, let user chose new name
@@ -853,7 +1060,7 @@ const vm = new Vue({
         this.importList()
       }
     }
-    
+
     // Linked to FAQ?
     if (window.location.hash.length) {
       this.showFAQ = true

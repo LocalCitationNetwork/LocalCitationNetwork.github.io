@@ -1,29 +1,29 @@
 javascript:(function(){
-    // root DOI has to be identified to 
-    rootDOI = document.querySelector("meta[name=\"citation_doi\"]") || document.querySelector("meta[name=\"evt-doiPage\"]" || document.querySelector("meta[name=\"dc.Identifier\"]"));
-    if (!rootDOI) return(alert("Unfortunately could not extract references."));
+    // root DOI has to be identified to remove it from list later
+    rootDOI = document.querySelector('meta[name=\'citation_doi\']') || document.querySelector('meta[name=\'evt-doiPage\']') || document.querySelector('meta[name=\'dc.Identifier\']');
+    if (!rootDOI) return(alert('Unfortunately could not extract references.'));
     else rootDOI = rootDOI.content.toUpperCase();
     
     // onlinelibrary.wiley.com
-    lis = document.querySelectorAll("#references-section ul > li");
+    lis = document.querySelectorAll('#references-section ul > li');
     // nature.com
-    if (!lis.length) lis = document.querySelectorAll("ol.c-article-references > li");
+    if (!lis.length) lis = document.querySelectorAll('ol.c-article-references > li');
     // pnas.org / sciencemag.org / jimmunol.org / biorxiv.org
-    if (!lis.length) lis = document.querySelectorAll("ol.cit-list > li");
+    if (!lis.length) lis = document.querySelectorAll('ol.cit-list > li');
     // frontiersin.org
-    if (!lis.length) lis = document.querySelectorAll("div.References");
+    if (!lis.length) lis = document.querySelectorAll('div.References');
     // nejm.org
-    if (!lis.length) lis = document.querySelectorAll("ol#referenceContent > li");
+    if (!lis.length) lis = document.querySelectorAll('ol#referenceContent > li');
     // amjpathol.org
-    if (!lis.length) lis = document.querySelectorAll("ol.referenceList > li");
+    if (!lis.length) lis = document.querySelectorAll('ol.referenceList > li');
     // oup.com
-    if (!lis.length) lis = document.querySelectorAll(".ref-list .ref");
+    if (!lis.length) lis = document.querySelectorAll('.ref-list .ref');
     // plos.org
-    if (!lis.length) lis = document.querySelectorAll(".references > li");
+    if (!lis.length) lis = document.querySelectorAll('.references > li');
     // cell.com / thelancet.com
-    if (!lis.length) lis = document.querySelectorAll("li.ref");
+    if (!lis.length) lis = document.querySelectorAll('li.ref');
     // sagepub.com
-    if (!lis.length) lis = document.querySelectorAll("table.references%20tr");
+    if (!lis.length) lis = document.querySelectorAll('table.references tr');
 
     listOfReferenceDOIs = Array.from(lis).map(x => {
         // Regular expression adapted from Crossref's recommendation (https://www.crossref.org/blog/dois-and-matching-regular-expressions/)
@@ -34,8 +34,8 @@ javascript:(function(){
     });
     
     if (listOfReferenceDOIs.length) {
-        window.open("https://timwoelfle.github.io/Local-Citation-Network/index.html?name=Custom&editList=true&listOfDOIs=" + listOfReferenceDOIs.join(","));
+        window.open('https://timwoelfle.github.io/Local-Citation-Network/index.html?name=Custom&editList=true&listOfDOIs=' + listOfReferenceDOIs.join(','));
     } else {
-        alert("Unfortunately could not extract references.");
+        alert('Unfortunately could not extract references.');
     }
 }())
