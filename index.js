@@ -1,4 +1,4 @@
-/* Local Citation Network v0.96 (GPL-3) */
+/* Local Citation Network v0.97 (GPL-3) */
 /* by Tim Wölfle */
 /* https://timwoelfle.github.io/Local-Citation-Network */
 
@@ -93,86 +93,6 @@ function openCitationsResponseToArticleArray (data, sourceReferences) {
       citationsCount: Number(article.citation_count)
     }
   })
-}
-
-/* Microsoft Academic (MA) API  */
-
-function microsoftAcademicEvaluate (expression, responseFunction, count, apiKey = '') {
-  const body = {
-    expr: expression,
-    model: 'latest',
-    count: count,
-    offset: 0,
-    attributes: ['Id', 'DOI', 'DN', 'AA.DAuN', 'AA.DAfN', 'Y', 'BV', 'RId', 'ECC', 'CitCon', 'IA'].join(',')
-  }
-
-  const init = {
-    method: 'POST',
-    headers: {
-      'Ocp-Apim-Subscription-Key': apiKey,
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    // Encode request body as URLencoded
-    body: Object.keys(body).map(function (k) {
-      return encodeURIComponent(k) + '=' + encodeURIComponent(body[k])
-    }).join('&')
-  }
-
-  return fetch('https://api.labs.cognitive.microsoft.com/academic/v1.0/evaluate', init).then(response => {
-    if (!response.ok) {
-      if (response.status === 401) {
-        vm.API = 'Crossref'
-        let errorMessage = 'Try again with Crossref, Microsoft Academic turned off.<br><br>'
-        if (vm.customKeyMA) {
-          errorMessage += 'Custom API key for Microsoft Academic (' + vm.customKeyMA + ') incorrect or monthly quota exhausted.'
-        } else {
-          errorMessage += 'Test API key used by web app has exceeded monthly quota.'
-        }
-        errorMessage += ' <a href="https://msr-apis.portal.azure-api.net/products/project-academic-knowledge" target="_blank">Get your own free key here!</a> Try again with Crossref or OpenCitations, Microsoft Academic turned off.'
-        vm.customKeyMA = undefined
-        throw new Error(errorMessage)
-      }
-      throw new Error(response)
-    }
-    return response.json()
-  }).then(data => {
-    responseFunction(data)
-  }).catch(error =>
-    vm.errorMessage('Error while processing data through Microsoft Academic API: ' + error)
-  )
-}
-
-// API attributes documentation: https://docs.microsoft.com/en-us/azure/cognitive-services/academic-knowledge/paperentityattributes
-function microsoftAcademicResponseToArticleArray (data, sourceReferences) {
-  return data.entities.map(function (article) {
-    return {
-      id: article.Id,
-      microsoftAcademicId: article.Id,
-      // Microsoft Academic returns reference lists of papers as arrays sorted by "relevance" (close to global number of citations), not by order of references in original publication
-      // Nonetheless, when the input is a listOfDOIs (i.e. file / bookmarklet), the order can be recovered
-      numberInSourceReferences: (article.DOI) ? ((sourceReferences.length) ? sourceReferences.indexOf(article.DOI.toUpperCase()) + 1 : undefined) : undefined,
-      doi: (article.DOI) ? article.DOI.toUpperCase() : undefined, // some articles don't have DOIs
-      title: article.DN,
-      authors: article.AA.map(author => {
-        if (!author.DAuN) return { LN: String(author) }
-        const lastSpace = author.DAuN.lastIndexOf(' ')
-        // Unfortunately, Microsoft Academic often has multiple author Ids for the same author name when affiliations differ => this leads to seeming redundancies
-        return { LN: author.DAuN.substr(lastSpace + 1), FN: author.DAuN.substr(0, lastSpace), affil: author.DAfN || undefined }
-      }),
-      year: article.Y,
-      journal: article.BV,
-      references: article.RId || [],
-      citationsCount: article.ECC,
-      citationContext: article.CitCon,
-      abstract: (article.IA) ? revertAbstractFromInvertedIndex(article.IA.InvertedIndex) : undefined
-    }
-  })
-}
-
-function revertAbstractFromInvertedIndex (InvertedIndex) {
-  const abstract = []
-  Object.keys(InvertedIndex).forEach(word => InvertedIndex[word].forEach(i => { abstract[i] = word }))
-  return abstract.join(' ').replace('  ', ' ').trim()
 }
 
 /* vis.js Reference graph */
@@ -408,7 +328,7 @@ const vm = new Vue({
   el: '#app',
   data: {
     // Settings
-    API: 'Microsoft Academic', // Use 'Microsoft Academic' API as default, other options: 'Crossref' and 'OpenCitations'
+    API: 'Crossref', // Use 'Crossref' as default, other option: 'OpenCitations' ('Microsoft Academic' was discontinued in 2022)
     customKeyMA: undefined,
     maxTabs: 5,
     autosaveResults: false,
@@ -530,8 +450,6 @@ const vm = new Vue({
 
       // Ignore trailing string (e.g. 'doi:' or 'https://doi.org/')
       if (DOI.match(/10\.\d{4,9}\/\S+/)) DOI = DOI.match(/10\.\d{4,9}\/\S+/)[0]
-      // Allow the use of the numeric Microsoft Academic ID
-      else if (this.API === 'Microsoft Academic' && Number(DOI)) DOI = Number(DOI)
       else return this.errorMessage(DOI + ' is not a valid DOI, which must be in the form: 10.prefix/suffix where prefix is 4 or more digits and suffix is a string.', 'Invalid DOI')
 
       // Check if DOI is among open tabs already
@@ -682,7 +600,7 @@ const vm = new Vue({
               // Careful: Array/object item setting can't be picked up by Vue (https://vuejs.org/v2/guide/list.html#Caveats)
               this.$set(this.graphs[this.graphs.length - 1], 'incomingSuggestions', incomingSuggestions)
 
-              // Microsoft Academic don't have incoming citation data, thus this has to be completed so that incoming suggestions have correct out-degrees, which are based on 'citing'
+              // Crossref does not have incoming citation data, thus this has to be completed so that incoming suggestions have correct out-degrees, which are based on 'citing'
               if (this.API !== 'OpenCitations') {
                 incomingSuggestions.forEach(article => {
                   article.references.filter(Boolean).forEach(refId => {
@@ -863,14 +781,7 @@ const vm = new Vue({
       return (ascending) ? this.sortOutDegree(b, a) : this.sortOutDegree(a, b)
     },
     callAPI: function (ids, response, count) {
-      if (this.API === 'Microsoft Academic') {
-        // For Microsoft Academic the user inputs DOIs but the API returns references as proprietory numeric Ids
-        if (String(ids[0]).match(/10\.\d{4,9}\/\S+/)) {
-          return microsoftAcademicEvaluate('Or(DOI=\'' + ids.join('\',DOI=\'') + '\')', response, count, this.customKeyMA)
-        } else {
-          return microsoftAcademicEvaluate('Or(Id=' + ids.join(',Id=') + ')', response, count, this.customKeyMA)
-        }
-      } else if (this.API === 'Crossref') {
+      if (this.API === 'Crossref') {
         // In Crossref the API also returns references as DOIs
         return crossrefWorks('doi:' + ids.join(',doi:'), response, count)
       } else {
@@ -879,9 +790,7 @@ const vm = new Vue({
       }
     },
     responseToArray: function (data, sourceReferences = false) {
-      if (this.API === 'Microsoft Academic') {
-        return microsoftAcademicResponseToArticleArray(data, sourceReferences)
-      } else if (this.API === 'Crossref') {
+      if (this.API === 'Crossref') {
         return crossrefResponseToArticleArray(data, sourceReferences)
       } else {
         return openCitationsResponseToArticleArray(data, sourceReferences)
@@ -943,28 +852,6 @@ const vm = new Vue({
     },
     clickToggleAPI: function () {
       if (this.API === 'OpenCitations') {
-        this.API = 'Microsoft Academic'
-        this.$buefy.dialog.prompt({
-          message: 'Use your own Microsoft Academic API key (<a href="https://msr-apis.portal.azure-api.net/products/project-academic-knowledge" target="_blank">create here for free</a>), which is faster and more reliable than the test key! Stays local and is only shared with Microsoft. Leave empty to keep using test key.',
-          inputAttrs: {
-            placeholder: 'Keep using test key',
-            value: this.customKeyMA,
-            maxlength: 100,
-            required: false
-          },
-          trapFocus: true,
-          confirmText: 'Use Microsoft Academic',
-          onConfirm: value => {
-            this.$buefy.toast.open({
-              message: 'Using Microsoft Academic',
-              queue: false
-            })
-            this.customKeyMA = (value.trim()) ? value.trim() : undefined
-          },
-          cancelText: 'Use Crossref',
-          onCancel: () => { this.API = 'Crossref' }
-        })
-      } else if (this.API === 'Microsoft Academic') {
         this.API = 'Crossref'
         this.$buefy.toast.open({
           message: 'Using Crossref',
@@ -992,7 +879,7 @@ const vm = new Vue({
       }
     },
     formatAbstract: function (abstract) {
-	  return abstract.replace(/(Importance|Background|Aims?|Goals?|Objectives?|Purpose|Main Outcomes? and Measures?|Methods?|Results?|Discussions?|Conclusions?)/g, '<em>$1</em>')
+      return abstract.replace(/(Importance|Background|Aims?|Goals?|Objectives?|Purpose|Main Outcomes? and Measures?|Methods?|Results?|Discussions?|Conclusions?)/g, '<em>$1</em>')
     },
     importList: function () {
       this.editListOfDOIs = false
@@ -1033,7 +920,7 @@ const vm = new Vue({
     }
 
     // Set API according to link
-    if (urlParams.has('API') && ['Microsoft Academic', 'Crossref', 'OpenCitations'].includes(urlParams.get('API'))) {
+    if (urlParams.has('API') && ['Crossref', 'OpenCitations'].includes(urlParams.get('API'))) {
       this.API = urlParams.get('API')
     }
 

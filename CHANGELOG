@@ -1,4 +1,7 @@
-03.2021 v0.96
+02.01.2022 v0.97
+- Removed Microsoft Academic option, which was discontinued in 2022
+
+20.03.2021 v0.96
 + Added support for OpenCitations API (#2 no-identd)
 + Suggest "Outgoing suggestions" for queries performed with OpenCitations API (down-pointing triangle in citation network)
 + Allow users to select the number of "Incoming suggestions" and "Outgoing suggestions" shown (max. 20 each)

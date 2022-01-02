@@ -3,7 +3,7 @@
   <head>
     <title>Local Citation Network</title>
     <meta charset="utf-8">
-    <meta name="description" content="This web app aims to help scientists with their literature review using reference data from Microsoft Academic, Crossref and OpenCitations. It visualizes citation networks defined by the references of a given set of input articles and the most cited references are suggested for further review.">
+    <meta name="description" content="This web app aims to help scientists with their literature review using reference data from Crossref and OpenCitations. It visualizes citation networks defined by the references of a given set of input articles and the most cited references are suggested for further review.">
     <meta name="author" content="Tim Woelfle">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="lib/buefy.min.css">
@@ -166,10 +166,10 @@
             <b-navbar-item tag="li"><b-upload v-model="file" :disabled="isLoading ? true : false"><a class="button is-dark is-rounded" title="Scan text file for DOIs" :disabled="isLoading ? true : false"><b-icon icon="folder"></b-icon></a></b-upload></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="clickCloseAllTabs" rounded type="is-dark" title="Close all tabs" icon-right="delete"></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="clickToggleAutosave" rounded :type="(autosaveResults) ? '' : 'is-dark'" title="Autosave results locally" icon-right="floppy"></b-button></b-navbar-item>
-            <b-navbar-item tag="li"><b-button @click="clickToggleAPI" rounded type="is-dark" title="Toggle API: Microsoft Academic / Crossref / OpenCitations" :disabled="isLoading ? true : false"><span style="font: 1.4em sans-serif;">{{ (this.API === 'Microsoft Academic') ? 'MA' : ((this.API === 'Crossref') ? 'CR' : 'OC') }}</span></b-button></b-navbar-item>
+            <b-navbar-item tag="li"><b-button @click="clickToggleAPI" rounded type="is-dark" title="Toggle API: Crossref / OpenCitations" :disabled="isLoading ? true : false"><span style="font: 1.4em sans-serif;">{{ (this.API === 'Crossref') ? 'CR' : 'OC' }}</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="showFAQ = !showFAQ" rounded type="is-dark" title="Frequently asked questions"><span style="font: 1.4em sans-serif;">?</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><a @click="indexFAQ = 'contact'; showFAQ = true;" href="#contact" class="button is-dark is-rounded" title="Contact app creator"><b-icon icon="envelope"></b-icon></a></b-navbar-item>
-            <b-navbar-item tag="li"><a href="https://twitter.com/timwoelfle/" target="_blank" class="button is-dark is-rounded" title="Twitter"><b-icon icon="bird"></b-icon></a></b-navbar-item>
+            <b-navbar-item tag="li"><a href="https://twitter.com/timwoelfle/" class="button is-dark is-rounded" title="Twitter"><b-icon icon="bird"></b-icon></a></b-navbar-item>
           </ul>
         </template>
       </b-navbar>
@@ -198,7 +198,7 @@
                   <template v-else>
                     {{ authorStringShort(currentGraph.source.authors) }},
                   </template>
-                  <a :href="'https://doi.org/' + currentGraph.source.doi" target="_blank"><em>{{ currentGraph.source.title }}</em></a>. {{ currentGraph.source.journal }} {{ currentGraph.source.year }}.
+                  <a :href="'https://doi.org/' + currentGraph.source.doi"><em>{{ currentGraph.source.title }}</em></a>. {{ currentGraph.source.journal }} {{ currentGraph.source.year }}.
                   <span :title="currentGraph.source.abstract"
                     v-if="currentGraph.source.abstract"
                     style="border-bottom: 1px dashed #b5b5b5; cursor: help">
@@ -261,7 +261,7 @@
                 <span :id="props.row.id">
                   {{ props.row.isSource ? 'Source: ' : ''  }}
                   <template v-if="props.row.doi">
-                    <a :href="'https://doi.org/' + props.row.doi" target="_blank">{{ props.row.title }}</a>
+                    <a :href="'https://doi.org/' + props.row.doi">{{ props.row.title }}</a>
                   </template>
                   <template v-else>
                     {{ props.row.title }}
@@ -285,12 +285,7 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="Estimated global incoming citations (click to open in Microsoft Academic)" position="is-left" dashed type="is-dark"
-                    v-if="props.row.microsoftAcademicId">
-                    <a :href="'https://academic.microsoft.com/paper/' + props.row.microsoftAcademicId + '/citedby'" target="_blank">{{ props.row.citationsCount }}</a>
-                  </b-tooltip>
-                  <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark"
-                    v-else>
+                  <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark">
                     {{ props.row.citationsCount }}
                   </b-tooltip>
                 </template>
@@ -384,7 +379,7 @@
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id">
                   <template v-if="props.row.doi">
-                    <a :href="'https://doi.org/' + props.row.doi" target="_blank">{{ props.row.title }}</a>
+                    <a :href="'https://doi.org/' + props.row.doi">{{ props.row.title }}</a>
                   </template>
                   <template v-else>
                     {{ props.row.title }}
@@ -408,12 +403,7 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="Estimated global incoming citations (click to open in Microsoft Academic)" position="is-left" dashed type="is-dark"
-                    v-if="props.row.microsoftAcademicId">
-                    <a :href="'https://academic.microsoft.com/paper/' + props.row.microsoftAcademicId + '/citedby'" target="_blank">{{ props.row.citationsCount }}</a>
-                  </b-tooltip>
-                  <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark"
-                    v-else>
+                  <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark">
                     {{ props.row.citationsCount }}
                   </b-tooltip>
                 </template>
@@ -507,7 +497,7 @@
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id">
                   <template v-if="props.row.doi">
-                    <a :href="'https://doi.org/' + props.row.doi" target="_blank">{{ props.row.title }}</a>
+                    <a :href="'https://doi.org/' + props.row.doi">{{ props.row.title }}</a>
                   </template>
                   <template v-else>
                     {{ props.row.title }}
@@ -531,12 +521,7 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="Estimated global incoming citations (click to open in Microsoft Academic)" position="is-left" dashed type="is-dark"
-                    v-if="props.row.microsoftAcademicId">
-                    <a :href="'https://academic.microsoft.com/paper/' + props.row.microsoftAcademicId + '/citedby'" target="_blank">{{ props.row.citationsCount }}</a>
-                  </b-tooltip>
-                  <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark"
-                    v-else>
+                  <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark">
                     {{ props.row.citationsCount }}
                   </b-tooltip>
                 </template>
@@ -634,7 +619,7 @@
             </div>
             <div class="card-content content">
               <p>
-                This web app aims to help scientists with their literature review using metadata from <a href="https://academic.microsoft.com" target="_blank">Microsoft Academic</a>, <a href="https://crossref.org" target="_blank">Crossref</a> and <a href="https://opencitations.net" target="_blank">OpenCitations</a>. Academic papers cite one another, thus creating a <a href="https://en.wikipedia.org/wiki/Citation_graph" target="_blank">citation network (= graph)</a>. Each node (= vertex) represents an article and each edge (= link / arrow) represents a reference / citation. Citation graphs are a topic of <a @click="indexFAQ = 'bibliometrics'" href="#bibliometrics">bibliometrics, for which other great software exists as well</a>.
+                This web app aims to help scientists with their literature review using metadata from <a href="https://crossref.org">Crossref</a> and <a href="https://opencitations.net">OpenCitations</a>. Unfortunately, the former source Microsoft Academic was discontinued in 2022. Academic papers cite one another, thus creating a <a href="https://en.wikipedia.org/wiki/Citation_graph">citation network (= graph)</a>. Each node (= vertex) represents an article and each edge (= link / arrow) represents a reference / citation. Citation graphs are a topic of <a @click="indexFAQ = 'bibliometrics'" href="#bibliometrics">bibliometrics, for which other great software exists as well</a>.
               </p>
               <p>
                 This web app visualizes subsets of the global citation network that I call "local citation networks", defined by the references of a given set of input articles. In addition, the locally most cited references missing in the set of input articles are suggested for further review.
@@ -647,13 +632,13 @@
             </div>
             <div class="card-content content">
               <p>
-                There are basically two ways to create new networks: First, based on the references of a given paper. This could be a review or just an interesting paper you'd like to dig into deeper. Either click the + button at the top right and enter the <a href="https://en.wikipedia.org/wiki/Digital_object_identifier" target="_blank">digital object identifier (DOI)</a> of the source article or use the <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">bookmarklet described below</a>.
+                There are basically two ways to create new networks: First, based on the references of a given paper. This could be a review or just an interesting paper you'd like to dig into deeper. Either click the + button at the top right and enter the <a href="https://en.wikipedia.org/wiki/Digital_object_identifier">digital object identifier (DOI)</a> of the source article or use the <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">bookmarklet described below</a>.
               </p>
               <p>
-                The second way to create a new network is to scan a text file for DOIs, which allows you to create your own unique lists of input articles. For example, this could be a .ris / .bib / .json file exported by your reference manager (e.g. <a href="https://www.zotero.org/" target="_blank">Zotero</a> or EndNote). In theory, you can scan any plain text file (PDFs and Microsoft Office files don't work). However, due to the multitude of characters allowed in DOIs, the system might not catch all of them correctly (see <a href="https://www.crossref.org/blog/dois-and-matching-regular-expressions/" target="_blank">this blog post by Crossref for more explanation</a>).
+                The second way to create a new network is to scan a text file for DOIs, which allows you to create your own unique lists of input articles. For example, this could be a .ris / .bib / .json file exported by your reference manager (e.g. <a href="https://www.zotero.org/">Zotero</a> or EndNote). In theory, you can scan any plain text file (PDFs and Microsoft Office files don't work). However, due to the multitude of characters allowed in DOIs, the system might not catch all of them correctly (see <a href="https://www.crossref.org/blog/dois-and-matching-regular-expressions/">this blog post by Crossref for more explanation</a>).
               </p>
               <p>
-                Up to 5 tabs can be open at the same time, representing a different local citation network each. Only one query can be processed at a time, which is why some buttons are disabled when a query is still going on. Microsoft Academic seems to be able to process quite large numbers of references (I've successfully tried up to 500) but Crossref's API returns an error when trying to process too many references (depending on the length of the search string, around >110 DOIs).  
+                Up to 5 tabs can be open at the same time, representing a different local citation network each. Only one query can be processed at a time, which is why some buttons are disabled when a query is still going on. Crossref's API returns an error when trying to process too many references (depending on the length of the search string, around >110 DOIs).  
               </p>
             </div>
           </b-collapse>
@@ -663,13 +648,13 @@
             </div>
             <div class="card-content content">
               <p>
-                A <a href="https://en.wikipedia.org/wiki/Bookmarklet" target="_blank">bookmarklet</a> is a small program that can be saved as a bookmark in your browser. This particular bookmarklet allows you to open a new network in Local Citation Network directly when surfing many journals' websites (e.g. Nature, Science, Lancet, ...) instead of having to enter the DOI manually. Save the following link as a bookmark (e.g. by dragging it to your bookmarks bar or by right-click → "Bookmark This Link" in Firefox) and then click on it when reading an article (e.g. <a href="https://www.nature.com/articles/s41586-020-2196-x" target="_blank">this one</a>): <a href="javascript:(function(){if(rootDOI=document.querySelector('meta[name=\'citation_doi\']')||document.querySelector('meta[name=\'evt-doiPage\']')||document.querySelector('meta[name=\'dc.Identifier\']'),!rootDOI)return alert('Unfortunately could not extract references.');rootDOI=rootDOI.content.toUpperCase(),lis=document.querySelectorAll('#references-section ul > li'),lis.length||(lis=document.querySelectorAll('ol.c-article-references > li')),lis.length||(lis=document.querySelectorAll('ol.cit-list > li')),lis.length||(lis=document.querySelectorAll('div.References')),lis.length||(lis=document.querySelectorAll('ol#referenceContent > li')),lis.length||(lis=document.querySelectorAll('ol.referenceList > li')),lis.length||(lis=document.querySelectorAll('.ref-list .ref')),lis.length||(lis=document.querySelectorAll('.references > li')),lis.length||(lis=document.querySelectorAll('li.ref')),lis.length||(lis=document.querySelectorAll('table.references tr')),listOfReferenceDOIs=Array.from(lis).map(e=>(e=decodeURIComponent(e.innerHTML).match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi))&&e.map(e=>e.toUpperCase()).filter(e=>e!==rootDOI)[0]),listOfReferenceDOIs.length?window.open('https://timwoelfle.github.io/Local-Citation-Network/index.html?name=Custom&editList=true&listOfDOIs='+listOfReferenceDOIs.join(',')):alert('Unfortunately could not extract references.')}())">Open in Local Citation Network</a>.
+                A <a href="https://en.wikipedia.org/wiki/Bookmarklet">bookmarklet</a> is a small program that can be saved as a bookmark in your browser. This particular bookmarklet allows you to open a new network in Local Citation Network directly when surfing many journals' websites (e.g. Nature, Science, Lancet, ...) instead of having to enter the DOI manually. Save the following link as a bookmark (e.g. by dragging it to your bookmarks bar or by right-click → "Bookmark This Link" in Firefox) and then click on it when reading an article (e.g. <a href="https://www.nature.com/articles/s41586-020-2196-x">this one</a>): <a href="javascript:(function(){if(rootDOI=document.querySelector('meta[name=\'citation_doi\']')||document.querySelector('meta[name=\'evt-doiPage\']')||document.querySelector('meta[name=\'dc.Identifier\']'),!rootDOI)return alert('Unfortunately could not extract references.');rootDOI=rootDOI.content.toUpperCase(),lis=document.querySelectorAll('#references-section ul > li'),lis.length||(lis=document.querySelectorAll('ol.c-article-references > li')),lis.length||(lis=document.querySelectorAll('ol.cit-list > li')),lis.length||(lis=document.querySelectorAll('div.References')),lis.length||(lis=document.querySelectorAll('ol#referenceContent > li')),lis.length||(lis=document.querySelectorAll('ol.referenceList > li')),lis.length||(lis=document.querySelectorAll('.ref-list .ref')),lis.length||(lis=document.querySelectorAll('.references > li')),lis.length||(lis=document.querySelectorAll('li.ref')),lis.length||(lis=document.querySelectorAll('table.references tr')),listOfReferenceDOIs=Array.from(lis).map(e=>(e=decodeURIComponent(e.innerHTML).match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi))&&e.map(e=>e.toUpperCase()).filter(e=>e!==rootDOI)[0]),listOfReferenceDOIs.length?window.open('https://timwoelfle.github.io/Local-Citation-Network/index.html?name=Custom&editList=true&listOfDOIs='+listOfReferenceDOIs.join(',')):alert('Unfortunately could not extract references.')}())">Open in Local Citation Network</a>.
               </p>
               <p>
-                The bookmarklet is particularly useful when you want to use Local Citation Network as a "second screen" when you are reading a paper, showing you its references in the correct order and allowing you to view their abstracts and to identify seminal articles as well as additional suggested articles. When using the bookmarklet, the reference list is not obtained through Microsoft Academic itself but scanned directly from the website and then only subsequently this list of references is sent to Microsoft Academic to construct the Citation Network and to obtain suggestions. This way, the original order of references is preserved, which is not the case when using the Microsoft Academic API.
+                The bookmarklet is particularly useful when you want to use Local Citation Network as a "second screen" when you are reading a paper, showing you its references in the correct order and allowing you to view their abstracts and to identify seminal articles as well as additional suggested articles. When using the bookmarklet, the reference list is scanned directly from the website and then only subsequently this list of references is sent to the selected API to construct the Citation Network and to obtain suggestions. This way, the original order of references is preserved.
               </p>
               <p>
-                Unfortunately, not all journals' websites are supported. If you know how to code, check out the <a href="https://github.com/timwoelfle/Local-Citation-Network/blob/master/bookmarklet.js" target="_blank">code of the bookmarklet on GitHub</a> and extend it to support more journals! In this light it might be worth updating the bookmark in your browser from time to time to benefit from possible improvements.
+                Unfortunately, not all journals' websites are supported. If you know how to code, check out the <a href="https://github.com/timwoelfle/Local-Citation-Network/blob/master/bookmarklet.js">code of the bookmarklet on GitHub</a> and extend it to support more journals! In this light it might be worth updating the bookmark in your browser from time to time to benefit from possible improvements.
               </p>
             </div>
           </b-collapse>
@@ -705,7 +690,7 @@
                 Zoom by scrolling and pan by dragging. Each node (= vertex) represents an article. They are ordered by year from top (newer) to bottom (older), with each year colored differently. The size of the nodes depends on the sum of their "in-degree", the number of citations the paper received from the input articles, and their 'out-degree', the number of input articles they cite. The local 'in-degree' is not always proportional to the global citation count. Input articles are circle-shaped nodes ( ● ), except for the source article, which is diamond-shaped (◆), if applicable. Up-pointing triangles (▲) represent <a @click="indexFAQ = 'incoming-suggestions'" href="#incoming-suggestions">incoming suggestions</a>, which are cited by the input articles but not part of them themselves. Down-pointing triangles (▼) are <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>, which are citing the input articles but not part of them themselves.
               </p>
               <p>
-                Each edge (= link / arrow) represents a reference and citation at the same time: They are references from their outgoing nodes and citations for their incoming nodes. Usually papers can only cite older papers, hence edges tend to point downwards (or sidewards for citations of the same year). Technically this is called a <a href="https://en.wikipedia.org/wiki/Directed_acyclic_graph" target="_blank">directed acyclic graph</a>.
+                Each edge (= link / arrow) represents a reference and citation at the same time: They are references from their outgoing nodes and citations for their incoming nodes. Usually papers can only cite older papers, hence edges tend to point downwards (or sidewards for citations of the same year). Technically this is called a <a href="https://en.wikipedia.org/wiki/Directed_acyclic_graph">directed acyclic graph</a>.
               </p>
             </div>
           </b-collapse>
@@ -731,7 +716,7 @@
             </div>
             <div class="card-content content">
               <p>
-                Microsoft Academic (MA) is used by default because it is usually the most comprehensive and also includes abstracts. Switch the API with the button indicating MA / CR / OC in the top-right menu. See <a @click="indexFAQ = 'apis-used'" href="#apis-used">background</a> for more details on the APIs used.
+                Crossref (CR) is used as default since Microsoft Academic was discontinued in 2022. Switch the API with the button indicating CR / OC in the top-right menu. See <a @click="indexFAQ = 'apis-used'" href="#apis-used">background</a> for more details on the APIs used.
               </p>
               <p>
                 Crossref (CR) has the advantage that it usually returns reference lists in their <a @click="indexFAQ = 'original-order'" href="#original-order">original order</a> (alternatively you can use the <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">bookmarklet</a>). Also, it allows for the most accurate estimation of the <a @click="indexFAQ = 'completeness'" href="#completeness">reference-list completeness</a>, it's usually very fast and can handle fairly large input lists.
@@ -747,7 +732,7 @@
             </div>
             <div class="card-content content">
               <p>
-                When activated, this option caches your recent networks (up to 5 tabs) and your settings (including your personal Microsoft Academic API key) locally in your browser in the so-called localStorage. When you revisit this web app, you can pick up where you left. When deactivated, this data is deleted.
+                When activated, this option caches your recent networks (up to 5 tabs) and your preferred API locally in your browser in the so-called localStorage. When you revisit this web app, you can pick up where you left. When deactivated, this data is deleted.
               </p>
             </div>
           </b-collapse>
@@ -761,7 +746,7 @@
             </div>
             <div class="card-content content">
               <p>
-                I've tested with current versions of Firefox, Safari and Chrome (as of November 2019) and made sure this web app runs in these. Microsoft Edge and Microsoft Internet Explorer are unfortunately not supported and do not work at all right now. This web app is meant for desktop use and not optimized for smartphones, which have not been tested at all. I'm a single person and created this web app in my spare time for free and for fun, so I don't have the time and resources to test all possible devices, web browsers and scenarios. This web app is <a @click="indexFAQ = 'open-source'" href="#open-source">open source</a>, feel free to support it by extending compatibility or optimizing mobile / tablet use! If you find a bug or problem with the newest versions of Firefox / Safari / Chrome, please <a href="https://github.com/timwoelfle/Local-Citation-Network/issues" target="_blank" title="Report bug on GitHub">report it on GitHub</a> or <a @click="indexFAQ = 'contact'" href="#contact">contact me</a>.
+                I've tested with current versions of Firefox, Safari and Chrome (as of November 2019) and made sure this web app runs in these. Microsoft Edge and Microsoft Internet Explorer are unfortunately not supported and do not work at all right now. This web app is meant for desktop use and not optimized for smartphones, which have not been tested at all. I'm a single person and created this web app in my spare time for free and for fun, so I don't have the time and resources to test all possible devices, web browsers and scenarios. This web app is <a @click="indexFAQ = 'open-source'" href="#open-source">open source</a>, feel free to support it by extending compatibility or optimizing mobile / tablet use! If you find a bug or problem with the newest versions of Firefox / Safari / Chrome, please <a href="https://github.com/timwoelfle/Local-Citation-Network/issues" title="Report bug on GitHub">report it on GitHub</a> or <a @click="indexFAQ = 'contact'" href="#contact">contact me</a>.
                </p>
             </div>
           </b-collapse>
@@ -771,7 +756,7 @@
             </div>
             <div class="card-content content">
               <p>
-                Both the Microsoft Academic API and the Crossref API are public with varying response speeds depending on their overall usage and workload. In addition, I hypothesize they might be throttling individual users (as identified by IP address) when they perform too many queries in a row. Checking your internet connection, only querying what's really important, <a @click="indexFAQ = 'switch-api'" href="#switch-api">switching to the other API</a> and trying again later might help!
+                APIs are public with varying response speeds depending on their overall usage and workload. In addition, I hypothesize they might be throttling individual users (as identified by IP address) when they perform too many queries in a row. Checking your internet connection, only querying what's really important, <a @click="indexFAQ = 'switch-api'" href="#switch-api">switching to the other API</a> and trying again later might help!
               </p>
               <p>
                 Sometimes (particularly with unstable internet connections) queries seem to run forever. In case you want to cancel loading, activate 'Autosave results locally' (<a @click="indexFAQ = 'autosave'" href="#autosave">see autosave</a>) and refresh page. You can deactivate autosave afterwards again.
@@ -784,10 +769,10 @@
             </div>
             <div class="card-content content">
               <p>
-                The data is usually incomplete. Some DOIs cannot be found at all in Microsoft Academic / Crossref / OpenCitations and for those that are found, often some metadata like authors, abstracts or reference-lists are missing (particularly in Crossref and OpenCitations). For the citation network and incoming suggestions, the completeness of the reference-lists is most important. Usually Microsoft Academic's data is more complete, which is currently turned <em>{{ (API === 'Microsoft Academic') ? 'on' : 'off' }}</em> (<a @click="indexFAQ = 'switch-api'" href="#switch-api">how to toggle</a>).
+                The data is usually incomplete. Some DOIs cannot be found at all in Crossref / OpenCitations and for those that are found, often some metadata like authors, abstracts or reference-lists are missing. For the citation network and incoming suggestions, the completeness of the reference-lists is most important.
               </p>
               <p>
-                The estimated completeness can be seen above the search bar in the "Input articles" tab and is calculated in the following way: For Microsoft Academic & OpenCitations it is the fraction of input articles that have reference-lists themselves (multiplied by the fraction of specified DOIs found, in case of an input list).
+                The estimated completeness can be seen above the search bar in the "Input articles" tab and is calculated in the following way: For OpenCitations it is the fraction of input articles that have reference-lists themselves (multiplied by the fraction of specified DOIs found, in case of an input list).
               </p>
               <p>
                 Crossref allows more subtle calculation, as it often also provides the total reference count, which is often larger than the reference-list of DOIs (older references often don't have DOIs and neither do some specific books, papers or conference abstracts). The estimated completeness is thus calculated as the product of three fractions:
@@ -805,10 +790,7 @@
             </div>
             <div class="card-content content">
               <p>
-                Unfortunately, Microsoft Academic does not seem to save the original order in which references appear in an article, at least it does not return it via its API. However, you can <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">use the bookmarklet</a> to open reference lists in their original order.
-              </p>
-              <p>
-                Alternatively, you can use Crossref, which does save the original order of references. See here <a @click="indexFAQ = 'switch-api'" href="#switch-api">how to switch the API used</a>.
+                You can <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">use the bookmarklet</a> to open reference lists in their original order. Alternatively, you can use Crossref, which does save the original order of references. See here <a @click="indexFAQ = 'switch-api'" href="#switch-api">how to switch the API used</a>.
               </p>
             </div>
           </b-collapse>
@@ -822,13 +804,16 @@
             </div>
             <div class="card-content content">
               <p>
-                Bibliometrics is a part of information science that uses <a href="https://en.wikipedia.org/wiki/Bibliometrics" target="_blank">statistical methods to analyze publications</a>. It emcompasses scientometrics, which is specifically looking at scientific publications, and citation analysis.
+                Bibliometrics is a part of information science that uses <a href="https://en.wikipedia.org/wiki/Bibliometrics">statistical methods to analyze publications</a>. It emcompasses scientometrics, which is specifically looking at scientific publications, and citation analysis.
               </p>
               <p>
-                A highly recommended tool similar in spirit to this one is <a href="http://citationgecko.com/" target="_blank">Citation Gecko</a> (based on Crossref and OpenCitations), which I didn't know when creating Local Citation Network. The main difference is that you start with a small number of seed articles (5-6 are recommended) and incrementally increase the network by adding recommended articles to the pool of seed articles. Recommended articles include all references and even global citations. Check out this <a href="https://leidenmadtrics.nl/articles/local-citation-network-and-citation-gecko-making-literature-discovery-fun" target="_blank">guest post I've written for the blog Leiden Madtrics comparing the two tools</a>.
+                A highly recommended tool similar in spirit to this one is <a href="http://citationgecko.com/">Citation Gecko</a> (based on Crossref and OpenCitations), which I didn't know when creating Local Citation Network. The main difference is that you start with a small number of seed articles (5-6 are recommended) and incrementally increase the network by adding recommended articles to the pool of seed articles. Recommended articles include all references and even global citations. Check out this <a href="https://leidenmadtrics.nl/articles/local-citation-network-and-citation-gecko-making-literature-discovery-fun">guest post I've written for the blog Leiden Madtrics comparing the two tools</a>.
               </p>
               <p>
-                Other great software to help with bibliometric / scientometric analyses include <a href="https://harzing.com/resources/publish-or-perish" target="_blank">Anne-Wil Harzing's Publish or Perish</a>, which allows sophisticated queries of a plethora of APIs including Microsoft Academic and Crossref but also Google Scholar, Scopus and Web of Science. If you're looking to create more complex networks than this web app allows, check out the Leiden University's great <a href="https://www.vosviewer.com/" target="_blank">VOSviewer</a> and <a href="https://www.citnetexplorer.nl/" target="_blank">CitNetExplorer</a>, which allow you to create and customize everything from citation networks to author networks, university networks and journal networks. VOSviewer also allows text mining and co-occurrence networks.
+                Lately, newer similar tools have emerged like <a href="https://www.connectedpapers.com/">Connected Papers</a>, <a href="https://www.litmaps.co/">Litmaps</a> and <a href="https://inciteful.xyz/">Inciteful</a>. Aaron Tay has written a blog post for <a href="https://musingsaboutlibrarianship.blogspot.com/2021/06/playing-devils-adovcate-why-newly.html">comparison</a>.
+              </p>
+              <p>
+                Other great software to help with bibliometric / scientometric analyses include <a href="https://harzing.com/resources/publish-or-perish">Anne-Wil Harzing's Publish or Perish</a>, which allows sophisticated queries of a plethora of APIs including Crossref but also Google Scholar, Scopus and Web of Science. If you're looking to create more complex networks than this web app allows, check out the Leiden University's great <a href="https://www.vosviewer.com/">VOSviewer</a> and <a href="https://www.citnetexplorer.nl/">CitNetExplorer</a>, which allow you to create and customize everything from citation networks to author networks, university networks and journal networks. VOSviewer also allows text mining and co-occurrence networks.
               </p>
             </div>
           </b-collapse>
@@ -838,10 +823,10 @@
             </div>
             <div class="card-content content">
               <p>
-                Local Citation Network supports APIs from <a href="https://academic.microsoft.com" target="_blank">Microsoft Academic</a>, <a href="https://crossref.org">Crossref</a> and <a href="https://opencitations.net" target="_blank">OpenCitations</a>. Microsoft Academic is the default as it is most comprehensive and also includes abstracts. It's a freely available academic search-engine based on the proprietory <a href="https://www.microsoft.com/en-us/research/project/microsoft-academic-graph/" target="_blank">Microsoft Academic Graph</a> (similar to Clarivate's Web of Science and Elsevier's Scopus, both of which require (paid) subscriptions). <a href="https://doi.org/10.1007/s11192-016-2026-y" target="_blank" title="Harzing, 2016">Several</a> <a href="https://doi.org/10.1007%2Fs11192-017-2535-3" target="_blank" title="Hug, 2017">publications</a> <a href="https://doi.org/10.1007/s11192-016-2185-x" target="_blank" title="Harzing, 2017">have</a> <a href="https://doi.org/10.1007%2Fs11192-017-2567-8" target="_blank" title="Haunschild, 2017">analyzed</a> the quality and coverage of Microsoft Academic, with overall very promising results. <a href="https://doi.org/10.1007/s11192-017-2247-8" target="_blank">Hug et al. (2017)</a> have said: "The citation analyses in MA [Microsoft Academic] and Scopus yield uniform results". Microsoft Academic's API needs a personalized key to use, which is free for up to 10,000 transactions per month. This web app comes with a test key, but it's faster and more reliable to <a href="https://msr-apis.portal.azure-api.net/products/project-academic-knowledge" target="_blank">get your own free key here</a>!
+                Local Citation Network supports APIs from <a href="https://crossref.org">Crossref</a> and <a href="https://opencitations.net">OpenCitations</a>.
               </p>
               <p>
-                Crossref is a not-for-profit organization that collects metadata from scholarly journals and publications. OpenCitations is an independent infrastructure organization extending on these ideas, not just providing (outgoing) reference-lists, but also (incoming) citations for each indexed article. Thanks to the formidable <a href="https://i4oc.org/" target="_blank">Initiative for Open Citations (I4OC)</a>, the coverage of Crossref and OpenCitations has increased vastly. However, some journals still do not support these ideals - feel free to write them, in case you find one! <a href="https://www.crossref.org/services/metadata-delivery/rest-api/" target="_blank">Crossref's API</a> and <a href="https://opencitations.net/querying" target="_blank">OpenCitations' API</a> are freely available.
+                Crossref is a not-for-profit organization that collects metadata from scholarly journals and publications. OpenCitations is an independent infrastructure organization extending on these ideas, not just providing (outgoing) reference-lists, but also (incoming) citations for each indexed article. Thanks to the formidable <a href="https://i4oc.org/">Initiative for Open Citations (I4OC)</a>, the coverage of Crossref and OpenCitations has increased vastly. However, some journals still do not support these ideals - feel free to write them, in case you find one! <a href="https://www.crossref.org/services/metadata-delivery/rest-api/">Crossref's API</a> and <a href="https://opencitations.net/querying">OpenCitations' API</a> are freely available.
               </p>
             </div>
           </b-collapse>
@@ -874,7 +859,7 @@
             </div>
             <div class="card-content content">
               <p>
-                Yes, great! This project is open source (GPL-3) and <a href="https://github.com/timwoelfle/Local-Citation-Network" target="_blank">the source can be found on GitHub</a>. I don't have much more time to work on this project, so I'm actively looking for help and contributors. Bugfixes are always welcome but please <a @click="indexFAQ = 'contact'" href="#contact">contact me</a> before any large pull-requests so we can coordinate.
+                Yes, great! This project is open source (GPL-3) and <a href="https://github.com/timwoelfle/Local-Citation-Network">the source can be found on GitHub</a>. I don't have much more time to work on this project, so I'm actively looking for help and contributors. Bugfixes are always welcome but please <a @click="indexFAQ = 'contact'" href="#contact">contact me</a> before any large pull-requests so we can coordinate.
               </p>
             </div>
           </b-collapse>
@@ -887,7 +872,7 @@
                 No, this web app doesn't use any cookies. No user-tracking or fingerprinting is performed and no usage-data is collected by the author of this web app. Optionally, so-called localStorage can be used to cache results and settings locally when "Autosave results locally" is manually turned on (<a @click="indexFAQ = 'autosave'" href="#autosave">see autosave</a>).
               </p>
               <p>
-                This web app is running locally on your computer and only contacts the API servers of Microsoft Academic / Crossref during runtime. Microsoft has a <a href="https://privacy.microsoft.com/en-gb/privacystatement" target="_blank" title="Microsoft's general privacy statement">general privacy statement</a>, I haven't found anything specific to the Microsoft Academic API. Crossref also has a <a href="https://www.crossref.org/privacy/" target="_blank" title="Crossref's general privacy statement">general privacy statement</a>. This web app is hosted by GitHub pages, see their <a href="https://help.github.com/en/github/site-policy/github-privacy-statement#github-pages" target="_blank" title="GitHub Pages privacy statement">privacy statement here</a>.
+                This web app is running locally on your computer and only contacts the API servers during runtime. Crossref has a <a href="https://www.crossref.org/privacy/" title="Crossref's general privacy statement">general privacy statement</a>. This web app is hosted by GitHub pages, see their <a href="https://help.github.com/en/github/site-policy/github-privacy-statement#github-pages" title="GitHub Pages privacy statement">privacy statement here</a>.
               </p>
             </div>
           </b-collapse>
@@ -897,7 +882,7 @@
             </div>
             <div class="card-content content">
               <p>
-                This web app uses <a href="completeness" target="_blank">Vue.js</a>, <a href="https://buefy.org/" target="_blank">Buefy</a> and <a href="https://visjs.org/" target="_blank">vis.js Network</a>. I opted against using content delivery networks (CDN) to speed up delivery of these JavaScript libraries and thus initial loading-time, because of the <a href="https://en.wikipedia.org/wiki/Content_delivery_network#Security_and_privacy" target="_blank">potential user-tracking by CDNs</a>. If you're interested, this rising problem is partly countered by the great browser-plugin <a href="https://decentraleyes.org/" target="_blank">Decentraleyes</a> (<a href="https://git.synz.io/Synzvato/decentraleyes/wikis/Frequently-Asked-Questions" target="_blank" title="FAQ Decentraleyes">see their FAQ</a> for more details).
+                This web app uses <a href="completeness">Vue.js</a>, <a href="https://buefy.org/">Buefy</a> and <a href="https://visjs.org/">vis.js Network</a>. I opted against using content delivery networks (CDN) to speed up delivery of these JavaScript libraries and thus initial loading-time, because of the <a href="https://en.wikipedia.org/wiki/Content_delivery_network#Security_and_privacy">potential user-tracking by CDNs</a>. If you're interested, this rising problem is partly countered by the great browser-plugin <a href="https://decentraleyes.org/">Decentraleyes</a> (<a href="https://git.synz.io/Synzvato/decentraleyes/wikis/Frequently-Asked-Questions" title="FAQ Decentraleyes">see their FAQ</a> for more details).
               </p>
             </div>
           </b-collapse>
@@ -907,7 +892,7 @@
             </div>
             <div class="card-content content">
               <p>
-                I'm Tim Wölfle from Germany and started creating this project during the literature review for my Master's thesis. I've often manually scanned reference lists of papers to identify seminal articles and thought this must be automized. You can contact me on <a href="https://twitter.com/timwoelfle" target="_blank">Twitter</a> or by <a href="mailto:local-citation-network@timwoelfle.de">e-mail</a>.
+                I'm Tim Wölfle from Germany and started creating this project during the literature review for my Master's thesis. I've often manually scanned reference lists of papers to identify seminal articles and thought this must be automized. You can contact me on <a href="https://twitter.com/timwoelfle">Twitter</a> or by <a href="mailto:local-citation-network@timwoelfle.de">e-mail</a>.
               </p>
             </div>
           </b-collapse>
