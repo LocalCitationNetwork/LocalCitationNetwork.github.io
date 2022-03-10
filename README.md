@@ -1,8 +1,10 @@
 # Local-Citation-Network
 
-This web app aims to help scientists with their literature review using metadata from [Microsoft Academic](https://academic.microsoft.com), [Crossref](https://crossref.org) and [OpenCitations](https://opencitations.net). Academic papers cite one another, thus creating a [citation network (= graph)](https://en.wikipedia.org/wiki/Citation_graph). Each node (= vertex) represents an article and each edge (= link / arrow) represents a citation, that is a directed link between two articles. As papers can only cite older papers, in theory the citation network is a [directed acyclic graph](https://en.wikipedia.org/wiki/Directed_acyclic_graph). Citation graphs are a topic of [bibliometrics](https://en.wikipedia.org/wiki/Bibliometrics).
 
-This web app visualizes subsets of the global citation network that I call "local citation networks", defined by citations of a given set of input articles. In addition, the cited references missing in the set of input articles are suggested for further review.
+
+This web app aims to help scientists with their literature review using metadata from [OpenAlex](https://openalex.org/) (OA), [Semantic Scholar](https://semanticscholar.org/) (S2) and [Crossref](https://crossref.org/) (CR). Academic papers cite one another, thus creating a [citation network (= graph)](https://en.wikipedia.org/wiki/Citation_graph). Each node (= vertex) represents an article and each edge (= link / arrow) represents a reference / citation. Citation graphs are a topic of [bibliometrics, for which other great software exists as well](https://timwoelfle.github.io/Local-Citation-Network#bibliometrics).
+
+This web app visualizes subsets of the global citation network that I call 'local citation networks', defined by the references (and citations) of a given set of input articles. In addition, the locally most relevant references (and citations) missing in the set of input articles are suggested for further review. 
 
 ## Open source contributions
 

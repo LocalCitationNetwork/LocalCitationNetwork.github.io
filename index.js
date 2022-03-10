@@ -1,5 +1,5 @@
-/* Local Citation Network v0.97 (GPL-3) */
-/* by Tim Wölfle */
+/* Local Citation Network v0.98 (GPL-3) */
+/* by Tim Woelfle */
 /* https://timwoelfle.github.io/Local-Citation-Network */
 
 /* global fetch, localStorage, vis, Vue, Buefy */
@@ -9,12 +9,133 @@
 const arrSum = arr => arr.reduce((a, b) => a + b, 0)
 const arrAvg = arr => arrSum(arr) / arr.length
 
+/* Semantic Scholar API */
+
+async function semanticScholarWrapper (expression, responseFunction, getCitations = false) {
+  // Single query (usually only source article)
+  if (!expression.includes(',')) {
+    responseFunction([await semanticScholarPaper(expression, getCitations)])
+  // Multiple queries
+  } else {
+    const responses = []
+    for (const id of expression.split(',')) {
+      const response = await semanticScholarPaper(id, getCitations)
+      if (!response) return false
+      responses.push(response)
+    }
+    responseFunction(responses)
+  }
+}
+
+function semanticScholarPaper (id, getCitations) {
+  let fields = 'externalIds,title,abstract,venue,year,citationCount,authors,references.paperId'
+  if (getCitations) fields += ',citations.paperId'
+  return fetch('https://api.semanticscholar.org/graph/v1/paper/' + id + '?fields=' + fields).then(response => {
+    return response.json()
+  }).then(response => {
+    if (response.error) throw (response.error)
+    return response
+  }).catch(error => {
+    vm.errorMessage('Error while processing data through Semantic Scholar API: ' + error + '<br><br>Most likely due to too rapid requests, repeat after a short break or switch API.')
+    return false
+  })
+}
+
+function semanticScholarResponseToArticleArray (data, sourceReferences) {
+  return data.map(function (article) {
+    const doi = article.externalIds.DOI && article.externalIds.DOI.toUpperCase()
+
+    return {
+      id: article.paperId,
+      // Semantic Scholar returns reference lists of papers not in order of references in original publication
+      // Nonetheless, when the input is a listOfDOIs (i.e. file / bookmarklet), the order can be recovered through sourceReferences
+      numberInSourceReferences: (doi && sourceReferences.length) ? sourceReferences.indexOf(doi) + 1 : undefined,
+      doi: doi,
+      title: article.title,
+      authors: article.authors.map(author => {
+        const lastSpace = author.name.lastIndexOf(' ')
+        return { LN: author.name.substr(lastSpace + 1), FN: author.name.substr(0, lastSpace) }
+      }),
+      year: article.year,
+      journal: article.venue,
+      references: (article.references) ? article.references.map(x => x.paperId) : [],
+      citations: (article.citations) ? article.citations.map(x => x.paperId).filter(Boolean) : [],
+      citationsCount: article.citationCount,
+      abstract: article.abstract
+    }
+  // Remove duplicates (e.g. in references of 10.1111/J.1461-0248.2009.01285.X, eebf363bc78ca7bc16a32fa339004d0ad43aa618 came up twice)
+  }).reduce((data, article) => {
+    const ids = data.map(x => x.id)
+    if (!ids.includes(article.id)) data.push(article)
+    return data
+  }, [])
+}
+
+/* OpenAlex API */
+
+async function openAlexWrapper (expression, responseFunction) {
+  // Single query (usually only source article)
+  if (!expression.includes(',')) {
+    responseFunction([await openAlexWorks(expression)])
+  // Multiple queries
+  } else {
+    const responses = []
+    for (const id of expression.split(',')) {
+      const response = await openAlexWorks(id)
+      if (!response) return false
+      responses.push(response)
+    }
+    responseFunction(responses)
+  }
+}
+
+function openAlexWorks (id) {
+  return fetch('https://api.openalex.org/works/' + id + '?mailto=local-citation-network@timwoelfle.de').then(response => {
+    if (response.status !== 200) throw (response.statusText)
+    return response.json()
+  }).catch(error =>
+    vm.errorMessage('Error while processing data through OpenAlex API: ' + error)
+  )
+}
+
+function openAlexResponseToArticleArray (data, sourceReferences) {
+  return data.map(function (article) {
+    const doi = (article.doi) ? article.doi.replace('https://doi.org/', '').toUpperCase() : undefined
+
+    return {
+      id: article.id.replace('https://openalex.org/', ''),
+      // OpenAlex returns reference lists of papers as arrays not by order of references in original publication
+      // Nonetheless, when the input is a listOfDOIs (i.e. file / bookmarklet), the order can be recovered through sourceReferences
+      numberInSourceReferences: (doi && sourceReferences.length) ? sourceReferences.indexOf(doi) + 1 : undefined,
+      doi: doi,
+      title: article.display_name,
+      authors: article.authorships.map(authorship => {
+        const display_name = authorship.author.display_name; const lastSpace = display_name.lastIndexOf(' ')
+        return { LN: display_name.substr(lastSpace + 1), FN: display_name.substr(0, lastSpace), affil: authorship.institutions.display_name || undefined }
+      }),
+      year: article.publication_year,
+      journal: article.host_venue.display_name || article.host_venue.publisher,
+      references: (article.referenced_works || []).map(x => x.replace('https://openalex.org/', '')),
+      citationsCount: article.cited_by_count,
+      abstract: (article.abstract_inverted_index) ? revertAbstractFromInvertedIndex(article.abstract_inverted_index) : undefined,
+      isRetracted: article.is_retracted
+    }
+  })
+}
+
+function revertAbstractFromInvertedIndex (abstract_inverted_index) {
+  const abstract = []
+  Object.keys(abstract_inverted_index).forEach(word => abstract_inverted_index[word].forEach(i => { abstract[i] = word }))
+  return abstract.join(' ').replace('  ', ' ').trim()
+}
+
 /* Crossref API */
 
 function crossrefWorks (expression, responseFunction, count) {
-  // Currently the crossref API doesn't fully support subselection of response, so just obtain full response (in particular reference data: https://gitlab.com/crossref/issues/issues/511)
+  // TODO Now that subselection of results is fixed, it could be leveraged to reduce API load (https://gitlab.com/crossref/issues/issues/511)
   let body = {
     filter: expression,
+    // 'count' necessary beacause Crossref otherwise reverts to default of only 20 rows
     rows: count,
     offset: 0,
     mailto: 'local-citation-network@timwoelfle.de'
@@ -40,13 +161,13 @@ function crossrefWorks (expression, responseFunction, count) {
 function crossrefResponseToArticleArray (data, sourceReferences) {
   return data.message.items.map(function (article) {
     // filter is necessary because some references don't have DOIs in Crossref (https://stackoverflow.com/questions/28607451/removing-undefined-values-from-array)
-    const references = (typeof article.reference === 'object') ? article.reference.map(x => (x.DOI) ? x.DOI.toUpperCase() : undefined) : []
+    const references = (typeof article.reference === 'object') ? article.reference.map(x => (x.DOI) ? x.DOI.toUpperCase() : undefined) : []; const doi = article.DOI.toUpperCase()
 
     return {
-      id: article.DOI.toUpperCase(),
+      id: doi,
       // Crossref actually returns references in the original order (as opposed to MA & OC)
-      numberInSourceReferences: (sourceReferences.length) ? (sourceReferences.indexOf(article.DOI.toUpperCase()) + 1) : undefined,
-      doi: article.DOI.toUpperCase(),
+      numberInSourceReferences: (doi && sourceReferences.length) ? sourceReferences.indexOf(doi) + 1 : undefined,
+      doi: doi,
       title: String(article.title), // most of the time title is an array with length=1, but I've also seen pure strings
       authors: (article.author && article.author.length) ? article.author.map(x => ({ LN: x.family || x.name, FN: x.given, affil: String(x.affiliation) || undefined })) : [{ LN: article.author || undefined }],
       year: article.issued['date-parts'] && article.issued['date-parts'][0] && article.issued['date-parts'][0][0],
@@ -60,8 +181,8 @@ function crossrefResponseToArticleArray (data, sourceReferences) {
 
 /* OpenCitations API */
 
-function openCitationsMetadata (expression, responseFunction, count) {
-  // https://opencitations.net/index/api/v1#/metadata/{dois}
+function openCitationsMetadata (expression, responseFunction) {
+  // https://opencitations.net/index/api/v1#/metadata/{DOIs}
   return fetch('https://opencitations.net/index/api/v1/metadata/' + expression).then(response => {
     if (!response.ok) {
       throw new Error(response)
@@ -76,14 +197,14 @@ function openCitationsMetadata (expression, responseFunction, count) {
 
 function openCitationsResponseToArticleArray (data, sourceReferences) {
   return data.map(function (article) {
-    const references = (article.reference) ? article.reference.split('; ').map(x => x.toUpperCase()) : []
+    const references = (article.reference) ? article.reference.split('; ').map(x => x.toUpperCase()) : []; const doi = article.doi.toUpperCase()
 
     return {
-      id: article.doi.toUpperCase(),
+      id: doi,
       // OpenCitations doesn't seem to return references in original ordering
       // Nonetheless, when the input is a listOfDOIs (i.e. file / bookmarklet), the order can be recovered
-      numberInSourceReferences: (sourceReferences.length) ? sourceReferences.indexOf(article.doi.toUpperCase()) + 1 : undefined,
-      doi: article.doi.toUpperCase(),
+      numberInSourceReferences: (doi && sourceReferences.length) ? sourceReferences.indexOf(doi) + 1 : undefined,
+      doi: doi,
       title: String(article.title), // most of the time title is an array with length=1, but I've also seen pure strings
       authors: article.author.split('; ').map(x => ({ LN: x.split(', ')[0], FN: x.split(', ')[1] })),
       year: article.year,
@@ -105,7 +226,7 @@ function initCitationNetwork (app) {
   if (!document.getElementById('citationNetwork')) return setTimeout(function () { app.init() }, 1)
 
   // Create an array with nodes only for nodes with in- / out-degree >= 1 (no singletons)
-  const articles = app.currentGraph.input.filter(article => app.inDegree(article.id) || app.outDegree(article.id)).concat(app.incomingSuggestionsSliced).concat(app.outgoingSuggestionsSliced)
+  const articles = app.currentGraph.input.filter(article => article.year && (app.inDegree(article.id) || app.outDegree(article.id))).concat(app.incomingSuggestionsSliced).concat(app.outgoingSuggestionsSliced)
   const articlesIds = articles.map(article => article.id)
 
   // Create an array with edges
@@ -129,7 +250,7 @@ function initCitationNetwork (app) {
     group: article.year,
     size: arrSum([5, app.inDegree(article.id), app.outDegree(article.id)]) * 5,
     shape: (app.currentGraph.source.id === article.id) ? 'diamond' : (app.inputArticlesIds.includes(article.id) ? 'dot' : (app.incomingSuggestionsIds.includes(article.id) ? 'triangle' : 'triangleDown')),
-    label: article.authors[0].LN + '\n' + article.year
+    label: (article.authors[0] && article.authors[0].LN) + '\n' + article.year
   }))
 
   // Create network
@@ -165,6 +286,9 @@ function initCitationNetwork (app) {
     physics: {
       hierarchicalRepulsion: {
         nodeDistance: 600
+      },
+      stabilization: {
+        iterations: 200
       }
     },
     configure: false
@@ -192,13 +316,19 @@ function initCitationNetwork (app) {
         app.showArticlesTab = 'outgoingSuggestions'
         app.selectedOutgoingSuggestionsArticle = app.currentGraph.outgoingSuggestions[app.outgoingSuggestionsIds.indexOf(selectedNode)]
       }
+    // Don't select edges
+    } else {
+      citationNetwork.setSelection({
+        nodes: [app.selected.id],
+        edges: []
+      })
     }
   }
 
   function networkOnDoubleClick (params) {
     let selectedNode, article
 
-    // Select corresponding row in table
+    // Open article in new tab
     if (params.nodes.length > 0) {
       selectedNode = params.nodes[0]
       article = app.currentGraph.input[app.inputArticlesIds.indexOf(selectedNode)] || app.currentGraph.incomingSuggestions[app.incomingSuggestionsIds.indexOf(selectedNode)]
@@ -210,7 +340,7 @@ function initCitationNetwork (app) {
 function initAuthorNetwork (app, minPublications = undefined) {
   if (!document.getElementById('authorNetwork')) return false
 
-  // Unfortunately, Microsoft Academic often has multiple author Ids for the same author name when affiliations differ => this leads to seeming redundancies, which makes the new Set() necessary to have each author name be unique
+  // Unfortunately, currently the new Set() requires each author name be unique
   // (I know this can cause trouble with non-unique author names actually shared by two people publishing in similar fields but I'm currently not taking this into account)
   let authorGroups = app.currentGraph.input.concat(app.incomingSuggestionsSliced).concat(app.outgoingSuggestionsSliced).map(article => article.authors ? Array.from(new Set(article.authors.map(x => x.FN + ' ' + x.LN))) : [])
   const authors = {}
@@ -328,14 +458,13 @@ const vm = new Vue({
   el: '#app',
   data: {
     // Settings
-    API: 'Crossref', // Use 'Crossref' as default, other option: 'OpenCitations' ('Microsoft Academic' was discontinued in 2022)
-    customKeyMA: undefined,
+    API: 'OpenAlex', // Use 'OpenAlex' as default, other options: 'Semantic Scholar, 'Crossref', 'OpenCitations' ('Microsoft Academic' was discontinued 01/2022)
     maxTabs: 5,
     autosaveResults: false,
 
     // Data
     graphs: [],
-    newSourceDOI: undefined,
+    newSource: undefined,
     file: undefined,
     listOfDOIs: [],
     listName: undefined,
@@ -414,17 +543,17 @@ const vm = new Vue({
     },
     completenessLabel: function () {
       let label = ''
-      // Show number of "original references" only for Crossref for source-based-graphs and for all listOfDOIs (i.e. file / bookmarklet) graphs, for which they can be estimated
-      if (this.currentGraph.API === 'Crossref' || !this.currentGraph.source.id) {
+      // Show number of "original references" only for Semantic Scholar / Crossref for source-based-graphs and for all listOfDOIs (i.e. file / bookmarklet) graphs, for which they can be estimated
+      if (['Semantic Scholar', 'Crossref'].includes(this.currentGraph.API) || !this.currentGraph.source.id) {
         if (this.currentGraph.source.id) {
           label += 'Source and '
         }
-        label += `${this.inputArticlesWithoutSource.length} of originally ${this.currentGraph.source.references.length} references were found in ${this.currentGraph.API} (${Math.round(this.sourceReferencesCompletenessFraction * 100)}%), ${this.inputHasReferences} of which have reference-lists themselves (${Math.round(this.inputHasReferences / this.inputArticlesWithoutSource.length * 100)}%). `
+        label += `${this.inputArticlesWithoutSource.length} of originally ${this.currentGraph.source.references.length} references were found in ${this.currentGraph.API} (${Math.round(this.sourceReferencesCompletenessFraction * 100)}%), ${this.inputHasReferences} of which have reference-lists themselves (${Math.round(this.inputHasReferences / this.inputArticlesWithoutSource.length * 100)}%).`
       } else {
-        label = `${this.inputHasReferences} of ${this.inputArticlesWithoutSource.length} input articles ${this.currentGraph.source.id ? '(excluding source) ' : ''}have reference-lists themselves in ${this.currentGraph.API} (${Math.round(this.inputHasReferences / this.inputArticlesWithoutSource.length * 100)}%). `
+        label = `${this.inputHasReferences} of ${this.inputArticlesWithoutSource.length} input articles ${this.currentGraph.source.id ? '(excluding source) ' : ''}have reference-lists themselves in ${this.currentGraph.API} (${Math.round(this.inputHasReferences / this.inputArticlesWithoutSource.length * 100)}%).`
       }
 
-      if (this.currentGraph.API === 'Crossref') label += `Their respective average reference completeness is ${Math.round(this.inputReferencesCompletenessFraction * 100)}%.`
+      if (['Semantic Scholar', 'Crossref'].includes(this.currentGraph.API)) label += ` Their respective average reference completeness is ${Math.round(this.inputReferencesCompletenessFraction * 100)}%.`
       return label
     },
     completenessPercent: function () {
@@ -442,27 +571,24 @@ const vm = new Vue({
         this.init()
       }
     },
-    // User provided a new DOI for source article
-    newSourceDOI: function () {
-      if (!this.newSourceDOI || !this.newSourceDOI.trim()) return false
+    // User provided a new DOI or other id for source article
+    newSource: function () {
+      if (!this.newSource || !this.newSource.trim()) return false
 
-      let DOI = this.newSourceDOI.trim().toUpperCase()
+      let id = this.newSource.trim()
 
-      // Ignore trailing string (e.g. 'doi:' or 'https://doi.org/')
-      if (DOI.match(/10\.\d{4,9}\/\S+/)) DOI = DOI.match(/10\.\d{4,9}\/\S+/)[0]
-      else return this.errorMessage(DOI + ' is not a valid DOI, which must be in the form: 10.prefix/suffix where prefix is 4 or more digits and suffix is a string.', 'Invalid DOI')
-
-      // Check if DOI is among open tabs already
-      const graphDOIs = this.graphs.map(graph => graph.source.doi)
-      if (graphDOIs.includes(DOI)) {
-        this.currentGraphIndex = graphDOIs.indexOf(DOI)
-      // Otherwise set new source DOI
-      } else {
-        this.isLoading = true
-        this.callAPI([DOI], data => {
-          this.setNewSource(this.responseToArray(data)[0])
-        }, 1)
+      // Crossref only allows DOIs as ids
+      if (this.API === 'Crossref') {
+        // Ignore trailing string (e.g. 'DOI:' or 'https://doi.org/')
+        if (id.match(/10\.\d{4,9}\/\S+/)) id = id.match(/10\.\d{4,9}\/\S+/)[0]
+        else return this.errorMessage(id + ' is not a valid DOI, which must be in the form: 10.prefix/suffix where prefix is 4 or more digits and suffix is a string.', 'Invalid DOI')
       }
+
+      // Set new source
+      this.isLoading = true
+      this.callAPI([id], data => {
+        this.setNewSource(this.responseToArray(data)[0])
+      }, 1, true) // count=1, getCitations=true
     },
     // User provided a file which is searched for DOIs
     file: function () {
@@ -471,9 +597,9 @@ const vm = new Vue({
       this.file.text().then(text => {
         this.isLoading = false
         // Using the set [-_;()/:A-Z0-9] twice (fullstop . and semicolon ; only in first set) makes sure that the trailing character is not a fullstop or semicolon
-        const dois = Array.from(new Set(text.match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi))).map(x => x.toUpperCase())
-        if (!dois.length) throw new Error('No DOIs found in file.')
-        this.listOfDOIs = dois
+        const DOIs = Array.from(new Set(text.match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi))).map(x => x.toUpperCase())
+        if (!DOIs.length) throw new Error('No DOIs found in file.')
+        this.listOfDOIs = DOIs
         this.listName = this.file.name
         this.editListOfDOIs = true
       }).catch(e => this.errorMessage('Error with file handling: ' + e))
@@ -489,14 +615,16 @@ const vm = new Vue({
       if (document.getElementById(this.selected.id)) document.getElementById(this.selected.id).scrollIntoView({ behavior: 'smooth', block: 'center' })
     },
     maxIncomingSuggestions: function () {
-      if (this.graphs.length) {
+      // Prevent too many re-inits
+      if (this.graphs.length && document.getElementById('citationNetwork')) {
         initCitationNetwork(this)
         initAuthorNetwork(this)
         this.highlightNodes()
       }
     },
     maxOutgoingSuggestions: function () {
-      if (this.graphs.length) {
+      // Prevent too many re-inits
+      if (this.graphs.length && document.getElementById('citationNetwork')) {
         initCitationNetwork(this)
         initAuthorNetwork(this)
         this.highlightNodes()
@@ -513,12 +641,12 @@ const vm = new Vue({
   methods: {
     setNewSource: function (source, label = undefined, title = undefined) {
       try {
-        // Some papers are in Crossref / MA but don't have references themselves
-        if (!source) throw new Error(`DOI ${this.newSourceDOI} not found in ${this.API} API, try other API.`)
-        if (!source.references.length) throw new Error(`No references found in ${this.API} API for paper: ${this.newSourceDOI}`)
+        // Some papers can be found in the APIs but don't have references themselves in there
+        if (!source) throw new Error(`DOI ${this.newSource} not found in ${this.API} API, try other API.`)
+        if (!source.references.length) throw new Error(`No references found in ${this.API} API for paper: ${this.newSource}`)
 
-        // Reset newSourceDOI (otherwise it cannot be called twice in a row with different APIs)
-        this.newSourceDOI = undefined
+        // Reset newSource (otherwise it cannot be called twice in a row with different APIs)
+        this.newSource = undefined
 
         this.$buefy.toast.open({
           message: 'New query sent to ' + this.API + '.<br>This may take a while, depending on the number of references and API workload.',
@@ -529,8 +657,9 @@ const vm = new Vue({
         // Get Input articles
         // filter(Boolean) is necessary because references array can contain empty items in order to preserve original order of DOIs from crossref
         this.callAPI(source.references.filter(Boolean), data => {
-          const referencedBy = {}
-          const citing = {}
+          source.isSource = true
+          let referencedBy = {}
+          let citing = {}
           // Only send sourceReferences to responseToArray function when original numbering can be recovered (either for Crossref or listOfDOIs (i.e. file / bookmarklet))
           let inputArticles = this.responseToArray(data, (this.API === 'Crossref' || !source.id) ? source.references : false)
           // Don't put source in inputArticles (and thus network) when a list was loaded
@@ -547,61 +676,40 @@ const vm = new Vue({
           inputArticles.forEach(article => {
             article.references.filter(Boolean).forEach(refId => {
               if (!referencedBy[refId]) referencedBy[refId] = []
-              referencedBy[refId].push(article.id)
+              // Avoid duplicate counting of references for in-degree (e.g. https://api.crossref.org/works/10.7717/PEERJ.3544 has 5 references to DOI 10.1080/00031305.2016.1154108)
+              if (!referencedBy[refId].includes(article.id)) referencedBy[refId].push(article.id)
 
               addToCiting(article.id, refId)
             })
-            // Currently, only OpenCitations has data on incoming citations
-            if (vm.API === 'OpenCitations') {
+            // Only Semantic Scholar and OpenCitations have incoming citations
+            if (['Semantic Scholar', 'OpenCitations'].includes(this.API)) {
               article.citations.filter(Boolean).forEach(citId => {
                 addToCiting(citId, article.id)
               })
+              // Remove citations property to save space (otherwise localStorage quota exceeds sooner) because the information is now stored in "citing" variable
+              delete inputArticles[inputArticles.indexOf(article)].citations
             }
           })
 
-          source.isSource = true
-
-          // Add new tab
-          this.graphs.push({
-            source: source,
-            input: inputArticles,
-            incomingSuggestions: [],
-            outgoingSuggestions: [],
-            referenced: referencedBy,
-            citing: citing,
-            tabLabel: label || source.authors[0].LN + ' ' + source.year,
-            tabTitle: title || source.title,
-            API: this.API,
-            timestamp: Date.now()
-          })
-
-          // Don't keep more articles in tab-bar than maxTabs
-          if (this.graphs.length > this.maxTabs) this.graphs = this.graphs.slice(1)
-
-          // Let user explore input articles while incoming suggestions (and outgoing suggestions) are still loading
-          this.currentGraphIndex = this.graphs.length - 1
-          this.isLoading = false
-
-          /* Find incoming suggestions articles */
-          // sort articles by number of local citations (inDegree) and pick max top 20
+          /* Find incoming suggestions (high in-degree = top outgoing references) */
+          // sort articles by number of local citations (inDegree) and pick top ones
           // https://medium.com/@alleto.saburido/set-theory-for-arrays-in-es6-eb2f20a61848
           const incomingSuggestionsIds = Object.keys(referencedBy)
           // Only suggest articles that have at least two local citations and that aren't already among input articles
-          // Careful with comparing DOIs!!! They have to be all upper case (performed by crossrefResponseToArticleArray & microsoftAcademicResponseToArticleArray)
-            .filter(x => referencedBy[x].length > 1 && !inputArticlesIds.includes(Number(x) || x)) // If x is numeric (i.e. Id from Microsoft Academic), convert to Number, otherwise keep DOIs from Crossref
+          // Careful with comparing DOIs!!! They have to be all upper case
+            .filter(x => referencedBy[x].length > 1 && !inputArticlesIds.includes(x))
             .sort((a, b) => referencedBy[b].length - referencedBy[a].length).slice(0, 20)
 
-          // In case no ids are found
-          if (!incomingSuggestionsIds.length) {
-            this.saveState()
-          } else {
+          let ids = inputArticlesIds.concat(incomingSuggestionsIds)
+
+          if (incomingSuggestionsIds.length) {
             this.callAPI(incomingSuggestionsIds, data => {
               const incomingSuggestions = this.responseToArray(data)
               // Careful: Array/object item setting can't be picked up by Vue (https://vuejs.org/v2/guide/list.html#Caveats)
               this.$set(this.graphs[this.graphs.length - 1], 'incomingSuggestions', incomingSuggestions)
 
-              // Crossref does not have incoming citation data, thus this has to be completed so that incoming suggestions have correct out-degrees, which are based on 'citing'
-              if (this.API !== 'OpenCitations') {
+              // OpenAlex and Crossref do not have incoming citation data (in case of OpenAlex this is not implemented here yet), thus this has to be completed so that incoming suggestions have correct out-degrees, which are based on 'citing'
+              if (['OpenAlex', 'Crossref'].includes(this.API)) {
                 incomingSuggestions.forEach(article => {
                   article.references.filter(Boolean).forEach(refId => {
                     addToCiting(article.id, refId)
@@ -612,58 +720,92 @@ const vm = new Vue({
 
               this.init()
               this.saveState()
-            }, incomingSuggestionsIds.length)
+            }, incomingSuggestionsIds.length, false) // count=incomingSuggestionsIds.length, getCitations=false
           }
 
-          // Top incoming citations (newer)
-          if (this.API === 'OpenCitations') {
+          /* Find outgoing suggestions (high out-degree = top incoming citations) */
+          // Only works with Semantic Scholar and OpenCitations for now (TODO OpenAlex could support this feature as well with some more work)
+          if (['Semantic Scholar', 'OpenCitations'].includes(this.API)) {
             const outgoingSuggestionsIds = Object.keys(citing)
               // If - in theoretical cases, I haven't seen one yet - a top incoming citation is already a top reference, don't include it here again
-              .filter(x => citing[x].length > 1 && !inputArticlesIds.includes(Number(x) || x) && !incomingSuggestionsIds.includes(x)) // If x is numeric (i.e. Id from Microsoft Academic), convert to Number, otherwise keep DOIs from Crossref
+              .filter(x => citing[x].length > 1 && !inputArticlesIds.includes(x) && !incomingSuggestionsIds.includes(x))
               .sort((a, b) => citing[b].length - citing[a].length).slice(0, 20)
 
-            if (!outgoingSuggestionsIds.length) {
-              this.saveState()
-            } else {
+            ids = ids.concat(outgoingSuggestionsIds)
+
+            if (outgoingSuggestionsIds.length) {
               this.callAPI(outgoingSuggestionsIds, data => {
                 // Careful: Array/object item setting can't be picked up by Vue (https://vuejs.org/v2/guide/list.html#Caveats)
                 this.$set(this.graphs[this.graphs.length - 1], 'outgoingSuggestions', this.responseToArray(data))
                 this.init()
                 this.saveState()
-              }, outgoingSuggestionsIds.length)
+              }, outgoingSuggestionsIds.length, false) // count=outgoingSuggestionsIds.length, getCitations=false
             }
           }
-        }, source.references.length)
+
+          // Reduce size of referenced and citing objects by only keeping entries for input articles and suggestions
+          referencedBy = ids.reduce((newObject, id) => { newObject[id] = referencedBy[id]; return newObject }, {})
+          citing = ids.reduce((newObject, id) => { newObject[id] = citing[id]; return newObject }, {})
+
+          // Add new tab
+          this.graphs.push({
+            source: source,
+            input: inputArticles,
+            incomingSuggestions: [],
+            outgoingSuggestions: [],
+            referenced: referencedBy,
+            citing: citing,
+            tabLabel: (label || (source.authors[0] && source.authors[0].LN) + ' ' + source.year) + ' (' + this.abbreviateAPI(this.API) + ')',
+            tabTitle: title || source.title,
+            API: this.API,
+            timestamp: Date.now()
+          })
+
+          // Don't keep more articles in tab-bar than maxTabs
+          if (this.graphs.length > this.maxTabs) this.graphs = this.graphs.slice(1)
+
+          // Let user explore input articles while suggestions are still loading
+          this.showArticlesTab = 'inputArticles'
+          this.currentGraphIndex = this.graphs.length - 1
+          this.isLoading = false
+
+          this.saveState()
+        }, source.references.length, true) // count=source.references.length, getCitations=true
       } catch (e) {
         this.errorMessage(e)
       }
     },
     clickOpenReferences: function (article) {
       const id = article.id
-      const graphIds = this.graphs.map(graph => graph.source.id)
+      const graphSourceIds = this.graphs.map(graph => graph.source.id)
 
       // If reference is already open in a different tab: change tabs only
-      if (graphIds.includes(id)) {
-        this.currentGraphIndex = graphIds.indexOf(id)
+      if (graphSourceIds.includes(id)) {
+        this.currentGraphIndex = graphSourceIds.indexOf(id)
       // Don't load new source through API because data is already in current input (only when source used same API as currently active)
-      } else if ((typeof id === 'number') & this.API === 'Microsoft Academic') {
+      } else if (this.API === this.currentGraph.API) {
         const source = this.currentGraph.input.filter(x => x.id === id)[0] ||
-                       this.currentGraph.incomingSuggestions.filter(x => x.id === id)[0]
+                       this.currentGraph.incomingSuggestions.filter(x => x.id === id)[0] ||
+                       this.currentGraph.outgoingSuggestions.filter(x => x.id === id)[0]
         this.isLoading = true
         this.setNewSource(source)
       // Load new source through API when source used different API than currently active
       } else {
-        this.newSourceDOI = String(article.doi)
+        this.newSource = String(article.doi)
       }
     },
     clickButtonAdd: function () {
       this.$buefy.dialog.prompt({
-        message: 'Enter DOI of new source article',
+        message: (this.API === 'OpenAlex')
+          ? 'Enter <a href="https://docs.openalex.org/about-the-data/work#ids" target="_blank">DOI / PMID / other ID</a> of new source article'
+          : ((this.API === 'Semantic Scholar')
+            ? 'Enter <a href="https://api.semanticscholar.org/graph/v1#operation/get_graph_get_paper_references" target="_blank">DOI / PMID / ARXIV / other ID</a> of new source article'
+            : 'Enter DOI of new source article'),
         inputAttrs: {
-          placeholder: 'e.g. 10.1126/SCIENCE.AAC4716',
+          placeholder: 'e.g. doi:10.1126/SCIENCE.AAC4716',
           maxlength: 50
         },
-        onConfirm: value => { this.newSourceDOI = value }
+        onConfirm: value => { this.newSource = value }
       })
     },
     clickCloseTab: function (index) {
@@ -780,17 +922,30 @@ const vm = new Vue({
     sortOutDegreeWrapper: function (a, b, ascending) {
       return (ascending) ? this.sortOutDegree(b, a) : this.sortOutDegree(a, b)
     },
-    callAPI: function (ids, response, count) {
-      if (this.API === 'Crossref') {
+    callAPI: function (ids, response, count, getCitations) {
+      if (this.API === 'OpenAlex') {
+        ids = ids.map(id => {
+          if (id.match(/openalex:|doi:|mag:|pmid:|pmcid:/i)) return id
+          else if (id.includes('/')) return 'doi:' + id
+          else return 'openalex:' + id
+        })
+        return openAlexWrapper(ids.join(','), response)
+      } else if (this.API === 'Semantic Scholar') {
+        return semanticScholarWrapper(ids.join(','), response, getCitations)
+      } else if (this.API === 'Crossref') {
         // In Crossref the API also returns references as DOIs
         return crossrefWorks('doi:' + ids.join(',doi:'), response, count)
       } else {
         // In OpenCitations API also returns references as DOIs
-        return openCitationsMetadata(ids.join('__'), response, count)
+        return openCitationsMetadata(ids.join('__'), response)
       }
     },
     responseToArray: function (data, sourceReferences = false) {
-      if (this.API === 'Crossref') {
+      if (this.API === 'Semantic Scholar') {
+        return semanticScholarResponseToArticleArray(data, sourceReferences)
+      } else if (this.API === 'OpenAlex') {
+        return openAlexResponseToArticleArray(data, sourceReferences)
+      } else if (this.API === 'Crossref') {
         return crossrefResponseToArticleArray(data, sourceReferences)
       } else {
         return openCitationsResponseToArticleArray(data, sourceReferences)
@@ -805,7 +960,7 @@ const vm = new Vue({
       })
 
       // Reset input variables so that watchers fire again even if same input is given
-      this.newSourceDOI = undefined
+      this.newSource = undefined
       this.file = undefined
     },
     saveState: function () {
@@ -813,8 +968,6 @@ const vm = new Vue({
         localStorage.graphs = JSON.stringify(this.graphs)
         localStorage.autosaveResults = true
         localStorage.API = this.API
-        if (this.customKeyMA) localStorage.customKeyMA = this.customKeyMA
-        else localStorage.removeItem('customKeyMA')
       } else {
         localStorage.clear()
       }
@@ -851,16 +1004,22 @@ const vm = new Vue({
       })
     },
     clickToggleAPI: function () {
-      if (this.API === 'OpenCitations') {
-        this.API = 'Crossref'
+      if (['OpenCitations', 'Crossref'].includes(this.API)) {
+        this.API = 'OpenAlex'
         this.$buefy.toast.open({
-          message: 'Using Crossref',
+          message: 'Using OpenAlex (OA)',
+          queue: false
+        })
+      } else if (this.API === 'OpenAlex') {
+        this.API = 'Semantic Scholar'
+        this.$buefy.toast.open({
+          message: 'Using Semantic Scholar (S2)',
           queue: false
         })
       } else {
-        this.API = 'OpenCitations'
+        this.API = 'Crossref'
         this.$buefy.toast.open({
-          message: 'Using OpenCitations',
+          message: 'Using Crossref (CR)',
           queue: false
         })
       }
@@ -873,79 +1032,79 @@ const vm = new Vue({
     },
     toggleArticle: function () {
       // Make sure article can even be toggled (compare with :has-detailed-visible in b-table in index.html)
-      if (this.selected.abstract || (this.currentGraph.source.citationContext && this.currentGraph.source.citationContext[this.selected.id])) {
+      if (this.selected.abstract) {
         this.$refs[this.showArticlesTab + 'Table'].toggleDetails(this.selected)
         // if (document.getElementById(this.selected.id)) document.getElementById(this.selected.id).scrollIntoView({ behavior: 'smooth', block: 'start' })
       }
     },
     formatAbstract: function (abstract) {
-      return abstract.replace(/(Importance|Background|Aims?|Goals?|Objectives?|Purpose|Main Outcomes? and Measures?|Methods?|Results?|Discussions?|Conclusions?)/g, '<em>$1</em>')
+      return abstract.replace(/(Importance|Background|Aims?|Goals?|Objectives?|Purpose|Main Outcomes? and Measures?|Methods?|Results?|Discussions?|Conclusions?)/gi, '<em>$1</em>')
     },
     importList: function () {
       this.editListOfDOIs = false
       this.isLoading = true
       this.setNewSource({ references: this.listOfDOIs, citations: [] }, this.listName, this.listName)
+    },
+    clickToggleFullscreen: function () {
+      this.fullscreenNetwork = !this.fullscreenNetwork
+      citationNetwork.setOptions({ layout: { hierarchical: { direction: this.fullscreenNetwork ? 'LR' : 'DU' } } })
+    },
+    abbreviateAPI: function (API) {
+      switch (API) {
+        case 'OpenAlex': return 'OA'
+        case 'Semantic Scholar': return 'S2'
+        case 'Crossref': return 'CR'
+        case 'OpenCitations': return 'OC'
+      }
     }
   },
   created: function () {
     const urlParams = new URLSearchParams(window.location.search)
 
     try {
-      if (localStorage.graphs) {
-        this.graphs = JSON.parse(localStorage.graphs)
-        // Backward compatibility with localStorage content from v0.95 and below (introduced in v0.96)
-        this.graphs.forEach((x, i) => {
-          if (!this.graphs[i].incomingSuggestions) this.graphs[i].incomingSuggestions = this.graphs[i].suggested
-          if (!this.graphs[i].outgoingSuggestions) this.graphs[i].outgoingSuggestions = []
-          if (!this.graphs[i].citing) {
-            this.graphs[i].citing = {}
-            const inputArticlesIds = this.graphs[i].input.map(x => x.id)
-            this.graphs[i].input.concat(this.graphs[i].incomingSuggestions).forEach(article => {
-              article.references.filter(Boolean).forEach(refId => {
-                if (inputArticlesIds.includes(refId)) {
-                  if (!this.graphs[i].citing[article.id]) this.graphs[i].citing[article.id] = []
-                  this.graphs[i].citing[article.id].push(refId)
-                }
-              })
-            })
-          }
-        })
-      }
+      if (localStorage.graphs) this.graphs = JSON.parse(localStorage.graphs)
       if (localStorage.autosaveResults) this.autosaveResults = localStorage.autosaveResults
-      if (localStorage.customKeyMA) this.customKeyMA = localStorage.customKeyMA
-      if (localStorage.API) this.API = localStorage.API
+      if (localStorage.API && ['OpenAlex', 'Semantic Scholar', 'Crossref', 'OpenCitations'].includes(localStorage.API)) this.API = localStorage.API
     } catch (e) {
       localStorage.clear()
       console.log("Couldn't load cached networks")
     }
 
     // Set API according to link
-    if (urlParams.has('API') && ['Crossref', 'OpenCitations'].includes(urlParams.get('API'))) {
+    if (urlParams.has('API') && ['OpenAlex', 'Semantic Scholar', 'Crossref', 'OpenCitations'].includes(urlParams.get('API'))) {
       this.API = urlParams.get('API')
     }
 
     // Open source from link
     if (urlParams.has('source')) {
-      this.newSourceDOI = urlParams.get('source')
-      // Open list of DOIs from link if tab is not already stored in localStorage
+      const id = urlParams.get('source'); const graphSourceIds = this.graphs.map(graph => graph.source.id)
+
+      // Only if reference is not already open in a different tab with same API (setting to correct tab via this.currentGraphIndex = X doesn't work because it is initialized to default afterwards)
+      if (!(graphSourceIds.includes(id) && this.graphs[graphSourceIds.indexOf(id)].API === this.API)) {
+        this.newSource = id
+      }
+    // Open list of DOIs from link if tab is not already stored in localStorage
     } else if (urlParams.has('listOfDOIs')) {
       let editList = urlParams.has('editList') ? urlParams.get('editList') : false
       const name = urlParams.has('name') ? urlParams.get('name') : 'Custom'
-      // Safety measure to allow max. 500 DOIs (not sure if Microsoft Academic actually allows this, Crossref definitely doesn't)
-      const dois = urlParams.get('listOfDOIs').split(',').slice(0, 500)
+      // Safety measure to allow max. 500 DOIs (not sure if any API actually allows this)
+      const DOIs = urlParams.get('listOfDOIs').split(',').slice(0, 500)
 
       // If a custom list with the same name already exists, let user chose new name
       if (this.graphs.map(x => x.tabLabel).includes(name)) {
         editList = true
       }
 
-      this.listOfDOIs = dois
+      this.listOfDOIs = DOIs
       this.listName = name
       if (editList) {
         this.editListOfDOIs = true
       } else {
         this.importList()
       }
+    // Linked to examples? Only load when no other graphs are opened
+    } else if (this.graphs.length === 0 && urlParams.has('examples')) {
+      this.loadExamples()
     }
 
     // Linked to FAQ?

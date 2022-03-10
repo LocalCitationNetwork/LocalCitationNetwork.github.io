@@ -1,3 +1,16 @@
+10.03.2022 v0.98
++ Added support for OpenAlex (OA), the successor of Microsoft Academic, which brings back its high coverage, speed and abstract support. Also allows search by different id types (including PMID)
++ Open Alex supports highlighting retracted papers, e.g. when opening source doi:10.3390/en14227745 (flags can be missing though)
++ Added support for Semantic Scholar (S2), which is a bit slower than OA but allows easy implentation of "Outgoing suggestions". Also allows search by even more id types (including PMID, ARXIV)
+* Deactivated OpenCitations (OC) option by default due to instability of its metadata API, it can still be activated through FAQ "Which APIs are supported?"
+* Updated examples and FAQ to showcase new APIs
+* Show API in tag labels
+* Rotate citation network 90° clockwise when fullscreen toggled so widescreen space is used more efficiently
+* Bumped Vue, Buefy and vis.js Network to newest versions
+! Cannot highlight edges by clicking anymore
+! Avoid duplicate counting of references for in-degree (e.g. https://api.crossref.org/works/10.7717/PEERJ.3544 has 5 references to DOI 10.1080/00031305.2016.1154108)
+! Avoid showing Vue template before site is mounted with v-cloak
+
 02.01.2022 v0.97
 - Removed Microsoft Academic option, which was discontinued in 2022
 

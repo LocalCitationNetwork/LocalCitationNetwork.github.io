@@ -24,6 +24,8 @@ javascript:(function(){
     if (!lis.length) lis = document.querySelectorAll('li.ref');
     // sagepub.com
     if (!lis.length) lis = document.querySelectorAll('table.references tr');
+    // JMIR
+    if (!lis.length) lis = document.querySelectorAll('.footnotes > ol > li');
 
     listOfReferenceDOIs = Array.from(lis).map(x => {
         // Regular expression adapted from Crossref's recommendation (https://www.crossref.org/blog/dois-and-matching-regular-expressions/)
