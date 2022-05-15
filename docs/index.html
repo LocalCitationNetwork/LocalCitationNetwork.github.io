@@ -916,8 +916,8 @@
             </content>
           </header>
           <section style="position: relative; height:300px">
-            <textarea id="rownumber" disabled style="overflow-y: scroll; height: 100%; width: 80px; text-align: right; position: absolute; padding-right: 20px; color: grey; resize: none; background-color: white; border: 1px darkgrey" onscroll="this.scrollTop = document.getElementById('DOIs').scrollTop">{{ editedListOfDOIs.split('\n') && Array.from(editedListOfDOIs.split('\n').keys()).map(x=>x+1).join('\n') }}</textarea>
-            <textarea id="DOIs" style="height: 100%; width: calc(100% - 50px); position: absolute; left: 50px; padding: 0px 10px; resize: none" spellcheck="false" onscroll="document.getElementById('rownumber').scrollTop = this.scrollTop" oninput="document.getElementById('rownumber').value = Array.from(this.value.split('\n').keys()).map(x=>x+1).join('\n')" v-model.lazy="editedListOfDOIs"></textarea>
+            <textarea id="rownumber" disabled style="overflow-y: scroll; height: 100%; width: 80px; text-align: right; position: absolute; padding-right: 35px; color: grey; resize: none; background-color: white; border: 1px darkgrey" onscroll="this.scrollTop = document.getElementById('DOIs').scrollTop">{{ editedListOfDOIs.split('\n') && Array.from(editedListOfDOIs.split('\n').keys()).map(x=>x+1).join('\n') }}</textarea>
+            <textarea id="DOIs" style="height: 100%; width: calc(100% - 50px); position: absolute; left: 50px; padding: 0px 5px; resize: none" spellcheck="false" onscroll="document.getElementById('rownumber').scrollTop = this.scrollTop" oninput="document.getElementById('rownumber').value = Array.from(this.value.split('\n').keys()).map(x=>x+1).join('\n')" v-model.lazy="editedListOfDOIs"></textarea>
           </section>
           <footer class="modal-card-foot">
             <button class="button" type="button" @click="editListOfDOIs=false">Cancel</button>
