@@ -1,4 +1,4 @@
-/* Local Citation Network v0.99 (GPL-3) */
+/* Local Citation Network v0.991 (GPL-3) */
 /* by Tim Woelfle */
 /* https://timwoelfle.github.io/Local-Citation-Network */
 
@@ -56,12 +56,7 @@ function semanticScholarResponseToArticleArray (data, sourceReferences) {
       citationsCount: article.citationCount,
       abstract: article.abstract
     }
-  // Remove duplicates (e.g. in references of 10.1111/J.1461-0248.2009.01285.X, eebf363bc78ca7bc16a32fa339004d0ad43aa618 came up twice)
-  }).reduce((data, article) => {
-    const ids = data.map(x => x.id)
-    if (!ids.includes(article.id)) data.push(article)
-    return data
-  }, [])
+  })
 }
 
 /* OpenAlex API */
@@ -923,15 +918,23 @@ const vm = new Vue({
       }
     },
     responseToArray: function (data, sourceReferences = false) {
+      let articles
       if (this.API === 'Semantic Scholar') {
-        return semanticScholarResponseToArticleArray(data, sourceReferences)
+        articles = semanticScholarResponseToArticleArray(data, sourceReferences)
       } else if (this.API === 'OpenAlex') {
-        return openAlexResponseToArticleArray(data, sourceReferences)
+        articles = openAlexResponseToArticleArray(data, sourceReferences)
       } else if (this.API === 'Crossref') {
-        return crossrefResponseToArticleArray(data, sourceReferences)
+        articles = crossrefResponseToArticleArray(data, sourceReferences)
       } else {
-        return openCitationsResponseToArticleArray(data, sourceReferences)
+        articles = openCitationsResponseToArticleArray(data, sourceReferences)
       }
+      // Remove duplicates (e.g. for S2 in references of 10.1111/J.1461-0248.2009.01285.X, eebf363bc78ca7bc16a32fa339004d0ad43aa618 came up twice)
+      articles = articles.reduce((data, article) => {
+        const ids = data.map(x => x.id)
+        if (!ids.includes(article.id)) data.push(article)
+        return data
+      }, [])
+      return articles
     },
     errorMessage: function (message) {
       // if (cancelLoading) this.isLoading = false
@@ -956,7 +959,7 @@ const vm = new Vue({
       const re = new RegExp(this.filterString, 'gi')
       switch (this.filterColumn) {
         case 'titleAbstract':
-          return articles.filter(article => String(article.numberInSourceReferences).match(new RegExp(this.filterString, 'y')) || article.title.match(re) || (article.abstract && article.abstract.match(re)))
+          return articles.filter(article => String(article.numberInSourceReferences).match(new RegExp(this.filterString, 'y')) || (article.title && article.title.match(re)) || (article.abstract && article.abstract.match(re)))
         case 'authors':
           return articles.filter(article => article.authors.map(author => (author.FN + ' ' + author.LN)).join(', ').match(re))
         case 'year':

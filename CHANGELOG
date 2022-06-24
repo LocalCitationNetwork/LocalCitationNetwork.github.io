@@ -1,4 +1,8 @@
-v0.99
+24.06.2022 v0.991
+! Remove duplicate input articles not only for S2 but also other source APIs
+! Fix bug in "Filter articles" function some articles are lacking a title
+
+15.05.2022 v0.99
 * When individual API calls fail in OpenAlex / Semantic Scholar, it now returns all the remaining articles instead of failing completely
 * Error messages are now messages (Buefy "toasts") instead of blocking alerts
 * Always allow editing list of DOIs before importing
