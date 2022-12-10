@@ -684,7 +684,7 @@
             <h2 class="title">
               Click <b-button @click="clickButtonAdd" rounded type="is-dark" title="Add network based on references from a single source DOI" :disabled="isLoading" style="width: 45px"><span style="font-size: 1.8em; line-height: 0.9 ">+</span></b-button> to enter source DOI<br>or scan a plain text file for DOIs instead <b-upload v-model="file" :disabled="isLoading"><a class="button is-dark is-rounded" title="Scan plain text file for DOIs" :disabled="isLoading" style="width: 45px"><span style="font-size: 1.2em; font-weight: normal">File</span></a></b-upload>!
             </h2>
-            (<a @click="loadGraphsFromJSON('cached-networks/examples.json')">Load examples</a> or see <a @click="showFAQ=true">Frequently asked questions</a>)
+            (<a @click="loadGraphsFromJSON('examples.json')">Load examples</a> or see <a @click="showFAQ=true">Frequently asked questions</a>)
           </div>
         </div>
       </section>
