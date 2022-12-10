@@ -1,6 +1,28 @@
+10.12.2022 v1.0
++ CSV export of input articles / incoming suggestions / outgoing suggestions is now possible.
++ Network configurator provided by vis.js can now be accessed in modal "network settings" pane (https://visjs.github.io/vis-network/docs/network/).
++ Added support for PubMed IDs (PMID) in bookmarklet, which can thus now be used on PubMed (https://pubmed.ncbi.nlm.nih.gov/).
++ Bookmarklet now also correctly sets source article (diamond in both citation and co-authorship networks).
++ Nodes in citation network can now optionally be colored by journal.
++ Node size in citation network can now optionally reflect in-degree/out-degree only (default: sum of both).
++ Source article node can now optionally be hidden in citation network.
++ Using Semantic Scholar (S2) now provides reference contexts in article details in input articles table (experimental!).
++ Show more author information when available: affiliation, links to ORCID, homepage, Google Scholar.
+* Both citation network and co-authorship now show multiple node labels depending on scale. When no article is selected, all labels are shown now. Citation network scales up selected node for highlighting.
+* Now show progress bars when loading new sources.
+* Wait 2 minutes when network errors occur (or 429 errors caused by too rapid requests).
+* Doubleclick now opens author information in co-authorship network.
+* Crossref (CR) and the reactivated OpenCitations (OC) now send one request per paper, resulting in more stability.
+* Loading of incoming / outgoing suggestions is now indicated by loading wheels.
+* Load examples from .json and not .js file, allow the manual caching of networks as .json.
+* Routing GitHub pages to root folder now and removed the unintuitive "docs" folder which formerly contained the live version.
+* Bumped Vue, Buefy and vis.js Network to newest versions.
+! Fixed bug when using S2: journals were not loaded correctly.
+! Fixed suggestions when API is changed before they finish loading.
+
 24.06.2022 v0.991
 ! Remove duplicate input articles not only for S2 but also other source APIs
-! Fix bug in "Filter articles" function some articles are lacking a title
+! Fix bug in "Filter articles" function: some articles are lacking a title
 
 15.05.2022 v0.99
 * When individual API calls fail in OpenAlex / Semantic Scholar, it now returns all the remaining articles instead of failing completely

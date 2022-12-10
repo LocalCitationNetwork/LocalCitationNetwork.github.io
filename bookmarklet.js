@@ -1,8 +1,8 @@
 javascript:(function(){
-    // root DOI has to be identified to remove it from list later
-    rootDOI = document.querySelector('meta[name=\'citation_doi\']') || document.querySelector('meta[name=\'evt-doiPage\']') || document.querySelector('meta[name=\'dc.Identifier\']');
-    if (!rootDOI) return(alert('Unfortunately could not extract references.'));
-    else rootDOI = rootDOI.content.toUpperCase();
+    // source DOI has to be identified
+    sourceDOI = document.querySelector('meta[name=\'citation_doi\']') || document.querySelector('meta[name=\'evt-doiPage\']') || document.querySelector('meta[scheme=\'doi\']') || document.querySelector('meta[name=\'prism.doi\']');
+    if (!sourceDOI) return(alert('Unfortunately could not extract source DOI.'));
+    else sourceDOI = sourceDOI.content.toUpperCase();
     
     // onlinelibrary.wiley.com
     lis = document.querySelectorAll('#references-section ul > li');
@@ -26,17 +26,37 @@ javascript:(function(){
     if (!lis.length) lis = document.querySelectorAll('table.references tr');
     // JMIR
     if (!lis.length) lis = document.querySelectorAll('.footnotes > ol > li');
+    // sciencedirect.com
+    if (!lis.length) lis = document.querySelectorAll('.reference');
+    // science.org
+    if (!lis.length) lis = document.querySelectorAll('#bibliography .citation');
+    // pubmed.ncbi.nlm.nih.gov - fetch pmid
+    if (!lis.length) lis = document.querySelectorAll('ol#top-references-list-1 > li');
 
-    listOfReferenceDOIs = Array.from(lis).map(x => {
+    listOfReferences = Array.from(lis).map(x => {
         // Regular expression adapted from Crossref's recommendation (https://www.crossref.org/blog/dois-and-matching-regular-expressions/)
         // Using the set [-_;()/:A-Z0-9] twice (fullstop . and semicolon ; only in first set) makes sure that the trailing character is neither a fullstop nor semicolon
-        x = decodeURIComponent(x.innerHTML).match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi);
-        // Make sure DOIs fetched in the reference list are not the root article's DOI
-        return(x && x.map(y => y.toUpperCase()).filter(y => y !== rootDOI)[0]);
+        id = decodeURIComponent(x.innerHTML).match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi);
+        if (id) {
+            // Make sure DOI fetched for this reference is not sourceDOI
+            return(id && id.map(id => id.toUpperCase()).filter(id => id !== sourceDOI)[0]);
+        // If no DOI try PMID
+        } else {
+            // Try to fet PMID from pubmed itself
+            pubmed_a = x.querySelectorAll('a.reference-link:not([href*=\'pmc\'])');
+            if (pubmed_a.length && pubmed_a[0].attributes['data-ga-action']) {
+                id = pubmed_a[0].attributes['data-ga-action'].value;
+            // Try to fetch PMID from other pages
+            } else {
+                a = x.querySelectorAll('a[href*=\'ncbi.nlm.nih.gov\']:not([href*=\'pmc\'])');
+                if (a.length) id = a[0].attributes['href'].value.match(/\d+/g)[0];
+            }
+            if (id) return('pmid:' + id);
+        }
     });
     
-    if (listOfReferenceDOIs.length) {
-        window.open('https://timwoelfle.github.io/Local-Citation-Network/index.html?name=Custom&editList=true&listOfDOIs=' + listOfReferenceDOIs.join(','));
+    if (listOfReferences.length) {
+        window.open('https://timwoelfle.github.io/Local-Citation-Network/index.html?source=' + sourceDOI + '&listOfIds=' + listOfReferences.join(',') + '&bookmarkletURL=' + document.URL);
     } else {
         alert('Unfortunately could not extract references.');
     }
