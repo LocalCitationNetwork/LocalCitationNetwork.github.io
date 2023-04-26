@@ -1,3 +1,11 @@
+v1.1
++ It's now possible to download a network as a JSON file and reload it through the "File" button.
++ Added white background to networks' canvas so they can now properly be saved by right-click → "Open/Save Image".
++ Added option to also show first names after last names in node labels for Co-authorship network.
++ Added "Incoming suggestions" to OpenAlex experimentally (activate by running "vm.retrieveIncomingCitationsOA = true" in browser console).
+* Authors are now again distinguished by their names in the Co-authorship network and not by their hidden internal OpenAlex (OA) / Semantic Scholar (S2) ID due to seemingly many duplicates.
+! Fixed first/last name detection when name was formatted "last name, first name".
+
 10.12.2022 v1.0
 + CSV export of input articles / incoming suggestions / outgoing suggestions is now possible.
 + Network configurator provided by vis.js can now be accessed in modal "network settings" pane (https://visjs.github.io/vis-network/docs/network/).

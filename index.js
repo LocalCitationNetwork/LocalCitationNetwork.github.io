@@ -1,10 +1,12 @@
-/* Local Citation Network v1.0 (GPL-3) */
+/* Local Citation Network v1.1 (GPL-3) */
 /* by Tim Woelfle */
 /* https://timwoelfle.github.io/Local-Citation-Network */
 
 /* global fetch, localStorage, vis, Vue, Buefy */
 
 'use strict'
+
+const localCitationNetworkVersion = 1.1
 
 const arrSum = arr => arr.reduce((a, b) => a + b, 0)
 const arrAvg = arr => arrSum(arr) / arr.length
@@ -61,13 +63,13 @@ function semanticScholarResponseToArticleArray (data) {
       doi: doi,
       title: article.title || '',
       authors: article.authors.map(author => {
-        const lastSpace = author.name.lastIndexOf(' ')
+        const cutPoint = (author.name.lastIndexOf(',') !== -1) ? author.name.lastIndexOf(',') : author.name.lastIndexOf(' ')
         return {
           id: author.authorId,
           orcid: author.externalIds && author.externalIds.ORCID,
           url: author.url,
-          LN: author.name.substr(lastSpace + 1),
-          FN: author.name.substr(0, lastSpace),
+          LN: author.name.substr(cutPoint + 1),
+          FN: author.name.substr(0, cutPoint),
           affil: (author.affiliations || []).join(', ') || undefined
         }
       }),
@@ -85,7 +87,7 @@ function semanticScholarResponseToArticleArray (data) {
 /* OpenAlex API */
 // https://docs.openalex.org/about-the-data/work#the-work-object
 
-async function openAlexWrapper (ids, responseFunction, isLoadingProgress = false) {
+async function openAlexWrapper (ids, responseFunction, isLoadingProgress = false, getCitations = false) {
   const responses = []
   ids = ids.map(id => {
     if (!id) return undefined
@@ -98,7 +100,14 @@ async function openAlexWrapper (ids, responseFunction, isLoadingProgress = false
   for (const i of Array(ids.length).keys()) {
     let response
     if (isLoadingProgress) vm.isLoadingIndex = i
-    if (ids[i]) response = await openAlexWorks(ids[i])
+    if (ids[i]) {
+      response = await openAlexWorks('/' + ids[i].replace('openalex:', ''))
+      if (getCitations && response.id) {
+        // TODO These results are incomplete when a paper is cited by >200 (current per-page upper-limit of OA)
+        const citations = await openAlexWorks('?per-page=200&sort=cited_by_count:desc&filter=cites:' + response.id.replace('https://openalex.org/', ''))
+        if (citations) { response.citations = citations }
+      }
+    }
     responses.push(response)
   }
   responseFunction(responses)
@@ -106,7 +115,7 @@ async function openAlexWrapper (ids, responseFunction, isLoadingProgress = false
 }
 
 function openAlexWorks (id) {
-  return fetch('https://api.openalex.org/works/' + id + '?mailto=local-citation-network@timwoelfle.de').then(response => {
+  return fetch('https://api.openalex.org/works' + id + '?mailto=local-citation-network@timwoelfle.de').then(response => {
     if (!response.ok) throw (response)
     return response.json()
   }).catch(async function (response) {
@@ -132,18 +141,19 @@ function openAlexResponseToArticleArray (data) {
       title: article.display_name || '',
       authors: article.authorships.map(authorship => {
         const display_name = authorship.author.display_name || ''
-        const lastSpace = display_name.lastIndexOf(' ')
+        const cutPoint = (display_name.lastIndexOf(',') !== -1) ? display_name.lastIndexOf(',') : display_name.lastIndexOf(' ')
         return {
           id: authorship.author.id && authorship.author.id.replace('https://openalex.org/', ''),
           orcid: authorship.author.orcid && authorship.author.orcid.replace('https://orcid.org/', ''),
-          LN: display_name.substr(lastSpace + 1),
-          FN: display_name.substr(0, lastSpace),
+          LN: display_name.substr(cutPoint + 1),
+          FN: display_name.substr(0, cutPoint),
           affil: (authorship.institutions || []).map(institution => institution.display_name + (institution.country_code ? ' (' + institution.country_code + ')' : '')).join(', ') || undefined
         }
       }),
       year: article.publication_year,
       journal: article.host_venue.display_name || article.host_venue.publisher,
       references: (article.referenced_works || []).map(x => x.replace('https://openalex.org/', '')),
+      citations: (article.citations) ? article.citations.results.map(x => x.id.replace('https://openalex.org/', '')) : [],
       citationsCount: article.cited_by_count,
       abstract: (article.abstract_inverted_index) ? revertAbstractFromInvertedIndex(article.abstract_inverted_index) : undefined,
       isRetracted: article.is_retracted
@@ -390,7 +400,6 @@ function initCitationNetwork (app) {
   citationNetwork.on('click', networkOnClick)
   citationNetwork.on('doubleClick', networkOnDoubleClick)
   citationNetwork.on('resize', function () {
-    console.log('onResize')
     citationNetwork.setOptions({ physics: true })
     citationNetwork.stabilize(100)
   })
@@ -398,6 +407,20 @@ function initCitationNetwork (app) {
   citationNetwork.on('stabilizationIterationsDone', function (params) {
     citationNetwork.setOptions({ physics: false })
     citationNetwork.fit()
+  })
+
+  // Draw a white background behind canvas so that right-click "Open/Save Image" works properly
+  citationNetwork.on('beforeDrawing', function (ctx) {
+    // https://github.com/almende/vis/issues/2292#issuecomment-372044181
+    // save current translate/zoom
+    ctx.save()
+    // reset transform to identity
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    // fill background with solid white
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+    // restore old transform
+    ctx.restore()
   })
 
   function networkOnClick (params) {
@@ -445,7 +468,7 @@ function initAuthorNetwork (app, minPublications = undefined) {
   // Prevent multiple configurators to be added one after another
   document.getElementById('authorNetworkConfigure').innerHTML = ''
 
-  let allAuthors = app.currentGraph.input.concat(app.incomingSuggestionsSliced).concat(app.outgoingSuggestionsSliced).map(article => article.authors.map(x => { x.name = app.authorString([x]); x.id = x.id || x.name; return x }))
+  let allAuthors = app.currentGraph.input.concat(app.incomingSuggestionsSliced).concat(app.outgoingSuggestionsSliced).map(article => article.authors.map(x => { x.name = app.authorString([x]); x.id = x.name; return x })) // TODO: used to be "x.id = x.id || x.name" but caused too many duplicates (at least on OA), double check in the future if this has been fixed
   let authorIdGroups = allAuthors.map(authorGroup => authorGroup.map(author => author.id))
   allAuthors = Object.fromEntries(allAuthors.flat().map(author => [author.id, author]))
 
@@ -496,7 +519,7 @@ function initAuthorNetwork (app, minPublications = undefined) {
       id: author.id,
       title: htmlTitle(author.name + (author.affil ? ', ' + author.affil : '') + ': author of ' + (isSourceAuthor ? 'source article, ' : '') + inputArticlesAuthoredCount + ' input articles & ' + (incomingSuggestionsAuthoredCount + outgoingSuggestionsAuthoredCount) + ' suggested articles.<br>(Double click opens author: <a>' + app.authorLink(author).substr(0, 28) + '...</a>)'),
       group: authorIdGroups.map(group => group.includes(author.id)).indexOf(true),
-      label: author.LN,
+      label: author.LN + ((app.settings.authorNetworkFirstNames) ? (', ' + author.FN) : ''),
       value: publicationsCount[author.id],
       mass: publicationsCount[author.id],
       shape: (isSourceAuthor) ? 'diamond' : (inputArticlesAuthoredCount ? 'dot' : (incomingSuggestionsAuthoredCount ? 'triangle' : 'triangleDown'))
@@ -562,6 +585,19 @@ function initAuthorNetwork (app, minPublications = undefined) {
     authorNetwork.fit()
   })
 
+  authorNetwork.on('beforeDrawing', function (ctx) {
+    // https://github.com/almende/vis/issues/2292#issuecomment-372044181
+    // save current translate/zoom
+    ctx.save()
+    // reset transform to identity
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    // fill background with solid white
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+    // restore old transform
+    ctx.restore()
+  })
+
   function networkOnClick (params) {
     app.filterColumn = 'authors'
 
@@ -610,9 +646,11 @@ const vm = new Vue({
     maxTabs: 5,
     autosaveResults: false,
     settings: {
+      getCitationsOA: false, // experimental
       citationNetworkNodeColor: 'year', // Other options: 'journal'
       citationNetworkNodeSize: 'both', // Other options: 'in', 'out'
-      citationNetworkShowSource: true
+      citationNetworkShowSource: true,
+      authorNetworkFirstNames: false
     },
 
     // Data
@@ -631,8 +669,6 @@ const vm = new Vue({
     selectedIncomingSuggestionsArticle: undefined,
     selectedOutgoingSuggestionsArticle: undefined,
     currentTabIndex: undefined,
-    maxIncomingSuggestions: 10,
-    maxOutgoingSuggestions: 10,
     showArticlesTab: 'inputArticles',
     showAuthorNetwork: 0,
     minPublications: 2,
@@ -655,10 +691,10 @@ const vm = new Vue({
       return this.graphs[this.currentTabIndex]
     },
     incomingSuggestionsSliced: function () {
-      return (this.currentGraph.incomingSuggestions || []).slice(0, this.maxIncomingSuggestions)
+      return (this.currentGraph.incomingSuggestions || []).slice(0, this.currentGraph.maxIncomingSuggestions ?? 10)
     },
     outgoingSuggestionsSliced: function () {
-      return (this.currentGraph.outgoingSuggestions || []).slice(0, this.maxOutgoingSuggestions)
+      return (this.currentGraph.outgoingSuggestions || []).slice(0, this.currentGraph.maxOutgoingSuggestions ?? 10)
     },
     inputArticlesIds: function () {
       return this.currentGraph.input.map(article => article.id)
@@ -727,8 +763,8 @@ const vm = new Vue({
     },
     completenessLabel: function () {
       let label = ''
-      // Show number of "original references" only for Semantic Scholar / Crossref for source-based-graphs and for all listOfIds (i.e. file / bookmarklet) graphs
-      if (['Semantic Scholar', 'Crossref'].includes(this.currentGraph.API) || this.currentGraph.source.customListOfReferences || !this.currentGraph.source.id) {
+      // Show number of "original references" for source-based-graphs when available from API and for all listOfIds (i.e. file / bookmarklet) graphs
+      if (['Semantic Scholar', 'Crossref', 'OpenCitations'].includes(this.currentGraph.API) || this.currentGraph.source.customListOfReferences || !this.currentGraph.source.id) {
         if (this.currentGraph.source.id) {
           label += 'Source and '
         }
@@ -741,7 +777,7 @@ const vm = new Vue({
       return label
     },
     completenessPercent: function () {
-      return Math.round(this.completenessOriginalReferencesFraction * this.completenessInputHasReferences / this.completenessInputArticlesWithoutSource.length * this.completenessInputReferencesFraction * 100)
+      return Math.round(this.completenessOriginalReferencesFraction * (this.completenessInputHasReferences / this.completenessInputArticlesWithoutSource.length) * this.completenessInputReferencesFraction * 100)
     }
   },
   watch: {
@@ -769,12 +805,22 @@ const vm = new Vue({
 
       if (!this.editListOfIds && !this.isLoading) this.setNewSource(this.newSource)
     },
-    // User provided a file which is searched for DOIs
+    // User provided a file...
     file: function () {
       if (!this.file || !this.file.name) return false
       this.isLoading = true
       this.file.text().then(text => {
         this.isLoading = false
+        // ... which is either a stored network file (JSON), which can be loaded directly
+        if (this.file.type === 'application/json') {
+          const graphs = JSON.parse(text)
+          // However, not all JSONs loaded are necessarily from this tool
+          if (Array.isArray(graphs) && graphs.every(graph => graph.localCitationNetworkVersion)) {
+            this.addGraphsFromJSON(graphs)
+            return (true)
+          }
+        }
+        // ... or a plain text file to be searched for DOIs
         // Using the set [-_;()/:A-Z0-9] twice (fullstop . and semicolon ; only in first set) makes sure that the trailing character is not a fullstop or semicolon
         const DOIs = Array.from(new Set(text.match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi))).map(x => x.toUpperCase())
         if (!DOIs.length) throw new Error('No DOIs found in file.')
@@ -898,8 +944,7 @@ const vm = new Vue({
 
             addToCiting(article.id, refId)
           })
-          // Only Semantic Scholar and OpenCitations have incoming citations
-          if (['Semantic Scholar', 'OpenCitations'].includes(API)) {
+          if (['OpenAlex', 'Semantic Scholar', 'OpenCitations'].includes(API)) {
             article.citations.filter(Boolean).forEach(citId => {
               addToCiting(citId, article.id)
             })
@@ -912,16 +957,16 @@ const vm = new Vue({
         // sort articles by number of local citations (inDegree) and pick top ones
         const incomingSuggestionsIds = Object.keys(referencedBy)
         // Only suggest articles that have at least two local citations and that aren't already among input articles
-        // Careful with comparing DOIs!!! They have to be all upper case
+        // Careful with comparing DOIs!!! They have to be all same case (upper case in this app)
           .filter(x => referencedBy[x].length > 1 && !inputArticlesIds.includes(x))
           .sort((a, b) => referencedBy[b].length - referencedBy[a].length).slice(0, 20)
 
         let ids = inputArticlesIds.concat(incomingSuggestionsIds)
 
         // Find outgoing suggestions ids (high out-degree = top incoming citations of input articles)
-        // Only works with Semantic Scholar and OpenCitations for now (TODO OpenAlex could support this feature as well with some more work)
+        // Only works with Semantic Scholar and OpenCitations for now
         let outgoingSuggestionsIds = []
-        if (['Semantic Scholar', 'OpenCitations'].includes(API)) {
+        if (['OpenAlex', 'Semantic Scholar', 'OpenCitations'].includes(API)) {
           outgoingSuggestionsIds = Object.keys(citing)
             // If - in theoretical cases, I haven't seen one yet - a top incoming citation is already a top reference, don't include it here again
             .filter(x => citing[x].length > 1 && !inputArticlesIds.includes(x) && !incomingSuggestionsIds.includes(x))
@@ -946,7 +991,8 @@ const vm = new Vue({
           tabTitle: source.id ? source.title : this.listName,
           bookmarkletURL: this.bookmarkletURL,
           API: API,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          localCitationNetworkVersion: localCitationNetworkVersion
         }
         this.pushGraph(newGraph)
         this.isLoading = false
@@ -960,8 +1006,8 @@ const vm = new Vue({
             // Careful: Array/object item setting can't be picked up by Vue (https://vuejs.org/v2/guide/list.html#Caveats)
             this.$set(newGraph, 'incomingSuggestions', incomingSuggestions)
 
-            // OpenAlex and Crossref do not have incoming citation data (in case of OpenAlex this is not implemented here yet), thus this has to be completed so that incoming suggestions have correct out-degrees, which are based on 'citing'
-            if (['OpenAlex', 'Crossref'].includes(API)) {
+            // Crossref does not have incoming citation data, thus this has to be completed so that incoming suggestions have correct out-degrees, which are based on 'citing'
+            if (['Crossref'].includes(API)) {
               incomingSuggestions.forEach(article => {
                 article.references.filter(Boolean).forEach(refId => {
                   addToCiting(article.id, refId)
@@ -1131,16 +1177,14 @@ const vm = new Vue({
       if (this.currentGraph.incomingSuggestions && this.currentGraph.incomingSuggestions.length) {
         this.currentGraph.incomingSuggestions.sort(this.sortInDegree)
         this.selectedIncomingSuggestionsArticle = this.currentGraph.incomingSuggestions[0]
-        // Reset maximum number of incoming suggestions if it's too high (i.e. more than available) or < 10
-        if (this.maxIncomingSuggestions < 10) this.maxIncomingSuggestions = 10
-        if (this.maxIncomingSuggestions > this.currentGraph.incomingSuggestions.length) this.maxIncomingSuggestions = this.currentGraph.incomingSuggestions.length
+        // Set maximum number of incoming suggestions if not set (compatibility with stored graphs (e.g. localStorage) with versions prior to 1.1)
+        if (this.currentGraph.maxIncomingSuggestions === undefined) this.$set(this.currentGraph, 'maxIncomingSuggestions', Math.min(10, this.currentGraph.incomingSuggestions.length))
       }
       if (this.currentGraph.outgoingSuggestions && this.currentGraph.outgoingSuggestions.length) {
         this.currentGraph.outgoingSuggestions.sort(this.sortOutDegree)
         this.selectedOutgoingSuggestionsArticle = this.currentGraph.outgoingSuggestions[0]
-        // Reset maximum number of outgoing suggestions if it's too high (i.e. more than available) or < 10
-        if (this.maxOutgoingSuggestions < 10) this.maxOutgoingSuggestions = 10
-        if (this.maxOutgoingSuggestions > this.currentGraph.outgoingSuggestions.length) this.maxOutgoingSuggestions = this.currentGraph.outgoingSuggestions.length
+        // Set maximum number of outgoing suggestions if not set (compatibility with stored graphs (e.g. localStorage) with versions prior to 1.1)
+        if (this.currentGraph.maxOutgoingSuggestions === undefined) this.$set(this.currentGraph, 'maxOutgoingSuggestions', Math.min(10, this.currentGraph.outgoingSuggestions.length))
       }
 
       // Networks are handled by vis.js outside of Vue through these two global init function
@@ -1194,7 +1238,7 @@ const vm = new Vue({
     },
     callAPI: function (ids, response, API, isLoadingProgress = false, getCitations = false, getReferenceContexts = false) {
       if (API === 'OpenAlex') {
-        return openAlexWrapper(ids, response, isLoadingProgress)
+        return openAlexWrapper(ids, response, isLoadingProgress, getCitations && this.getCitationsOA)
       } else if (API === 'Semantic Scholar') {
         return semanticScholarWrapper(ids, response, isLoadingProgress, getCitations, getReferenceContexts)
       } else if (API === 'OpenCitations') {
@@ -1306,13 +1350,21 @@ const vm = new Vue({
         })
       }
     },
+    addGraphsFromJSON: function (graphs) {
+      const graphTabLabels = this.graphs.map(x => x.tabLabel)
+      for (const graph of graphs) {
+        if (!graphTabLabels.includes(graph.tabLabel)) this.pushGraph(graph)
+        else this.errorMessage("Tab with name '" + graph.tabLabel + "' already exists!")
+      }
+    },
     loadGraphsFromJSON: function (path) {
       this.isLoading = true
-      const graphTabLabels = this.graphs.map(x => x.tabLabel)
+      // If path is neither "examples.json" nor a URL, check hardcoded path for "cache"
+      if (path !== 'examples.json' && !(path.startsWith('https://') || path.startsWith('http://'))) {
+        path = 'https://github.com/LocalCitationNetwork/cache/blob/main/' + path
+      }
       fetch(path).then(data => data.json()).then(graphs => {
-        for (const graph of graphs) {
-          if (!graphTabLabels.includes(graph.tabLabel)) this.pushGraph(graph)
-        }
+        this.addGraphsFromJSON(graphs)
         this.isLoading = false
       }).catch(e => {
         this.isLoading = false
@@ -1371,6 +1423,11 @@ const vm = new Vue({
       this.highlightNodes()
       this.saveState()
     },
+    changeAuthorNetworkSettings: function () {
+      initAuthorNetwork(this)
+      this.highlightNodes()
+      this.saveState()
+    },
     downloadCSVData: function (table) {
       function prepareCell (text) {
         if (!text) return ''
@@ -1395,6 +1452,15 @@ const vm = new Vue({
       anchor.target = '_blank'
       anchor.download = `${vm.currentGraph.tabLabel} ${vm.showArticlesTab}.csv`
       anchor.click()
+      anchor.remove()
+    },
+    downloadJSON: function () {
+      const anchor = document.createElement('a')
+      anchor.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify([vm.currentGraph]))
+      anchor.target = '_blank'
+      anchor.download = `${vm.currentGraph.tabLabel}.json`
+      anchor.click()
+      anchor.remove()
     }
   },
   created: function () {

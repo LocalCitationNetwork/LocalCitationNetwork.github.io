@@ -175,40 +175,49 @@
               <h2 class="title is-4">Input articles ({{ currentGraph.input.length }})</h2>
             </template>
             <div class="content">
-              <template v-if="currentGraph.source.id">
-                <p>
-                  Based on the <template v-if="currentGraph.source.customListOfReferences"><a v-if="currentGraph.bookmarkletURL" @click="indexFAQ = 'bookmarklet'; showFAQ = true;" href="#bookmarklet">bookmarklet-derived</a> custom list of</template> references of the following source article (◆)
-                  (<b-tooltip dashed multilined position="is-bottom" type="is-dark"
-                    label="Copy this link's address and share! (Right-click → 'Copy Link')">
-                    <a :href="linkToShareAppendix" @click="e => e.preventDefault()">link to share</a>
-                  </b-tooltip> / <a @click="downloadCSVData(inputArticlesFiltered)">download {{ filterString ? 'filtered ' : '' }}input table</a>):
-                </p>
-                <p>
-                  <b-tooltip dashed multilined position="is-bottom" type="is-dark"
-                    :label="authorString(currentGraph.source.authors)"
-                    v-if="currentGraph.source.authors.length > 5">
-                    {{ authorStringShort(currentGraph.source.authors) }}.
-                  </b-tooltip>
-                  <template v-else>
-                    {{ authorStringShort(currentGraph.source.authors) }}.
+              <p>
+                <template v-if="currentGraph.source.id">
+                  Based on the
+                  <template v-if="currentGraph.source.customListOfReferences">
+                    <a v-if="currentGraph.bookmarkletURL" @click="indexFAQ = 'bookmarklet'; showFAQ = true;" href="#bookmarklet">bookmarklet-derived</a>
+                    custom list of
                   </template>
-                  <a :href="currentGraph.bookmarkletURL || articleLink(currentGraph.source)" target="_blank"><em :class="{ retracted: currentGraph.source.isRetracted }">{{ currentGraph.source.title }}</em></a>. {{ currentGraph.source.journal }}. {{ currentGraph.source.year }}.
-                  <a @click="selectedInputArticle = currentGraph.input.filter(x => x.isSource)[0]">(select)</a>
-                </p>
-              </template>
-              <p v-else>
-                Based on the following custom list: {{ currentGraph.tabLabel }}
+                  references of the following source article (◆)
+                </template>
+                <template v-else>
+                  Based on the following custom list: {{ currentGraph.tabLabel }}
+                </template>
                 (<b-tooltip dashed multilined position="is-bottom" type="is-dark"
                   label="Copy this link's address and share! (Right-click → 'Copy Link')">
-                  <a :href="linkToShareAppendix" @click="e =>  e.preventDefault()">link to share</a>
-                </b-tooltip> / <a @click="downloadCSVData(inputArticlesFiltered)">download {{ filterString ? 'filtered ' : '' }}input table</a>)
+                  <a :href="linkToShareAppendix" @click="e => e.preventDefault()">link to share</a>
+                </b-tooltip> /
+                <!-- Make sure network is fully loaded (otherwise incomingSuggestions / outgoingSuggestions tabs would show eternal spinning wheels) -->
+                <template v-if="currentGraph.incomingSuggestions && currentGraph.outgoingSuggestions">
+                  <b-tooltip dashed multilined position="is-bottom" type="is-dark"
+                    label="Can be loaded again through the 'File' button at the top right!">
+                    <a @click="downloadJSON">download network</a>
+                  </b-tooltip> /
+                </template>
+                <a @click="downloadCSVData(inputArticlesFiltered)">download {{ filterString ? 'filtered ' : '' }}input table</a>)
+              </p>
+              <p v-if="currentGraph.source.id">
+                <b-tooltip dashed multilined position="is-bottom" type="is-dark"
+                  :label="authorString(currentGraph.source.authors)"
+                  v-if="currentGraph.source.authors.length > 5">
+                  {{ authorStringShort(currentGraph.source.authors) }}.
+                </b-tooltip>
+                <template v-else>
+                  {{ authorStringShort(currentGraph.source.authors) }}.
+                </template>
+                <a :href="currentGraph.bookmarkletURL || articleLink(currentGraph.source)" target="_blank"><em :class="{ retracted: currentGraph.source.isRetracted }">{{ currentGraph.source.title }}</em></a>. {{ currentGraph.source.journal }}. {{ currentGraph.source.year }}.
+                <a @click="selectedInputArticle = currentGraph.input.filter(x => x.isSource)[0]">(select)</a>
               </p>
               <p>
                 Data retrieved through <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">{{ currentGraph.API + ' (' + abbreviateAPI(currentGraph.API) + ')' }}</a> API on {{ new Date(currentGraph.timestamp).toLocaleDateString() }}
                 <b-tooltip dashed multilined type="is-dark" position="is-bottom" :label="completenessLabel">
                   <a @click="indexFAQ = 'completeness'; showFAQ = true;" href="#completeness"
                     :style="'color: ' + ((completenessPercent > 40) ? '' : '#ff3860')">
-                    (estimated completeness: {{ completenessPercent }}%).
+                    (estimated completeness: {{ completenessPercent }}%)
                   </a>
                 </b-tooltip>
               </p>
@@ -235,7 +244,7 @@
                 <p class="content">
                   Authors:
                   <template v-for="(author, index) in props.row.authors">
-                    <template v-if="index !== 0">, </template>
+                    <template v-if="index !== 0">; </template>
                     <b-tooltip
                       multilined
                       type="is-light"
@@ -360,16 +369,16 @@
           <b-tab-item value="incomingSuggestions" :disabled="currentGraph.incomingSuggestions === undefined" v-if="currentGraph.incomingSuggestions === undefined || currentGraph.incomingSuggestions.length">
             <template slot="header">
               <h2 class="title is-4">Incoming suggestions 
-                (<template v-if="currentGraph.incomingSuggestions && currentGraph.incomingSuggestions.length">▲ {{ maxIncomingSuggestions }}</template>
+                (<template v-if="currentGraph.incomingSuggestions && currentGraph.incomingSuggestions.length">▲ {{ currentGraph.maxIncomingSuggestions }}</template>
                 <a v-else class="button is-loading" style="display:inline; border: 0"></a>)
               </h2>
             </template>
             <div class="content" v-if="currentGraph.incomingSuggestions && currentGraph.incomingSuggestions.length">
               <p>
-                <a @click="indexFAQ = 'incoming-suggestions'; showFAQ = true;" href="#incoming-suggestions">Incoming suggestions</a> are the locally most cited references from the input articles, thus they have high in-degrees. They tend to be older than most input articles. Number:
-                <select v-model="maxIncomingSuggestions">
+                <a @click="indexFAQ = 'incoming-suggestions'; showFAQ = true;" href="#incoming-suggestions">Incoming suggestions</a> are the most cited references by the input articles that are still missing, thus they have high in-degrees. They tend to be older than most input articles. Number shown:
+                <select @input="event => this.$set(currentGraph, 'maxIncomingSuggestions', +event.target.value)">
                   <template v-for="val in [...Array(currentGraph.incomingSuggestions.length+1).keys()]">
-                    <option :value="val" :selected="val == maxIncomingSuggestions">{{ val }}</option>
+                    <option :value="val" :selected="val === currentGraph.maxIncomingSuggestions">{{ val }}</option>
                   </template>
                 </select>
                 <a @click="downloadCSVData(incomingSuggestionsFiltered)">(download {{ filterString ? 'filtered ' : '' }} incoming suggestions table)</a>
@@ -388,7 +397,7 @@
                 icon-right-clickable
                 @icon-right-click="filterString=''"></b-input>
               <!-- this line differs from input articles -->
-              <span class="button is-static">{{ incomingSuggestionsFiltered.length + " / " + maxIncomingSuggestions }}</span>
+              <span class="button is-static">{{ incomingSuggestionsFiltered.length + " / " + currentGraph.maxIncomingSuggestions }}</span>
             </b-field>
             <!-- 'ref', 'data', 'selected.sync' differ from input articles -->
             <b-table ref="incomingSuggestionsTable" :data="incomingSuggestionsFiltered" :selected.sync="selectedIncomingSuggestionsArticle"
@@ -508,15 +517,15 @@
           <b-tab-item value="outgoingSuggestions" :disabled="currentGraph.outgoingSuggestions === undefined" v-if="currentGraph.outgoingSuggestions === undefined || currentGraph.outgoingSuggestions.length">
             <template slot="header">
               <h2 class="title is-4">Outgoing suggestions 
-                (<template v-if="currentGraph.outgoingSuggestions && currentGraph.outgoingSuggestions.length">▼ {{ maxOutgoingSuggestions }}</template>
+                (<template v-if="currentGraph.outgoingSuggestions && currentGraph.outgoingSuggestions.length">▼ {{ currentGraph.maxOutgoingSuggestions }}</template>
                 <a v-else class="button is-loading" style="display:inline; border: 0"></a>)
             </template>
             <div class="content" v-if="currentGraph.outgoingSuggestions && currentGraph.outgoingSuggestions.length">
               <p>
-                <a @click="indexFAQ = 'outgoing-suggestions'; showFAQ = true;" href="#outgoing-suggestions">Outgoing suggestions</a> are citing the most input articles, thus they have high out-degrees. They tend to be newer than most input articles. Number:
-                <select v-model="maxOutgoingSuggestions">
+                <a @click="indexFAQ = 'outgoing-suggestions'; showFAQ = true;" href="#outgoing-suggestions">Outgoing suggestions</a> are citing the most input articles, thus they have high out-degrees. They tend to be newer than most input articles. Number shown:
+                <select @input="event => this.$set(currentGraph, 'maxOutgoingSuggestions', +event.target.value)">
                   <template v-for="val in [...Array(currentGraph.outgoingSuggestions.length+1).keys()]">
-                    <option :value="val" :selected="val == maxOutgoingSuggestions">{{ val }}</option>
+                    <option :value="val" :selected="val == currentGraph.maxOutgoingSuggestions">{{ val }}</option>
                   </template>
                 </select>
                 <a @click="downloadCSVData(outgoingSuggestionsFiltered)">(download {{ filterString ? 'filtered ' : '' }} outgoing suggestions table)</a>
@@ -535,7 +544,7 @@
                 icon-right-clickable
                 @icon-right-click="filterString=''"></b-input>
               <!-- this line differs from input articles -->
-              <span class="button is-static">{{ outgoingSuggestionsFiltered.length + " / " + maxOutgoingSuggestions }}</span>
+              <span class="button is-static">{{ outgoingSuggestionsFiltered.length + " / " + currentGraph.maxOutgoingSuggestions }}</span>
             </b-field>
             <!-- 'ref', 'data', 'selected.sync', 'default-sort' differ from input articles -->
             <b-table ref="outgoingSuggestionsTable" :data="outgoingSuggestionsFiltered" :selected.sync="selectedOutgoingSuggestionsArticle"
@@ -726,6 +735,14 @@
         <div class="card">
           <div class="card-header-title"><h3 class="title is-3">Co-authorship network settings</h3></div>
           <div class="card-content">
+            <b-field grouped>
+              <b-field label="Show first names">
+                <b-select v-model="settings.authorNetworkFirstNames" @input="changeAuthorNetworkSettings()">
+                  <option :value="true">Yes</option>
+                  <option :value="false">No</option>
+                </b-select>
+              </b-field>
+            </b-field>
             <p class="content">
               Warning: The settings below are only temporary, will not be saved and will be reset when loading another network or changing the network tab! They are provided by the <a href="https://visjs.github.io/vis-network/docs/network/" target="_blank">vis.js network library</a> used.
             </p>
@@ -749,7 +766,7 @@
                 This web app aims to help scientists with their literature review using metadata from <a href="https://openalex.org/" target="_blank">OpenAlex</a> (OA), <a href="https://semanticscholar.org/" target="_blank">Semantic Scholar</a> (S2), <a href="https://opencitations.net/" target="_blank">OpenCitations</a> (OC) and <a href="https://crossref.org" target="_blank">Crossref</a> (CR). Academic papers cite one another, thus creating a <a href="https://en.wikipedia.org/wiki/Citation_graph" target="_blank">citation network (= graph)</a>. Each node (= vertex) represents an article and each edge (= link / arrow) represents a reference (outgoing) / citation (incoming). Citation networks are a topic of <a @click="indexFAQ = 'bibliometrics'" href="#bibliometrics">bibliometrics, for which other great software exists as well</a>.
               </p>
               <p>
-                This web app visualizes subsets of the global citation network that I call 'local citation networks', defined by the references of a given set of input articles. In addition, the locally most cited references missing in the set of input articles are suggested for further review as <a @click="indexFAQ = 'incoming-suggestions'" href="#incoming-suggestions">incoming suggestions</a>. Other missing articles citing the highest number of input articles are <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>.
+                This web app visualizes subsets of the global citation network that I call 'local citation networks', defined by the references of a given set of input articles. In addition, the most cited references missing in the set of input articles are suggested for further review as <a @click="indexFAQ = 'incoming-suggestions'" href="#incoming-suggestions">incoming suggestions</a>. Other missing articles citing the highest number of input articles are <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>.
               </p>
             </div>
           </b-collapse>
@@ -778,7 +795,7 @@
                 A <a href="https://en.wikipedia.org/wiki/Bookmarklet" target="_blank">bookmarklet</a> is a small JavaScript program that can be saved as a bookmark in your browser. This particular bookmarklet allows you to open a new network in Local Citation Network directly when surfing many journals' websites (e.g. Nature, Science, Lancet, …) with the advantage that the original order of references is preserved. Save the following link as a bookmark (e.g. by dragging it to your bookmarks bar) and then click on it when reading an article:
                 <b-tooltip dashed position="is-bottom" type="is-dark"
                   label="Right-click → 'Bookmark Link'">
-                  <a @click="e => e.preventDefault()" href="javascript:(function(){if(!(sourceDOI=document.querySelector('meta[name=\'citation_doi\']')||document.querySelector('meta[name=\'evt-doiPage\']')||document.querySelector('meta[scheme=\'doi\']')||document.querySelector('meta[name=\'prism.doi\']')))return alert('Unfortunately could not extract source DOI.');sourceDOI=sourceDOI.content.toUpperCase(),(lis=document.querySelectorAll('#references-section ul > li')).length||(lis=document.querySelectorAll('ol.c-article-references > li')),lis.length||(lis=document.querySelectorAll('ol.cit-list > li')),lis.length||(lis=document.querySelectorAll('div.References')),lis.length||(lis=document.querySelectorAll('ol#referenceContent > li')),lis.length||(lis=document.querySelectorAll('ol.referenceList > li')),lis.length||(lis=document.querySelectorAll('.ref-list .ref')),lis.length||(lis=document.querySelectorAll('.references > li')),lis.length||(lis=document.querySelectorAll('li.ref')),lis.length||(lis=document.querySelectorAll('table.references tr')),lis.length||(lis=document.querySelectorAll('.footnotes > ol > li')),lis.length||(lis=document.querySelectorAll('.reference')),lis.length||(lis=document.querySelectorAll('#bibliography .citation')),lis.length||(lis=document.querySelectorAll('ol#top-references-list-1 > li')),(listOfReferences=Array.from(lis).map(e=>(id=decodeURIComponent(e.innerHTML).match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi))?id&&id.map(e=>e.toUpperCase()).filter(e=>e!==sourceDOI)[0]:((pubmed_a=e.querySelectorAll('a.reference-link:not([href*=\'pmc\'])')).length&&pubmed_a[0].attributes['data-ga-action']?id=pubmed_a[0].attributes['data-ga-action'].value:(a=e.querySelectorAll('a[href*=\'ncbi.nlm.nih.gov\']:not([href*=\'pmc\'])')).length&&(id=a[0].attributes.href.value.match(/\d+/g)[0]),id)?'pmid:'+id:void 0)).length?window.open('https://timwoelfle.github.io/Local-Citation-Network/index.html?source='+sourceDOI+'&listOfIds='+listOfReferences.join(',')+'&bookmarkletURL='+document.URL):alert('Unfortunately could not extract references.')}())">
+                  <a @click="e => e.preventDefault()" href="javascript:(function(){if(!(sourceDOI=document.querySelector('meta[name=\'citation_doi\']')||document.querySelector('meta[name=\'evt-doiPage\']')||document.querySelector('meta[scheme=\'doi\']')||document.querySelector('meta[name=\'prism.doi\']')))return alert('Unfortunately could not extract source DOI.');sourceDOI=sourceDOI.content.toUpperCase(),(lis=document.querySelectorAll('#references-section ul > li')).length||(lis=document.querySelectorAll('ol.c-article-references > li')),lis.length||(lis=document.querySelectorAll('ol.cit-list > li')),lis.length||(lis=document.querySelectorAll('div.References')),lis.length||(lis=document.querySelectorAll('ol#referenceContent > li')),lis.length||(lis=document.querySelectorAll('ol.referenceList > li')),lis.length||(lis=document.querySelectorAll('.ref-list .ref')),lis.length||(lis=document.querySelectorAll('.references > li')),lis.length||(lis=document.querySelectorAll('li.ref')),lis.length||(lis=document.querySelectorAll('table.references tr')),lis.length||(lis=document.querySelectorAll('.footnotes > ol > li')),lis.length||(lis=document.querySelectorAll('.reference')),lis.length||(lis=document.querySelectorAll('#bibliography .citation')),lis.length||(lis=document.querySelectorAll('ol#top-references-list-1 > li')),lis.length||(lis=document.querySelectorAll('.text-base-md-lh div.reference-container')),(listOfReferences=Array.from(lis).map(e=>(id=decodeURIComponent(e.innerHTML).match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi))?id&&id.map(e=>e.toUpperCase()).filter(e=>e!==sourceDOI)[0]:((pubmed_a=e.querySelectorAll('a.reference-link:not([href*=\'pmc\'])')).length&&pubmed_a[0].attributes['data-ga-action']?id=pubmed_a[0].attributes['data-ga-action'].value:(a=e.querySelectorAll('a[href*=\'ncbi.nlm.nih.gov\']:not([href*=\'pmc\'])')).length&&(id=a[0].attributes.href.value.match(/\d+/g)[0]),id)?'pmid:'+id:void 0)).length?window.open('https://LocalCitationNetwork.github.io?source='+sourceDOI+'&listOfIds='+listOfReferences.join(',')+'&bookmarkletURL='+document.URL):alert('Unfortunately could not extract references.')}())">
                     Open in Local Citation Network
                   </a>
                 </b-tooltip>
@@ -800,7 +817,7 @@
             </div>
             <div class="card-content content">
               <p>
-                'Incoming suggestions' are the locally most cited references from the input articles, thus they have high in-degrees. In order to create the local citation network, this web apps attempts to retrieve reference-lists from all input articles (usually some are missed, <a @click="indexFAQ = 'completeness'" href="#completeness">see completeness</a>) and then orders these references by the number of local incoming citations (in-degree, <a @click="indexFAQ = 'citation-network'" href="#citation-network">see network</a>). Some of these references might be among the input articles, depending on how connected they are. However, some of them usually aren't among the input articles and then become 'incoming suggestions' (they must be referenced by at least two input articles). Currently the arbitrary maximum number of incoming suggestions is 20 in order to avoid API overload.
+                'Incoming suggestions' are the most cited references by the input articles that are still missing, thus they have high in-degrees. In order to create the local citation network, this web apps attempts to retrieve reference-lists from all input articles (usually some are missed, <a @click="indexFAQ = 'completeness'" href="#completeness">see completeness</a>) and then orders these references by the number of local incoming citations (in-degree, <a @click="indexFAQ = 'citation-network'" href="#citation-network">see network</a>). Some of these references might be among the input articles, depending on how connected they are. However, some of them usually aren't among the input articles and then become 'incoming suggestions' (they must be referenced by at least two input articles). Currently the arbitrary maximum number of incoming suggestions is 20 in order to avoid API overload.
               </p>
               <p>
                 Keep in mind that because of the nature of this approach, 'incoming suggestions' are generally older than the input articles. This can help identifying seminal papers of the field but not newer state-of-the-art research. In order to identify newer articles, use <a @click="indexFAQ = 'switch-api'" href="#switch-api">Semantic Scholar (S2) or OpenCitations (OC)</a> to obtain <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>.
