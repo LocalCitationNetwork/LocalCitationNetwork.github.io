@@ -1,4 +1,4 @@
-v1.1
+26.04.2023 v1.1
 + It's now possible to download a network as a JSON file and reload it through the "File" button.
 + Added white background to networks' canvas so they can now properly be saved by right-click → "Open/Save Image".
 + Added option to also show first names after last names in node labels for Co-authorship network.

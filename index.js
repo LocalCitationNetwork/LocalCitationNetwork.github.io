@@ -1361,7 +1361,7 @@ const vm = new Vue({
       this.isLoading = true
       // If path is neither "examples.json" nor a URL, check hardcoded path for "cache"
       if (path !== 'examples.json' && !(path.startsWith('https://') || path.startsWith('http://'))) {
-        path = 'https://github.com/LocalCitationNetwork/cache/blob/main/' + path
+        path = 'https://raw.githubusercontent.com/LocalCitationNetwork/cache/main/' + path
       }
       fetch(path).then(data => data.json()).then(graphs => {
         this.addGraphsFromJSON(graphs)
