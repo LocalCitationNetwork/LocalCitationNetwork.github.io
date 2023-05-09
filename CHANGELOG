@@ -1,8 +1,13 @@
+09.05.2023 v1.11
+! Fixed data retrieval through OpenAlex (OA) (work.host_venue became deprecated).
+! Fixed automatic 90° turning of Citation network when "fullscreen network" is toggled.
+! Fixed experimental "Incoming suggestions" for OpenAlex (OA) (see v1.1).
+
 26.04.2023 v1.1
 + It's now possible to download a network as a JSON file and reload it through the "File" button.
 + Added white background to networks' canvas so they can now properly be saved by right-click → "Open/Save Image".
 + Added option to also show first names after last names in node labels for Co-authorship network.
-+ Added "Incoming suggestions" to OpenAlex experimentally (activate by running "vm.retrieveIncomingCitationsOA = true" in browser console).
++ Added "Incoming suggestions" to OpenAlex experimentally (activate by running "vm.settings.getCitationsOA = true" in browser console).
 * Authors are now again distinguished by their names in the Co-authorship network and not by their hidden internal OpenAlex (OA) / Semantic Scholar (S2) ID due to seemingly many duplicates.
 ! Fixed first/last name detection when name was formatted "last name, first name".
 

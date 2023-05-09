@@ -1,4 +1,4 @@
-/* Local Citation Network v1.1 (GPL-3) */
+/* Local Citation Network v1.11 (GPL-3) */
 /* by Tim Woelfle */
 /* https://timwoelfle.github.io/Local-Citation-Network */
 
@@ -6,7 +6,7 @@
 
 'use strict'
 
-const localCitationNetworkVersion = 1.1
+const localCitationNetworkVersion = 1.11
 
 const arrSum = arr => arr.reduce((a, b) => a + b, 0)
 const arrAvg = arr => arrSum(arr) / arr.length
@@ -62,7 +62,7 @@ function semanticScholarResponseToArticleArray (data) {
       numberInSourceReferences: data.indexOf(article) + 1,
       doi: doi,
       title: article.title || '',
-      authors: article.authors.map(author => {
+      authors: (article.authors || []).map(author => {
         const cutPoint = (author.name.lastIndexOf(',') !== -1) ? author.name.lastIndexOf(',') : author.name.lastIndexOf(' ')
         return {
           id: author.authorId,
@@ -101,10 +101,10 @@ async function openAlexWrapper (ids, responseFunction, isLoadingProgress = false
     let response
     if (isLoadingProgress) vm.isLoadingIndex = i
     if (ids[i]) {
-      response = await openAlexWorks('/' + ids[i].replace('openalex:', ''))
+      response = await openAlexWorks('/' + ids[i].replace('openalex:', '') + '?select=id,doi,display_name,authorships,publication_year,primary_location,referenced_works,cited_by_count,abstract_inverted_index,is_retracted')
       if (getCitations && response.id) {
         // TODO These results are incomplete when a paper is cited by >200 (current per-page upper-limit of OA)
-        const citations = await openAlexWorks('?per-page=200&sort=cited_by_count:desc&filter=cites:' + response.id.replace('https://openalex.org/', ''))
+        const citations = await openAlexWorks('?select=id&per-page=200&sort=cited_by_count:desc&filter=cites:' + response.id.replace('https://openalex.org/', ''))
         if (citations) { response.citations = citations }
       }
     }
@@ -114,8 +114,8 @@ async function openAlexWrapper (ids, responseFunction, isLoadingProgress = false
   if (isLoadingProgress) vm.isLoadingTotal = 0
 }
 
-function openAlexWorks (id) {
-  return fetch('https://api.openalex.org/works' + id + '?mailto=local-citation-network@timwoelfle.de').then(response => {
+function openAlexWorks (suffix) {
+  return fetch('https://api.openalex.org/works' + suffix + '&mailto=local-citation-network@timwoelfle.de').then(response => {
     if (!response.ok) throw (response)
     return response.json()
   }).catch(async function (response) {
@@ -123,9 +123,9 @@ function openAlexWorks (id) {
       if (response.status === 429) vm.errorMessage('OpenAlex (OA) reports too rapid requests. Waiting 2 minutes...')
       else vm.errorMessage('OpenAlex (OA) not reachable. Waiting 2 minutes...')
       await new Promise(resolve => setTimeout(resolve, 120000))
-      return openAlexWorks(id)
+      return openAlexWorks(suffix)
     }
-    vm.errorMessage('Error while processing data through OpenAlex API for ' + id + ': ' + response.statusText)
+    vm.errorMessage('Error while processing data through OpenAlex API for ' + suffix.substr(1).replace(/\?.*/, '') + ': ' + response.statusText)
     return false
   })
 }
@@ -139,7 +139,7 @@ function openAlexResponseToArticleArray (data) {
       numberInSourceReferences: data.indexOf(article) + 1,
       doi: doi,
       title: article.display_name || '',
-      authors: article.authorships.map(authorship => {
+      authors: (article.authorships || []).map(authorship => {
         const display_name = authorship.author.display_name || ''
         const cutPoint = (display_name.lastIndexOf(',') !== -1) ? display_name.lastIndexOf(',') : display_name.lastIndexOf(' ')
         return {
@@ -151,7 +151,10 @@ function openAlexResponseToArticleArray (data) {
         }
       }),
       year: article.publication_year,
-      journal: article.host_venue.display_name || article.host_venue.publisher,
+      journal: (article.primary_location && article.primary_location.source && (
+        article.primary_location.source.display_name +
+        ((article.primary_location.source.host_organization_name && !article.primary_location.source.display_name.includes(article.primary_location.source.host_organization_name)) ? ' (' + article.primary_location.source.host_organization_name + ')' : '')
+      )) ?? undefined,
       references: (article.referenced_works || []).map(x => x.replace('https://openalex.org/', '')),
       citations: (article.citations) ? article.citations.results.map(x => x.id.replace('https://openalex.org/', '')) : [],
       citationsCount: article.cited_by_count,
@@ -400,7 +403,7 @@ function initCitationNetwork (app) {
   citationNetwork.on('click', networkOnClick)
   citationNetwork.on('doubleClick', networkOnDoubleClick)
   citationNetwork.on('resize', function () {
-    citationNetwork.setOptions({ physics: true })
+    citationNetwork.setOptions({ physics: true, layout: { hierarchical: { direction: app.fullscreenNetwork ? 'LR' : 'DU' } } })
     citationNetwork.stabilize(100)
   })
 
@@ -1238,7 +1241,7 @@ const vm = new Vue({
     },
     callAPI: function (ids, response, API, isLoadingProgress = false, getCitations = false, getReferenceContexts = false) {
       if (API === 'OpenAlex') {
-        return openAlexWrapper(ids, response, isLoadingProgress, getCitations && this.getCitationsOA)
+        return openAlexWrapper(ids, response, isLoadingProgress, getCitations && this.settings.getCitationsOA)
       } else if (API === 'Semantic Scholar') {
         return semanticScholarWrapper(ids, response, isLoadingProgress, getCitations, getReferenceContexts)
       } else if (API === 'OpenCitations') {
