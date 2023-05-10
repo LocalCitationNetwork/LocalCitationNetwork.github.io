@@ -381,7 +381,7 @@
             <div class="content" v-if="currentGraph.incomingSuggestions && currentGraph.incomingSuggestions.length">
               <p>
                 <a @click="indexFAQ = 'incoming-suggestions'; showFAQ = true;" href="#incoming-suggestions">Incoming suggestions</a> are the most cited references by the input articles that are still missing, thus they have high in-degrees. They tend to be older than most input articles. Number shown:
-                <select @input="event => this.$set(currentGraph, 'maxIncomingSuggestions', +event.target.value)">
+                <select @input="event => this.$set(currentGraph, 'maxIncomingSuggestions', +event.target.value)" @change="changeCitationNetworkSettings(); changeAuthorNetworkSettings()">
                   <template v-for="val in [...Array(currentGraph.incomingSuggestions.length+1).keys()]">
                     <option :value="val" :selected="val === currentGraph.maxIncomingSuggestions">{{ val }}</option>
                   </template>
@@ -528,7 +528,7 @@
             <div class="content" v-if="currentGraph.outgoingSuggestions && currentGraph.outgoingSuggestions.length">
               <p>
                 <a @click="indexFAQ = 'outgoing-suggestions'; showFAQ = true;" href="#outgoing-suggestions">Outgoing suggestions</a> are citing the most input articles, thus they have high out-degrees. They tend to be newer than most input articles. Number shown:
-                <select @input="event => this.$set(currentGraph, 'maxOutgoingSuggestions', +event.target.value)">
+                <select @input="event => this.$set(currentGraph, 'maxOutgoingSuggestions', +event.target.value)" @change="changeCitationNetworkSettings(); changeAuthorNetworkSettings()">
                   <template v-for="val in [...Array(currentGraph.outgoingSuggestions.length+1).keys()]">
                     <option :value="val" :selected="val == currentGraph.maxOutgoingSuggestions">{{ val }}</option>
                   </template>

@@ -1,4 +1,4 @@
-/* Local Citation Network v1.11 (GPL-3) */
+/* Local Citation Network v1.12 (GPL-3) */
 /* by Tim Woelfle */
 /* https://timwoelfle.github.io/Local-Citation-Network */
 
@@ -6,7 +6,7 @@
 
 'use strict'
 
-const localCitationNetworkVersion = 1.11
+const localCitationNetworkVersion = 1.12
 
 const arrSum = arr => arr.reduce((a, b) => a + b, 0)
 const arrAvg = arr => arrSum(arr) / arr.length

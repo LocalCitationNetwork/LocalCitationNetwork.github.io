@@ -1,3 +1,7 @@
+10.05.2023 v1.12
+* Bumped Buefy and vis.js Network to newest versions.
+! Fixed bug: Changing "Number shown" for "Incoming suggestions" and "Outgoing suggestions" didn't update networks anymore since 1.1.
+
 09.05.2023 v1.11
 ! Fixed data retrieval through OpenAlex (OA) (work.host_venue became deprecated).
 ! Fixed automatic 90° turning of Citation network when "fullscreen network" is toggled.
@@ -8,6 +12,7 @@
 + Added white background to networks' canvas so they can now properly be saved by right-click → "Open/Save Image".
 + Added option to also show first names after last names in node labels for Co-authorship network.
 + Added "Incoming suggestions" to OpenAlex experimentally (activate by running "vm.settings.getCitationsOA = true" in browser console).
+* "Number shown" for "Incoming suggestions" and "Outgoing suggestions" is now saved with each network (i.e. tab) separately and stored locally when "Autosave results locally" is on or a JSON of network is downloaded.
 * Authors are now again distinguished by their names in the Co-authorship network and not by their hidden internal OpenAlex (OA) / Semantic Scholar (S2) ID due to seemingly many duplicates.
 ! Fixed first/last name detection when name was formatted "last name, first name".
 
