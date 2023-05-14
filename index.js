@@ -1,4 +1,4 @@
-/* Local Citation Network v1.12 (GPL-3) */
+/* Local Citation Network v1.15 (GPL-3) */
 /* by Tim Woelfle */
 /* https://timwoelfle.github.io/Local-Citation-Network */
 
@@ -6,10 +6,11 @@
 
 'use strict'
 
-const localCitationNetworkVersion = 1.12
+const localCitationNetworkVersion = 1.15
 
 const arrSum = arr => arr.reduce((a, b) => a + b, 0)
 const arrAvg = arr => arrSum(arr) / arr.length
+const arrSort = (arr, fun, ascending = true) => arr.sort((b, a) => (ascending) ? fun(b) - fun(a) : fun(a) - fun(b))
 
 /* Semantic Scholar API */
 // https://api.semanticscholar.org/api-docs/graph#tag/paper
@@ -187,13 +188,12 @@ async function crossrefWrapper (ids, responseFunction, isLoadingProgress = false
 }
 
 function crossrefWorks (id) {
-  // TODO Now that subselection of results is fixed, it could be leveraged to reduce API load (https://gitlab.com/crossref/issues/issues/511)
-  return fetch('https://api.crossref.org/works/' + id + '?mailto=local-citation-network@timwoelfle.de').then(response => {
+  return fetch('https://api.crossref.org/works?filter=doi:' + id + '&select=DOI,title,author,issued,container-title,reference,is-referenced-by-count,abstract&mailto=local-citation-network@timwoelfle.de').then(response => {
     if (!response.ok) throw (response)
     return response.json()
   }).then(data => {
-    if (typeof data !== 'object' || !data.message) throw ({ statusText: 'Empty response.' })
-    return (data.message)
+    if (typeof data !== 'object' || !data.message || !data.message.items || !data.message.items[0]) throw ({ statusText: 'Empty response.' })
+    return (data.message.items[0])
   }).catch(async function (response) {
     if (response.status === 429 || typeof response.statusText !== 'string') {
       if (response.status === 429) vm.errorMessage('Crossref reports too rapid requests. Waiting 2 minutes...')
@@ -298,15 +298,15 @@ function htmlTitle (html) {
 
 function initCitationNetwork (app) {
   // This line is necessary because of v-if="currentTabIndex !== undefined" in the main columns div, which apparently is evaluated after watch:currentTabIndex is called
-  if (!document.getElementById('citationNetwork')) {
-    return setTimeout(function () { app.init(); app.highlightNodes() }, 1)
-  }
+  if (!document.getElementById('citationNetwork')) return setTimeout(function () { app.init() }, 1)
 
-  // Prevent multiple configurators to be added one after another
-  document.getElementById('citationNetworkConfigure').innerHTML = ''
+  // Only init network if it doesn't exist yet (or was previously reset == destroyed)
+  if (document.getElementById('citationNetwork').innerHTML !== '') return false
+
+  app.citationNetworkIsLoading = true
 
   // Create an array with nodes
-  let articles = app.currentGraph.input.filter(article => (app.settings.citationNetworkShowSource ? true : !article.isSource)).concat(app.incomingSuggestionsSliced).concat(app.outgoingSuggestionsSliced)
+  let articles = app.currentGraph.input.filter(article => (app.citationNetworkShowSource ? true : !article.isSource)).concat(app.incomingSuggestionsSliced).concat(app.outgoingSuggestionsSliced)
   articles = articles.filter(article => article.year)
 
   // Create an array with edges
@@ -327,6 +327,10 @@ function initCitationNetwork (app) {
   // Only keep connected articles (no singletons)
   articles = articles.filter(article => keepArticlesIds.has(article.id))
 
+  if (!articles.length) {
+    app.citationNetworkIsLoading = false
+  }
+
   // Sort by rank of year
   const years = Array.from(new Set(articles.map(article => article.year).sort()))
 
@@ -334,8 +338,8 @@ function initCitationNetwork (app) {
     id: article.id,
     title: htmlTitle(app.authorStringShort(article.authors) + '. <a><em>' + article.title + '</em></a>. ' + article.journal + '. ' + article.year + '.<br>(Double click opens article: <a>' + app.articleLink(article).substr(0, 28) + '...</a>)'),
     level: years.indexOf(article.year),
-    group: article[app.settings.citationNetworkNodeColor],
-    value: arrSum([['in', 'both'].includes(app.settings.citationNetworkNodeSize) ? app.inDegree(article.id) : 0, ['out', 'both'].includes(app.settings.citationNetworkNodeSize) ? app.outDegree(article.id) : 0]),
+    group: article[app.citationNetworkNodeColor],
+    value: arrSum([['in', 'both'].includes(app.citationNetworkNodeSize) ? app.inDegree(article.id) : 0, ['out', 'both'].includes(app.citationNetworkNodeSize) ? app.outDegree(article.id) : 0]),
     shape: (app.currentGraph.source.id === article.id) ? 'diamond' : (app.inputArticlesIds.includes(article.id) ? 'dot' : (app.incomingSuggestionsIds.includes(article.id) ? 'triangle' : 'triangleDown')),
     label: (article.authors[0] && article.authors[0].LN) + '\n' + article.year
   }))
@@ -344,7 +348,7 @@ function initCitationNetwork (app) {
   const options = {
     layout: {
       hierarchical: {
-        direction: app.fullscreenNetwork ? 'LR' : 'DU',
+        direction: (app.currentGraph.citationNetworkTurned) ? 'LR' : 'DU',
         levelSeparation: 400
       }
     },
@@ -376,7 +380,8 @@ function initCitationNetwork (app) {
           scaleFactor: 4
         }
       },
-      width: 8
+      width: 8,
+      smooth: false
       // chosen: { edge: function(values, id, selected, hovering) { values.inheritsColor = "from" } },
     },
     interaction: {
@@ -402,12 +407,10 @@ function initCitationNetwork (app) {
   citationNetwork = new vis.Network(document.getElementById('citationNetwork'), { nodes: nodes, edges: edges }, options)
   citationNetwork.on('click', networkOnClick)
   citationNetwork.on('doubleClick', networkOnDoubleClick)
-  citationNetwork.on('resize', function () {
-    citationNetwork.setOptions({ physics: true, layout: { hierarchical: { direction: app.fullscreenNetwork ? 'LR' : 'DU' } } })
-    citationNetwork.stabilize(100)
-  })
 
+  citationNetwork.stabilize(citationNetwork.body.nodeIndices.length)
   citationNetwork.on('stabilizationIterationsDone', function (params) {
+    app.citationNetworkIsLoading = false
     citationNetwork.setOptions({ physics: false })
     citationNetwork.fit()
   })
@@ -435,16 +438,15 @@ function initCitationNetwork (app) {
       // Input article node was clicked (circle)
       if (app.inputArticlesIds.includes(selectedNodeId)) {
         app.showArticlesTab = 'inputArticles'
-        app.selectedInputArticle = app.currentGraph.input[app.inputArticlesIds.indexOf(selectedNodeId)]
-        // Suggested article node was clicked (triangle)
+        app.selected = app.currentGraph.input[app.inputArticlesIds.indexOf(selectedNodeId)]
+      // Suggested article node was clicked (triangle)
       } else if (app.incomingSuggestionsIds.includes(selectedNodeId)) {
         app.showArticlesTab = 'incomingSuggestions'
-        app.selectedIncomingSuggestionsArticle = app.currentGraph.incomingSuggestions[app.incomingSuggestionsIds.indexOf(selectedNodeId)]
+        app.selected = app.currentGraph.incomingSuggestions[app.incomingSuggestionsIds.indexOf(selectedNodeId)]
       } else {
         app.showArticlesTab = 'outgoingSuggestions'
-        app.selectedOutgoingSuggestionsArticle = app.currentGraph.outgoingSuggestions[app.outgoingSuggestionsIds.indexOf(selectedNodeId)]
+        app.selected = app.currentGraph.outgoingSuggestions[app.outgoingSuggestionsIds.indexOf(selectedNodeId)]
       }
-      if (document.getElementById(selectedNodeId)) document.getElementById(selectedNodeId).scrollIntoView({ behavior: 'smooth', block: 'center' })
     // Don't select edges
     } else {
       app.selected = undefined
@@ -468,30 +470,46 @@ function initCitationNetwork (app) {
 function initAuthorNetwork (app, minPublications = undefined) {
   if (!document.getElementById('authorNetwork')) return false
 
-  // Prevent multiple configurators to be added one after another
-  document.getElementById('authorNetworkConfigure').innerHTML = ''
+  // Only init network if it doesn't exist yet (or was previously reset == destroyed)
+  if (document.getElementById('authorNetwork').innerHTML !== '') return false
 
-  let allAuthors = app.currentGraph.input.concat(app.incomingSuggestionsSliced).concat(app.outgoingSuggestionsSliced).map(article => article.authors.map(x => { x.name = app.authorString([x]); x.id = x.name; return x })) // TODO: used to be "x.id = x.id || x.name" but caused too many duplicates (at least on OA), double check in the future if this has been fixed
+  app.authorNetworkIsLoading = true
+
+  // Deep copy articles because otherwise later "x.id = ..." would overwrite currentGraph's articles' authors' ids
+  const articles = JSON.parse(JSON.stringify(
+    arrSort(app.currentGraph.input, x => x.year, app.authorNetworkNodeColor === 'firstArticle')
+      .concat(arrSort(app.incomingSuggestionsSliced, x => x.year, app.authorNetworkNodeColor === 'firstArticle'))
+      .concat(arrSort(app.outgoingSuggestionsSliced, x => x.year, app.authorNetworkNodeColor === 'firstArticle'))
+  ))
+  // Used to be "x.id = x.id || x.name" but caused too many duplicates (at least on OA), double check in the future if this has been fixed
+  let allAuthors = articles.map(article => article.authors.map(x => { x.name = app.authorString([x]); x.id = x.name; return x }))
   let authorIdGroups = allAuthors.map(authorGroup => authorGroup.map(author => author.id))
   allAuthors = Object.fromEntries(allAuthors.flat().map(author => [author.id, author]))
 
   // Count publications per author
   const publicationsCount = {}
-  authorIdGroups.flat().forEach(authorId => { publicationsCount[authorId] = (publicationsCount[authorId] || 0) + 1 })
+  authorIdGroups.flat().forEach(authorId => {
+    publicationsCount[authorId] = (publicationsCount[authorId] || 0) + 1
+  })
 
   let authorIdsWithMinPubs = []
   const links = {}
 
   if (!minPublications) {
+    // Default minPublications: Increase iteratively until <= 50 authors are shown
     minPublications = 2
     authorIdsWithMinPubs = Object.keys(publicationsCount).filter(authorId => publicationsCount[authorId] >= minPublications)
     while (authorIdsWithMinPubs.length > 50) {
       minPublications++
       authorIdsWithMinPubs = Object.keys(publicationsCount).filter(authorId => publicationsCount[authorId] >= minPublications)
     }
-    app.minPublications = minPublications
+    app.authorNetworkMinPublications = minPublications
   } else {
     authorIdsWithMinPubs = Object.keys(publicationsCount).filter(authorId => publicationsCount[authorId] >= minPublications)
+  }
+
+  if (!authorIdsWithMinPubs.length) {
+    app.authorNetworkIsLoading = false
   }
 
   authorIdGroups = authorIdGroups.map(group => group.filter(authorId => authorIdsWithMinPubs.includes(authorId)))
@@ -509,7 +527,7 @@ function initAuthorNetwork (app, minPublications = undefined) {
   })))
 
   const edges = Object.keys(links).map(authorId1 => Object.keys(links[authorId1]).map(authorId2 => {
-    return { from: authorId1, to: authorId2, value: links[authorId1][authorId2], title: allAuthors[authorId1].name + ' & ' + allAuthors[authorId2].name + ' (' + links[authorId1][authorId2] / 2 + ' collaboration(s) among source, input & suggested articles)' }
+    return { from: authorId1, to: authorId2, value: links[authorId1][authorId2], title: allAuthors[authorId1].name + ' & ' + allAuthors[authorId2].name + ' (' + links[authorId1][authorId2] / 2 + ' collaboration(s) among input & suggested articles)' }
   })).flat(2)
 
   const nodes = authorIdsWithMinPubs.map(authorId => {
@@ -518,11 +536,12 @@ function initAuthorNetwork (app, minPublications = undefined) {
     const inputArticlesAuthoredCount = app.currentGraph.input.filter(article => app.authorString(article.authors).includes(author.name)).length
     const incomingSuggestionsAuthoredCount = app.incomingSuggestionsSliced.filter(article => app.authorString(article.authors).includes(author.name)).length
     const outgoingSuggestionsAuthoredCount = app.outgoingSuggestionsSliced.filter(article => app.authorString(article.authors).includes(author.name)).length
+    const authorIdGroupIndex = authorIdGroups.map(group => group.includes(author.id)).indexOf(true)
     return {
       id: author.id,
-      title: htmlTitle(author.name + (author.affil ? ', ' + author.affil : '') + ': author of ' + (isSourceAuthor ? 'source article, ' : '') + inputArticlesAuthoredCount + ' input articles & ' + (incomingSuggestionsAuthoredCount + outgoingSuggestionsAuthoredCount) + ' suggested articles.<br>(Double click opens author: <a>' + app.authorLink(author).substr(0, 28) + '...</a>)'),
-      group: authorIdGroups.map(group => group.includes(author.id)).indexOf(true),
-      label: author.LN + ((app.settings.authorNetworkFirstNames) ? (', ' + author.FN) : ''),
+      title: htmlTitle(author.name + ': author of ' + inputArticlesAuthoredCount + ' input articles ' + (isSourceAuthor ? '(including source) ' : '') + '& ' + (incomingSuggestionsAuthoredCount + outgoingSuggestionsAuthoredCount) + ' suggested articles.<br>' + (author.affil ? 'Affiliation(s): ' + author.affil + '<br>' : '') + ' Color by ' + ((app.authorNetworkNodeColor === 'firstArticle') ? 'first' : 'last') + ' article: ' + articles[authorIdGroupIndex].title + ' <br>(Double click opens author: <a>' + app.authorLink(author).substr(0, 28) + '...</a>)'),
+      group: authorIdGroupIndex,
+      label: ((app.authorNetworkFirstNames) ? (author.FN + ' ') : '') + author.LN,
       value: publicationsCount[author.id],
       mass: publicationsCount[author.id],
       shape: (isSourceAuthor) ? 'diamond' : (inputArticlesAuthoredCount ? 'dot' : (incomingSuggestionsAuthoredCount ? 'triangle' : 'triangleDown'))
@@ -578,12 +597,10 @@ function initAuthorNetwork (app, minPublications = undefined) {
   authorNetwork = new vis.Network(document.getElementById('authorNetwork'), { nodes: nodes, edges: edges }, options)
   authorNetwork.on('click', networkOnClick)
   authorNetwork.on('doubleClick', networkOnDoubleClick)
-  authorNetwork.on('resize', function () {
-    authorNetwork.setOptions({ physics: true })
-    authorNetwork.stabilize(100)
-  })
 
+  authorNetwork.stabilize(100)
   authorNetwork.on('stabilizationIterationsDone', function (params) {
+    app.authorNetworkIsLoading = false
     authorNetwork.setOptions({ physics: false })
     authorNetwork.fit()
   })
@@ -648,13 +665,7 @@ const vm = new Vue({
     API: 'OpenAlex', // Options: 'OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref' ('Microsoft Academic' was discontinued 01/2022)
     maxTabs: 5,
     autosaveResults: false,
-    settings: {
-      getCitationsOA: false, // experimental
-      citationNetworkNodeColor: 'year', // Other options: 'journal'
-      citationNetworkNodeSize: 'both', // Other options: 'in', 'out'
-      citationNetworkShowSource: true,
-      authorNetworkFirstNames: false
-    },
+    getCitationsOA: true, // Getting global citations for input articles to retrieve Outgoing Suggestions requires 1 extra API call per input article for OA
 
     // Data
     graphs: [],
@@ -674,10 +685,11 @@ const vm = new Vue({
     currentTabIndex: undefined,
     showArticlesTab: 'inputArticles',
     showAuthorNetwork: 0,
-    minPublications: 2,
     isLoading: false,
     isLoadingIndex: 0,
     isLoadingTotal: 0,
+    citationNetworkIsLoading: undefined,
+    authorNetworkIsLoading: undefined,
     showFAQ: false,
     indexFAQ: 'about',
     editListOfIds: false,
@@ -694,10 +706,10 @@ const vm = new Vue({
       return this.graphs[this.currentTabIndex]
     },
     incomingSuggestionsSliced: function () {
-      return (this.currentGraph.incomingSuggestions || []).slice(0, this.currentGraph.maxIncomingSuggestions ?? 10)
+      return (this.currentGraph.incomingSuggestions || []).slice(0, this.maxIncomingSuggestions)
     },
     outgoingSuggestionsSliced: function () {
-      return (this.currentGraph.outgoingSuggestions || []).slice(0, this.currentGraph.maxOutgoingSuggestions ?? 10)
+      return (this.currentGraph.outgoingSuggestions || []).slice(0, this.maxOutgoingSuggestions)
     },
     inputArticlesIds: function () {
       return this.currentGraph.input.map(article => article.id)
@@ -731,6 +743,7 @@ const vm = new Vue({
           case 'incomingSuggestions': this.selectedIncomingSuggestionsArticle = x
           case 'outgoingSuggestions': this.selectedOutgoingSuggestionsArticle = x
         }
+        if (x && document.getElementById(x.id)) document.getElementById(x.id).scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
     },
     linkToShareAppendix: function () {
@@ -747,6 +760,42 @@ const vm = new Vue({
     },
     showNumberInSourceReferences: function () {
       return this.currentGraph.API === 'Crossref' || (this.currentGraph.source.customListOfReferences !== undefined) || !this.currentGraph.source.id
+    },
+    // The following are settings and their default values
+    maxIncomingSuggestions: {
+      get: function () { return this.currentGraph.maxIncomingSuggestions ?? Math.min(10, this.currentGraph.incomingSuggestions && this.currentGraph.incomingSuggestions.length) },
+      set: function (x) { this.$set(this.currentGraph, 'maxIncomingSuggestions', x) }
+    },
+    maxOutgoingSuggestions: {
+      get: function () { return this.currentGraph.maxOutgoingSuggestions ?? Math.min(10, this.currentGraph.outgoingSuggestions && this.currentGraph.outgoingSuggestions.length) },
+      set: function (x) { this.$set(this.currentGraph, 'maxOutgoingSuggestions', x) }
+    },
+    citationNetworkNodeColor: {
+      // Options: 'year', 'journal'
+      get: function () { return this.currentGraph.citationNetworkNodeColor ?? 'year' },
+      set: function (x) { this.$set(this.currentGraph, 'citationNetworkNodeColor', x) }
+    },
+    citationNetworkNodeSize: {
+      // Options: 'both', 'in', 'out
+      get: function () { return this.currentGraph.citationNetworkNodeSize ?? 'both' },
+      set: function (x) { this.$set(this.currentGraph, 'citationNetworkNodeSize', x) }
+    },
+    citationNetworkShowSource: {
+      get: function () { return this.currentGraph.citationNetworkShowSource ?? false },
+      set: function (x) { this.$set(this.currentGraph, 'citationNetworkShowSource', x) }
+    },
+    authorNetworkNodeColor: {
+      // Options: 'firstArticle', 'lastArticle'
+      get: function () { return this.currentGraph.authorNetworkNodeColor ?? 'firstArticle' },
+      set: function (x) { this.$set(this.currentGraph, 'authorNetworkNodeColor', x) }
+    },
+    authorNetworkFirstNames: {
+      get: function () { return this.currentGraph.authorNetworkFirstNames ?? false },
+      set: function (x) { this.$set(this.currentGraph, 'authorNetworkFirstNames', x) }
+    },
+    authorNetworkMinPublications: {
+      get: function () { return this.currentGraph.authorNetworkMinPublications },
+      set: function (x) { this.$set(this.currentGraph, 'authorNetworkMinPublications', x) }
     },
     // The following are for the estimation of the completeness of the data
     completenessOriginalReferencesCount: function () {
@@ -842,38 +891,8 @@ const vm = new Vue({
       // Highlight the right network node
       this.highlightNodes()
     },
-    maxIncomingSuggestions: function () {
-      // Prevent too many re-inits
-      if (this.graphs.length && document.getElementById('citationNetwork')) {
-        initCitationNetwork(this)
-        initAuthorNetwork(this)
-        this.highlightNodes()
-      }
-    },
-    maxOutgoingSuggestions: function () {
-      // Prevent too many re-inits
-      if (this.graphs.length && document.getElementById('citationNetwork')) {
-        initCitationNetwork(this)
-        initAuthorNetwork(this)
-        this.highlightNodes()
-      }
-    },
     showAuthorNetwork: function () {
-      this.highlightNodes()
-      // Avoid resizing (and thus flickering) of networks when changing tabs
-      if (this.showAuthorNetwork) {
-        citationNetwork.setOptions({ autoResize: false })
-        setTimeout(function () { authorNetwork.setOptions({ autoResize: true }) }, 1)
-      } else {
-        authorNetwork.setOptions({ autoResize: false })
-        setTimeout(function () { citationNetwork.setOptions({ autoResize: true }) }, 1)
-      }
-    },
-    minPublications: function () {
-      if (this.showAuthorNetwork) {
-        initAuthorNetwork(this, this.minPublications)
-        this.highlightNodes()
-      }
+      this.initCurrentNetwork()
     }
   },
   methods: {
@@ -1021,7 +1040,6 @@ const vm = new Vue({
 
             if (this.currentGraph === newGraph) {
               this.init()
-              this.highlightNodes()
             }
             this.saveState()
           }, API)
@@ -1034,7 +1052,6 @@ const vm = new Vue({
             this.$set(newGraph, 'outgoingSuggestions', this.responseToArray(data, API))
             if (this.currentGraph === newGraph) {
               this.init()
-              this.highlightNodes()
             }
             this.saveState()
           }, API)
@@ -1065,12 +1082,14 @@ const vm = new Vue({
       }
     },
     clickButtonAdd: function () {
+      let message = (this.API === 'OpenAlex')
+        ? 'Enter <a href="https://docs.openalex.org/api-entities/works/work-object#ids" target="_blank">DOI / PMID / other ID</a> of new source article'
+        : ((this.API === 'Semantic Scholar')
+          ? 'Enter <a href="https://api.semanticscholar.org/graph/v1#operation/get_graph_get_paper_references" target="_blank">DOI / PMID / ARXIV / other ID</a> of new source article'
+          : 'Enter <a href="https://en.wikipedia.org/wiki/Digital_object_identifier" target="_blank">DOI</a> of new source article')
+      if (!this.editListOfIds) message += ' and use its references as input articles. <a onclick="vm.editListOfIds=true; document.querySelector(`footer.modal-card-foot:last-child button`).click()">Enter custom list of IDs instead.</a>'
       this.$buefy.dialog.prompt({
-        message: (this.API === 'OpenAlex')
-          ? 'Enter <a href="https://docs.openalex.org/about-the-data/work#ids" target="_blank">DOI / PMID / other ID</a> of new source article'
-          : ((this.API === 'Semantic Scholar')
-            ? 'Enter <a href="https://api.semanticscholar.org/graph/v1#operation/get_graph_get_paper_references" target="_blank">DOI / PMID / ARXIV / other ID</a> of new source article'
-            : 'Enter <a href="https://en.wikipedia.org/wiki/Digital_object_identifier" target="_blank">DOI</a> of new source article'),
+        message: message,
         inputAttrs: {
           placeholder: 'doi:10.1126/SCIENCE.AAC4716',
           maxlength: 50,
@@ -1099,6 +1118,7 @@ const vm = new Vue({
           this.currentTabIndex = undefined
           this.graphs = []
           this.saveState()
+          this.resetBothNetworks()
         }
       })
     },
@@ -1116,7 +1136,8 @@ const vm = new Vue({
         // If no nodes are clicked they depend on table selection
         } else if (this.selected) {
           selectedNodeIds = []
-          this.selected.authors.map(x => x.id).forEach(author => {
+          // authorString converts author to full name, as currently used as node id in authorNetwork
+          this.selected.authors.map(x => this.authorString([x])).forEach(author => {
             if (network.body.data.nodes.getIds().includes(author)) {
               selectedNodeIds.push(author)
             }
@@ -1173,6 +1194,9 @@ const vm = new Vue({
       network.body.data.nodes.update(updatedNodes)
     },
     init: function () {
+      // Destroy old networks if already there
+      this.resetBothNetworks()
+
       // Sort tables & select top article for tables
       this.currentGraph.input.sort(this.sortInDegree)
       this.selectedInputArticle = this.currentGraph.input[0]
@@ -1180,20 +1204,39 @@ const vm = new Vue({
       if (this.currentGraph.incomingSuggestions && this.currentGraph.incomingSuggestions.length) {
         this.currentGraph.incomingSuggestions.sort(this.sortInDegree)
         this.selectedIncomingSuggestionsArticle = this.currentGraph.incomingSuggestions[0]
-        // Set maximum number of incoming suggestions if not set (compatibility with stored graphs (e.g. localStorage) with versions prior to 1.1)
-        if (this.currentGraph.maxIncomingSuggestions === undefined) this.$set(this.currentGraph, 'maxIncomingSuggestions', Math.min(10, this.currentGraph.incomingSuggestions.length))
       }
       if (this.currentGraph.outgoingSuggestions && this.currentGraph.outgoingSuggestions.length) {
         this.currentGraph.outgoingSuggestions.sort(this.sortOutDegree)
         this.selectedOutgoingSuggestionsArticle = this.currentGraph.outgoingSuggestions[0]
-        // Set maximum number of outgoing suggestions if not set (compatibility with stored graphs (e.g. localStorage) with versions prior to 1.1)
-        if (this.currentGraph.maxOutgoingSuggestions === undefined) this.$set(this.currentGraph, 'maxOutgoingSuggestions', Math.min(10, this.currentGraph.outgoingSuggestions.length))
       }
 
+      this.initCurrentNetwork()
+    },
+    resetBothNetworks: function () {
+      this.resetCitationNetwork()
+      this.resetAuthorNetwork()
+    },
+    resetCurrentNetwork: function () {
+      if (this.showAuthorNetwork) this.resetAuthorNetwork()
+      else this.resetCitationNetwork()
+    },
+    resetCitationNetwork: function () {
+      if (citationNetwork) citationNetwork.destroy()
+      citationNetwork = undefined
+      // Prevent multiple configurators to be added one after another
+      document.getElementById('citationNetworkConfigure').innerHTML = ''
+    },
+    resetAuthorNetwork: function () {
+      if (authorNetwork) authorNetwork.destroy()
+      authorNetwork = undefined
+      // Prevent multiple configurators to be added one after another
+      document.getElementById('authorNetworkConfigure').innerHTML = ''
+    },
+    initCurrentNetwork: function () {
       // Networks are handled by vis.js outside of Vue through these two global init function
-      // Initializing both networks now incurs higher CPU usage now but then tab changes are quicker compared to init at watch:showAuthorNetwork (especially when going back and forth)
-      initAuthorNetwork(this)
-      initCitationNetwork(this)
+      if (this.showAuthorNetwork) initAuthorNetwork(this, this.authorNetworkMinPublications)
+      else initCitationNetwork(this)
+      this.highlightNodes()
     },
     inDegree: function (id) {
       return (this.currentGraph.referenced[id]) ? this.currentGraph.referenced[id].length : 0
@@ -1241,7 +1284,7 @@ const vm = new Vue({
     },
     callAPI: function (ids, response, API, isLoadingProgress = false, getCitations = false, getReferenceContexts = false) {
       if (API === 'OpenAlex') {
-        return openAlexWrapper(ids, response, isLoadingProgress, getCitations && this.settings.getCitationsOA)
+        return openAlexWrapper(ids, response, isLoadingProgress, getCitations && this.getCitationsOA)
       } else if (API === 'Semantic Scholar') {
         return semanticScholarWrapper(ids, response, isLoadingProgress, getCitations, getReferenceContexts)
       } else if (API === 'OpenCitations') {
@@ -1284,12 +1327,12 @@ const vm = new Vue({
       if (this.autosaveResults) {
         const copiedGraphs = JSON.parse(JSON.stringify(this.graphs))
         localStorage.graphs = JSON.stringify(copiedGraphs.map(graph => {
+          // Don't save suggestions still in loading phase
           // Otherwise suggestions would be saved in loading state (undefined) but after reload they do not continue to load!
           if (graph.incomingSuggestions === undefined) graph.incomingSuggestions = []
           if (graph.outgoingSuggestions === undefined) graph.outgoingSuggestions = []
           return graph
         }))
-        localStorage.settings = JSON.stringify(this.settings)
         localStorage.autosaveResults = true
         localStorage.API = this.API
       } else {
@@ -1421,14 +1464,10 @@ const vm = new Vue({
       else if (Number(author.id) && this.currentGraph.API === 'Semantic Scholar') return 'https://semanticscholar.org/author/' + author.id
       else return 'https://scholar.google.com/scholar?q=' + author.name
     },
-    changeCitationNetworkSettings: function () {
-      initCitationNetwork(this)
-      this.highlightNodes()
-      this.saveState()
-    },
-    changeAuthorNetworkSettings: function () {
-      initAuthorNetwork(this)
-      this.highlightNodes()
+    changeCurrentNetworkSettings: function (resetBothNetworks = false) {
+      if (resetBothNetworks) this.resetBothNetworks()
+      else this.resetCurrentNetwork()
+      this.initCurrentNetwork()
       this.saveState()
     },
     downloadCSVData: function (table) {
@@ -1469,11 +1508,11 @@ const vm = new Vue({
   created: function () {
     const urlParams = new URLSearchParams(window.location.search)
 
+    // Load locally saved networks / settings from localStorage
     try {
       if (localStorage.graphs) this.graphs = JSON.parse(localStorage.graphs)
       if (localStorage.autosaveResults) this.autosaveResults = localStorage.autosaveResults
       if (localStorage.API && ['OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref'].includes(localStorage.API)) this.API = localStorage.API
-      if (localStorage.settings) this.settings = JSON.parse(localStorage.settings)
     } catch (e) {
       localStorage.clear()
       console.log("Couldn't load locally saved networks / settings.")

@@ -152,7 +152,7 @@
             </b-navbar-item>
             <b-navbar-item tag="li">
               <b-button v-if="isLoading" :loading="isLoadingTotal <= 1" :disabled="isLoadingTotal > 1" rounded style="width: 130px">
-                <b-progress :value="isLoadingIndex/isLoadingTotal*100" size="is-large" show-value v-if="isLoadingTotal > 1" title="To cancel loading activate 'Autosave results locally' ('Save' button on the right) and refresh page." style="width: 100px">
+                <b-progress :value="isLoadingIndex/isLoadingTotal*100" size="is-large" show-value v-if="isLoadingTotal > 1" title="To cancel loading activate 'Save' button on the right and refresh page." style="width: 100px">
                   {{isLoadingIndex}} / {{isLoadingTotal}}
                 </b-progress>
               </b-button>
@@ -215,7 +215,7 @@
                   {{ authorStringShort(currentGraph.source.authors) }}.
                 </template>
                 <a :href="currentGraph.bookmarkletURL || articleLink(currentGraph.source)" target="_blank"><em :class="{ retracted: currentGraph.source.isRetracted }">{{ currentGraph.source.title }}</em></a>. {{ currentGraph.source.journal }}. {{ currentGraph.source.year }}.
-                <a @click="selectedInputArticle = currentGraph.input.filter(x => x.isSource)[0]">(select)</a>
+                <a @click="selected = currentGraph.input.filter(x => x.isSource)[0]">(select)</a>
               </p>
               <p>
                 Data retrieved through <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">{{ currentGraph.API + ' (' + abbreviateAPI(currentGraph.API) + ')' }}</a> API on {{ new Date(currentGraph.timestamp).toLocaleDateString() }}
@@ -318,7 +318,10 @@
                 </template>
                 <template v-slot="props">
                   <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark">
-                    <a :href="'https://semanticscholar.org/paper/' + props.row.id + '#citing-papers'" target="_blank" v-if="currentGraph.API === 'Semantic Scholar'">
+                    <a :href="'https://openalex.org/' + props.row.id" target="_blank" v-if="currentGraph.API === 'OpenAlex'">
+                      {{ props.row.citationsCount }}
+                    </a>
+                    <a :href="'https://semanticscholar.org/paper/' + props.row.id + '#citing-papers'" target="_blank" v-else-if="currentGraph.API === 'Semantic Scholar'">
                       {{ props.row.citationsCount }}
                     </a>
                     <template v-else>
@@ -374,16 +377,16 @@
           <b-tab-item value="incomingSuggestions" :disabled="currentGraph.incomingSuggestions === undefined" v-if="currentGraph.incomingSuggestions === undefined || currentGraph.incomingSuggestions.length">
             <template slot="header">
               <h2 class="title is-4">Incoming suggestions 
-                (<template v-if="currentGraph.incomingSuggestions && currentGraph.incomingSuggestions.length">▲ {{ currentGraph.maxIncomingSuggestions }}</template>
+                (<template v-if="currentGraph.incomingSuggestions && currentGraph.incomingSuggestions.length">▲ {{ maxIncomingSuggestions }}</template>
                 <a v-else class="button is-loading" style="display:inline; border: 0"></a>)
               </h2>
             </template>
             <div class="content" v-if="currentGraph.incomingSuggestions && currentGraph.incomingSuggestions.length">
               <p>
                 <a @click="indexFAQ = 'incoming-suggestions'; showFAQ = true;" href="#incoming-suggestions">Incoming suggestions</a> are the most cited references by the input articles that are still missing, thus they have high in-degrees. They tend to be older than most input articles. Number shown:
-                <select @input="event => this.$set(currentGraph, 'maxIncomingSuggestions', +event.target.value)" @change="changeCitationNetworkSettings(); changeAuthorNetworkSettings()">
+                <select v-model="maxIncomingSuggestions" @change="changeCurrentNetworkSettings(true)">
                   <template v-for="val in [...Array(currentGraph.incomingSuggestions.length+1).keys()]">
-                    <option :value="val" :selected="val === currentGraph.maxIncomingSuggestions">{{ val }}</option>
+                    <option :value="val">{{ val }}</option>
                   </template>
                 </select>
                 <a @click="downloadCSVData(incomingSuggestionsFiltered)">(download {{ filterString ? 'filtered ' : '' }} incoming suggestions table)</a>
@@ -402,7 +405,7 @@
                 icon-right-clickable
                 @icon-right-click="filterString=''"></b-input>
               <!-- this line differs from input articles -->
-              <span class="button is-static">{{ incomingSuggestionsFiltered.length + " / " + currentGraph.maxIncomingSuggestions }}</span>
+              <span class="button is-static">{{ incomingSuggestionsFiltered.length + " / " + maxIncomingSuggestions }}</span>
             </b-field>
             <!-- 'ref', 'data', 'selected.sync' differ from input articles -->
             <b-table ref="incomingSuggestionsTable" :data="incomingSuggestionsFiltered" :selected.sync="selectedIncomingSuggestionsArticle"
@@ -466,7 +469,10 @@
                 </template>
                 <template v-slot="props">
                   <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark">
-                    <a :href="'https://semanticscholar.org/paper/' + props.row.id + '#citing-papers'" target="_blank" v-if="currentGraph.API === 'Semantic Scholar'">
+                    <a :href="'https://openalex.org/' + props.row.id" target="_blank" v-if="currentGraph.API === 'OpenAlex'">
+                      {{ props.row.citationsCount }}
+                    </a>
+                    <a :href="'https://semanticscholar.org/paper/' + props.row.id + '#citing-papers'" target="_blank" v-else-if="currentGraph.API === 'Semantic Scholar'">
                       {{ props.row.citationsCount }}
                     </a>
                     <template v-else>
@@ -522,15 +528,15 @@
           <b-tab-item value="outgoingSuggestions" :disabled="currentGraph.outgoingSuggestions === undefined" v-if="currentGraph.outgoingSuggestions === undefined || currentGraph.outgoingSuggestions.length">
             <template slot="header">
               <h2 class="title is-4">Outgoing suggestions 
-                (<template v-if="currentGraph.outgoingSuggestions && currentGraph.outgoingSuggestions.length">▼ {{ currentGraph.maxOutgoingSuggestions }}</template>
+                (<template v-if="currentGraph.outgoingSuggestions && currentGraph.outgoingSuggestions.length">▼ {{ maxOutgoingSuggestions }}</template>
                 <a v-else class="button is-loading" style="display:inline; border: 0"></a>)
             </template>
             <div class="content" v-if="currentGraph.outgoingSuggestions && currentGraph.outgoingSuggestions.length">
               <p>
                 <a @click="indexFAQ = 'outgoing-suggestions'; showFAQ = true;" href="#outgoing-suggestions">Outgoing suggestions</a> are citing the most input articles, thus they have high out-degrees. They tend to be newer than most input articles. Number shown:
-                <select @input="event => this.$set(currentGraph, 'maxOutgoingSuggestions', +event.target.value)" @change="changeCitationNetworkSettings(); changeAuthorNetworkSettings()">
+                <select v-model="maxOutgoingSuggestions" @change="changeCurrentNetworkSettings(true)">
                   <template v-for="val in [...Array(currentGraph.outgoingSuggestions.length+1).keys()]">
-                    <option :value="val" :selected="val == currentGraph.maxOutgoingSuggestions">{{ val }}</option>
+                    <option :value="val">{{ val }}</option>
                   </template>
                 </select>
                 <a @click="downloadCSVData(outgoingSuggestionsFiltered)">(download {{ filterString ? 'filtered ' : '' }} outgoing suggestions table)</a>
@@ -549,7 +555,7 @@
                 icon-right-clickable
                 @icon-right-click="filterString=''"></b-input>
               <!-- this line differs from input articles -->
-              <span class="button is-static">{{ outgoingSuggestionsFiltered.length + " / " + currentGraph.maxOutgoingSuggestions }}</span>
+              <span class="button is-static">{{ outgoingSuggestionsFiltered.length + " / " + maxOutgoingSuggestions }}</span>
             </b-field>
             <!-- 'ref', 'data', 'selected.sync', 'default-sort' differ from input articles -->
             <b-table ref="outgoingSuggestionsTable" :data="outgoingSuggestionsFiltered" :selected.sync="selectedOutgoingSuggestionsArticle"
@@ -613,7 +619,10 @@
                 </template>
                 <template v-slot="props">
                   <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark">
-                    <a :href="'https://semanticscholar.org/paper/' + props.row.id + '#citing-papers'" target="_blank" v-if="currentGraph.API === 'Semantic Scholar'">
+                    <a :href="'https://openalex.org/' + props.row.id" target="_blank" v-if="currentGraph.API === 'OpenAlex'">
+                      {{ props.row.citationsCount }}
+                    </a>
+                    <a :href="'https://semanticscholar.org/paper/' + props.row.id + '#citing-papers'" target="_blank" v-else-if="currentGraph.API === 'Semantic Scholar'">
                       {{ props.row.citationsCount }}
                     </a>
                     <template v-else>
@@ -669,24 +678,36 @@
         </b-tabs>
 
         <b-tabs v-model="showAuthorNetwork" class="column" size="is-small" :animated="false">
-          <b-tab-item>
+          <b-tab-item :loading="true">
             <template slot="header"><h2 class="title is-4">Citation network</h2></template>
             
-            <div id="citationNetwork" style="height: 100%; cursor: pointer;"></div>
-            <span style="position:absolute; top: 0px; left: 10px;"><a @click="fullscreenNetwork = !fullscreenNetwork">{{ (fullscreenNetwork) ? 'show tables' : 'fullscreen network' }}</a> / <a @click="showCitationNetworkSettings = true">network settings</a></span>
+            <b-loading :is-full-page="false" :active="citationNetworkIsLoading"></b-loading>
+            <div id="citationNetwork" style="height: 100%; cursor: pointer;" :loading="true"></div>
+            <span style="position:absolute; top: 0px; left: 10px;">
+              <a @click="fullscreenNetwork = !fullscreenNetwork; setTimeout(function () { citationNetwork.fit() }, 1)" title="Toggle network fullscreen">{{ (fullscreenNetwork) ? 'show tables' : 'fullscreen network' }}</a> / 
+              <a @click="showCitationNetworkSettings = true">network settings</a> / 
+              <a @click="$set(currentGraph, 'citationNetworkTurned', !currentGraph.citationNetworkTurned); changeCurrentNetworkSettings()" title="Rotate network 90°">{{ (currentGraph.citationNetworkTurned) ? '↺' : '↻'}}</a>
+            </span>
             <span style="position:absolute; top: 0px; right: 0px"><a @click="indexFAQ = 'citation-network'; showFAQ = true;" href="#citation-network">how to read this network</a></span>
-            <span style="position:absolute; bottom: 0px; left: 10px;">{{ fullscreenNetwork ? '←' : '↓' }} older articles</span>
-            <span style="position:absolute; bottom: 0px; right: 0px">newer articles {{ fullscreenNetwork ? '→' : '↑' }}</span>
+            <span style="position:absolute; bottom: 0px; left: 10px;">{{ (currentGraph.citationNetworkTurned) ? '←' : '↓' }} older articles</span>
+            <span style="position:absolute; bottom: 0px; right: 0px">newer articles {{ (currentGraph.citationNetworkTurned) ? '→' : '↑' }}</span>
           </b-tab-item>
           <b-tab-item>
             <template slot="header"><h2 class="title is-4">Co-authorship network</h2></template>
+            
+            <b-loading :is-full-page="false" :active="authorNetworkIsLoading"></b-loading>
             <div id="authorNetwork" style="height: 100%; cursor: pointer;"></div>
-            <span style="position:absolute; top: 0px; left: 10px"><a @click="fullscreenNetwork = !fullscreenNetwork">{{ (fullscreenNetwork) ? 'show tables' : 'fullscreen network' }}</a> / <a @click="showAuthorNetworkSettings = true">network settings</a></span>
+            <span style="position:absolute; top: 0px; left: 10px"><a @click="fullscreenNetwork = !fullscreenNetwork; setTimeout(function () { authorNetwork.fit() }, 1)" title="Toggle network fullscreen">{{ (fullscreenNetwork) ? 'show tables' : 'fullscreen network' }}</a> / <a @click="showAuthorNetworkSettings = true">network settings</a></span>
             <span style="position:absolute; top: 0px; right: 0px"><a @click="indexFAQ = 'author-network'; showFAQ = true;" href="#author-network">how to read this network</a></span>
-            <b-field :label="'(only authors with a minimum of ' + minPublications + ' input & suggested articles are shown)'" custom-class="small"
-              style="position:absolute; bottom: 0px; left: 10px">
-              <b-slider v-model="minPublications" lazy :min="2" :max="10" ticks size="is-small"></b-slider>
-            </b-field>
+            <span style="position:absolute; bottom: 0px; left: 10px">
+              (only authors with a minimum of
+              <select v-model="authorNetworkMinPublications" @change="changeCurrentNetworkSettings()">
+                <template v-for="val in [...Array(11).keys()].splice(2)">
+                  <option :value="val">{{ val }}</option>
+                </template>
+              </select>
+              input & suggested articles are shown)
+            </span>
           </b-tab-item>
         </b-tabs>
       </div>
@@ -709,22 +730,22 @@
           <div class="card-content">
             <b-field grouped>
               <b-field label="Node color">
-                <b-select v-model="settings.citationNetworkNodeColor" @input="changeCitationNetworkSettings()">
+                <b-select v-model="citationNetworkNodeColor" @input="changeCurrentNetworkSettings()">
                   <option value="year">Year</option>
                   <option value="journal">Journal</option>
                 </b-select>
               </b-field>
               <b-field label="Node size">
-                <b-select v-model="settings.citationNetworkNodeSize" @input="changeCitationNetworkSettings()">
+                <b-select v-model="citationNetworkNodeSize" @input="changeCurrentNetworkSettings()">
+                  <option value="both">Sum of In- & Out-Degree</option>
                   <option value="in">In-Degree only</option>
                   <option value="out">Out-Degree only</option>
-                  <option value="both">Sum of both</option>
                 </b-select>
               </b-field>
               <b-field label="Show source article node">
-                <b-select v-model="settings.citationNetworkShowSource" @input="changeCitationNetworkSettings()">
-                  <option :value="true">Yes</option>
+                <b-select v-model="citationNetworkShowSource" @input="changeCurrentNetworkSettings()">
                   <option :value="false">No</option>
+                  <option :value="true">Yes</option>
                 </b-select>
               </b-field>
             </b-field>
@@ -741,10 +762,16 @@
           <div class="card-header-title"><h3 class="title is-3">Co-authorship network settings</h3></div>
           <div class="card-content">
             <b-field grouped>
+              <b-field label="Node color">
+                <b-select v-model="authorNetworkNodeColor" @input="changeCurrentNetworkSettings()">
+                  <option value="firstArticle">First article</option>
+                  <option value="lastArticle">Last article</option>
+                </b-select>
+              </b-field>
               <b-field label="Show first names">
-                <b-select v-model="settings.authorNetworkFirstNames" @input="changeAuthorNetworkSettings()">
-                  <option :value="true">Yes</option>
+                <b-select v-model="authorNetworkFirstNames" @input="changeCurrentNetworkSettings()">
                   <option :value="false">No</option>
+                  <option :value="true">Yes</option>
                 </b-select>
               </b-field>
             </b-field>
@@ -756,303 +783,12 @@
         </div>
       </b-modal>
 
-      <b-modal :active.sync="showFAQ" :width="840" scroll="keep">
-        <div class="card">
-          <div class="card-header-title">
-            <h3 class="title is-3">Instructions</h3>
-          </div>
-        
-          <b-collapse id="about" :open="indexFAQ === 'about'" @open="indexFAQ = 'about'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">What is this web app about?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                This web app aims to help scientists with their literature review using metadata from <a href="https://openalex.org/" target="_blank">OpenAlex</a> (OA), <a href="https://semanticscholar.org/" target="_blank">Semantic Scholar</a> (S2), <a href="https://opencitations.net/" target="_blank">OpenCitations</a> (OC) and <a href="https://crossref.org" target="_blank">Crossref</a> (CR). Academic papers cite one another, thus creating a <a href="https://en.wikipedia.org/wiki/Citation_graph" target="_blank">citation network (= graph)</a>. Each node (= vertex) represents an article and each edge (= link / arrow) represents a reference (outgoing) / citation (incoming). Citation networks are a topic of <a @click="indexFAQ = 'bibliometrics'" href="#bibliometrics">bibliometrics, for which other great software exists as well</a>.
-              </p>
-              <p>
-                This web app visualizes subsets of the global citation network that I call 'local citation networks', defined by the references of a given set of input articles. In addition, the most cited references missing in the set of input articles are suggested for further review as <a @click="indexFAQ = 'incoming-suggestions'" href="#incoming-suggestions">incoming suggestions</a>. Other missing articles citing the highest number of input articles are <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>.
-              </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="how-to-use" :open="indexFAQ === 'how-to-use'" @open="indexFAQ = 'how-to-use'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">How to use this web app?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                There are basically two ways to create new networks: First, based on the references of a given paper ('source article'). This could be a review or just an interesting paper you'd like to dig into deeper. Either click the + button at the top right and enter the <a href="https://en.wikipedia.org/wiki/Digital_object_identifier" target="_blank">digital object identifier (DOI)</a> of the source article or use the <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">bookmarklet described below</a>.
-              </p>
-              <p>
-                The second way to create a new network is to scan a plain text file for DOIs, which allows you to create your own unique lists of input articles. For example, this could be a .ris / .bib / .json file exported by your reference manager (e.g. <a href="https://www.zotero.org/" target="_blank">Zotero</a> or EndNote). In theory, you can scan any plain text file (PDFs and Microsoft Office files don't work). However, due to the multitude of characters allowed in DOIs, the system might not catch all of them correctly (see <a href="https://www.crossref.org/blog/dois-and-matching-regular-expressions/" target="_blank">this blog post by Crossref for more explanation</a>).
-              </p>
-              <p>
-                Up to 5 tabs can be open at the same time, representing a different local citation network each. Only one query can be processed at a time, which is why some buttons are disabled when a query is still going on. The APIs can return errors when they're overloaded, the reference list is too long or your search frequency too high.
-              </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="bookmarklet" :open="indexFAQ === 'bookmarklet'" @open="indexFAQ = 'bookmarklet'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">How to use the bookmarklet to open references of a paper?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                A <a href="https://en.wikipedia.org/wiki/Bookmarklet" target="_blank">bookmarklet</a> is a small JavaScript program that can be saved as a bookmark in your browser. This particular bookmarklet allows you to open a new network in Local Citation Network directly when surfing many journals' websites (e.g. Nature, Science, Lancet, …) with the advantage that the original order of references is preserved. Save the following link as a bookmark (e.g. by dragging it to your bookmarks bar) and then click on it when reading an article:
-                <b-tooltip dashed position="is-bottom" type="is-dark"
-                  label="Right-click → 'Bookmark Link'">
-                  <a @click="e => e.preventDefault()" href="javascript:(function(){if(!(sourceDOI=document.querySelector('meta[name=\'citation_doi\']')||document.querySelector('meta[name=\'evt-doiPage\']')||document.querySelector('meta[scheme=\'doi\']')||document.querySelector('meta[name=\'prism.doi\']')))return alert('Unfortunately could not extract source DOI.');sourceDOI=sourceDOI.content.toUpperCase(),(lis=document.querySelectorAll('#references-section ul > li')).length||(lis=document.querySelectorAll('ol.c-article-references > li')),lis.length||(lis=document.querySelectorAll('ol.cit-list > li')),lis.length||(lis=document.querySelectorAll('div.References')),lis.length||(lis=document.querySelectorAll('ol#referenceContent > li')),lis.length||(lis=document.querySelectorAll('ol.referenceList > li')),lis.length||(lis=document.querySelectorAll('.ref-list .ref')),lis.length||(lis=document.querySelectorAll('.references > li')),lis.length||(lis=document.querySelectorAll('li.ref')),lis.length||(lis=document.querySelectorAll('table.references tr')),lis.length||(lis=document.querySelectorAll('.footnotes > ol > li')),lis.length||(lis=document.querySelectorAll('.reference')),lis.length||(lis=document.querySelectorAll('#bibliography .citation')),lis.length||(lis=document.querySelectorAll('ol#top-references-list-1 > li')),lis.length||(lis=document.querySelectorAll('.text-base-md-lh div.reference-container')),(listOfReferences=Array.from(lis).map(e=>(id=decodeURIComponent(e.innerHTML).match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi))?id&&id.map(e=>e.toUpperCase()).filter(e=>e!==sourceDOI)[0]:((pubmed_a=e.querySelectorAll('a.reference-link:not([href*=\'pmc\'])')).length&&pubmed_a[0].attributes['data-ga-action']?id=pubmed_a[0].attributes['data-ga-action'].value:(a=e.querySelectorAll('a[href*=\'ncbi.nlm.nih.gov\']:not([href*=\'pmc\'])')).length&&(id=a[0].attributes.href.value.match(/\d+/g)[0]),id)?'pmid:'+id:void 0)).length?window.open('https://LocalCitationNetwork.github.io?source='+sourceDOI+'&listOfIds='+listOfReferences.join(',')+'&bookmarkletURL='+document.URL):alert('Unfortunately could not extract references.')}())">
-                    Open in Local Citation Network
-                  </a>
-                </b-tooltip>
-              </p>
-              <p>
-                The bookmarklet is particularly useful when you want to use Local Citation Network as a 'second screen' when you are reading a paper, showing you its references in the correct order and allowing you to view their abstracts and to identify seminal articles as well as additional suggested articles. When using the bookmarklet, the reference list is scanned directly from the website, thus preserving the original order of references.
-              </p>
-              <p>
-                <a href="https://pubmed.ncbi.nlm.nih.gov/" target="_blank">PubMed</a> is also supported by the bookmarket, giving access to a vast number of biomedical papers. Before clicking the bookmarklet, scroll down on the paper page (e.g. <a href="https://pubmed.ncbi.nlm.nih.gov/16060722/#references" target="_blank">this one</a>) and click "Show all X references". Make sure to use the <a @click="indexFAQ = 'switch-api'" href="#switch-api">OpenAlex (OA) or Semantic Scholar (S2) APIs </a>, as they are supporting PubMed IDs (PMIDs).
-              </p>
-              <p>
-                Unfortunately, not all journals' websites are supported. If you know how to code, check out the <a href="https://github.com/timwoelfle/Local-Citation-Network/blob/master/bookmarklet.js" target="_blank">code of the bookmarklet on GitHub</a> and extend it to support more journals! In this light it might be worth updating the bookmark in your browser from time to time to benefit from possible improvements.
-              </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="incoming-suggestions" :open="indexFAQ === 'incoming-suggestions'" @open="indexFAQ = 'incoming-suggestions'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">Where do the 'Incoming suggestions' come from?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                'Incoming suggestions' are the most cited references by the input articles that are still missing, thus they have high in-degrees. In order to create the local citation network, this web apps attempts to retrieve reference-lists from all input articles (usually some are missed, <a @click="indexFAQ = 'completeness'" href="#completeness">see completeness</a>) and then orders these references by the number of local incoming citations (in-degree, <a @click="indexFAQ = 'citation-network'" href="#citation-network">see network</a>). Some of these references might be among the input articles, depending on how connected they are. However, some of them usually aren't among the input articles and then become 'incoming suggestions' (they must be referenced by at least two input articles). Currently the arbitrary maximum number of incoming suggestions is 20 in order to avoid API overload.
-              </p>
-              <p>
-                Keep in mind that because of the nature of this approach, 'incoming suggestions' are generally older than the input articles. This can help identifying seminal papers of the field but not newer state-of-the-art research. In order to identify newer articles, use <a @click="indexFAQ = 'switch-api'" href="#switch-api">Semantic Scholar (S2) or OpenCitations (OC)</a> to obtain <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>.
-              </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="outgoing-suggestions" :open="indexFAQ === 'outgoing-suggestions'" @open="indexFAQ = 'outgoing-suggestions'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">Where do the 'Outgoing suggestions' come from?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                'Outgoing suggestions' are citing the most input articles, thus they have high out-degrees. They are generally newer than the input articles. Local Citation Network currently only supports this feature with the APIs of <a @click="indexFAQ = 'switch-api'" href="#switch-api">Semantic Scholar (S2) and OpenCitations (OC)</a>. Outgoing suggestions must cite at least 2 input articles and currently their arbitrary maximum is 20 in order to avoid API overload.
-              </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="citation-network" :open="indexFAQ === 'citation-network'" @open="indexFAQ = 'citation-network'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">How to read the citation network?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                Zoom by scrolling and pan by dragging. Each node (= vertex) represents an article. They are ordered by year from top (newer) to bottom (older), with each year colored differently. Alternatively, nodes can also be colored by the article's journal in 'network settings'. The size of the nodes depends on the sum of their 'in-degree', the number of citations the paper received from the input articles, and their 'out-degree', the number of input articles they cite. The local 'in-degree' is not always proportional to the global citation count. Input articles are circle-shaped (●), except for the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, which is diamond-shaped (◆). Up-pointing triangles (▲) represent <a @click="indexFAQ = 'incoming-suggestions'" href="#incoming-suggestions">incoming suggestions</a>, which are cited by the input articles but are not part of them. Down-pointing triangles (▼) are <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>, which are citing the input articles but are not part of them (currently only available with the APIs of <a @click="indexFAQ = 'switch-api'" href="#switch-api">Semantic Scholar (S2) and OpenCitations (OC)</a>).
-              </p>
-              <p>
-                Each edge (= link / arrow) represents a reference and citation at the same time: They are references (=outgoing citations) for their source nodes and (incoming) citations for their target nodes. Usually papers can only cite older papers, hence edges tend to point downwards (or sidewards for citations of the same year). Technically a citation network is a <a href="https://en.wikipedia.org/wiki/Directed_acyclic_graph" target="_blank">directed acyclic graph</a>.
-              </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="author-network" :open="indexFAQ === 'author-network'" @open="indexFAQ = 'author-network'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">How to read the co-authorship network?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                This 'local' co-authorship network shows the most common authors among the source, input and suggested articles. Depending on the discipline, the number of (co)authors among a set of multiple articles can quickly rise to the hundreds, which is why this author network only shows authors with a minimum number of input & suggested articles (not to be mistaken with their global number of publications, which is usually higher). The default minimum number of input & suggested articles is determined so that this network shows no more than 50 authors, but it can be changed with the slider at the bottom from 2 to 10.
-              </p>
-              <p>
-                Each node (= vertex) represents an author. The size depends on their number of input & suggested articles and the color depends on the author-cluster they first appear in. Authors of input articles are circle-shaped (●), except for authors of the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, who are diamond-shaped (◆). Up-pointing triangles (▲) represent authors of only <a @click="indexFAQ = 'incoming-suggestions'" href="#incoming-suggestions">incoming suggestions</a> and down-pointing triangles (▼) authors of only <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>. Click authors to filter input & suggested articles, ctrl+click to filter for more than one author.
-              </p>
-              <p>
-                Each edge (= link) represents a collaboration between two authors among the source, input and suggested articles, the width indicating the number of collaborations. Click edges to filter input & suggested articles.
-              </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="switch-api" :open="indexFAQ === 'switch-api'" @open="indexFAQ = 'switch-api'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">Which APIs are supported and how to switch?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                Switch the API with the button indicating "S2 / OA / OC / CR" in the top-right menu.
-              </p>
-              <p>
-                <a href="https://openalex.org/rest-api" target="_blank">OpenAlex</a> (OA) is the direct successor of Microsoft Academic, which was discontinued in 01/2022. It is fast, it has <a href="https://www.nature.com/articles/d41586-022-00138-y" target="_blank">high coverage</a> and serves abstracts. It also serves a flag for retracted papers, which can be seen <a href="?API=OpenAlex&source=10.3390/en14227745">here for example</a> <a href="https://docs.openalex.org/about-the-data/work#is_retracted" target="_blank">(it can be missing though)</a>.
-              </p>
-              <p>
-                <a href="https://semanticscholar.org/product/api" target="_blank">Semantic Scholar</a> (S2) has <a href="https://doi.org/10.18653/v1/N18-3011" target="_blank">high coverage</a>, serves abstracts and allows accurate estimation of the <a @click="indexFAQ = 'completeness'" href="#completeness">reference-list completeness</a>. In addition, it provides incoming citations for each paper, allowing the generation of <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>, which are newer than the input articles. However, it can be slow and has a <a href="https://semanticscholar.org/product/api" target="_blank">rate limit</a>.
-              </p>
-              <p>
-                The <a href="https://opencitations.net/index/api/v1#/metadata/{dois}" target="_blank">metadata API</a> from <a href="https://opencitations.net" target="_blank">OpenCitations</a> (OC) also provides incoming citations and thus also features <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>. However, it does not provide abstracts, author information (like affiliation or ORCID) and it is quite slow.
-              </p>
-              <p>
-                <a href="https://www.crossref.org/services/metadata-delivery/rest-api/" target="_blank">Crossref</a> (CR) has the advantage that it usually returns reference lists in their <a @click="indexFAQ = 'original-order'" href="#original-order">original order</a> (you can use the <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">bookmarklet</a> for other APIs). Also, it allows for an accurate estimation of the <a @click="indexFAQ = 'completeness'" href="#completeness">reference-list completeness</a>, it's usually very fast and can handle fairly large input lists. Crossref is a not-for-profit organization that collects metadata from scholarly journals and publications. Thanks to the formidable <a href="https://i4oc.org/" target="_blank">Initiative for Open Citations (I4OC)</a>, the coverage of Crossref has increased vastly. However, some journals still do not support these ideals - feel free to write them, in case you find one!
-              </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="autosave" :open="indexFAQ === 'autosave'" @open="indexFAQ = 'autosave'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">What does 'Autosave results locally' do?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                When activated, this option caches your recent networks (up to 5 tabs) and your preferred API locally in your browser in the so-called localStorage. When you revisit this web app, you can pick up where you left. When deactivated, this data is deleted. <a @click="indexFAQ = 'privacy'" href="#privacy">See privacy.</a>
-              </p>
-            </div>
-          </b-collapse>
-        
-          <div class="card-header-title">
-            <h3 class="title is-3">Troubleshooting</h3>
-          </div>
-          <b-collapse class="card" id="supported-browsers" :open="indexFAQ === 'supported-browsers'" @open="indexFAQ = 'supported-browsers'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">This web app is not working!? Which browsers are supported?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                I've tested with the current version of Firefox (as of November 2022), but this web app should also run in current versions of Safari, Edge and Chrome. Microsoft Internet Explorer is not supported. This web app is meant for desktop use and not optimized for smartphones, which have only been tested sparsely. I'm a single developer and created this web app in my spare time for free and for fun, so I don't have the time and resources to test all possible devices, web browsers and scenarios. This web app is <a @click="indexFAQ = 'open-source'" href="#open-source">open source</a>, feel free to support it by extending compatibility or optimizing mobile / tablet use! If you find a bug or problem with the newest versions of Firefox / Safari / Edge / Chrome, please <a href="https://github.com/timwoelfle/Local-Citation-Network/issues" target="_blank">report it on GitHub</a> or <a @click="indexFAQ = 'contact'" href="#contact">contact me</a>.
-               </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="slow-queries" :open="indexFAQ === 'slow-queries'" @open="indexFAQ = 'slow-queries'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">The queries have turned very slow!? / How to cancel loading?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                APIs are public with varying response speeds depending on their overall usage and workload. In addition, they might be throttling individual users (as identified by IP address) when they perform too many queries in a row. Checking your internet connection, only querying what's really important, <a @click="indexFAQ = 'switch-api'" href="#switch-api">switching to another API</a> and trying again later might help!
-              </p>
-              <p>
-                Sometimes (particularly with unstable internet connections) queries seem to run forever. In case you want to cancel loading, activate 'Autosave results locally' (<a @click="indexFAQ = 'autosave'" href="#autosave">see autosave</a>) and refresh the page. You can deactivate autosave afterwards again.
-              </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="completeness" :open="indexFAQ === 'completeness'" @open="indexFAQ = 'completeness'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">Is the data complete? / Some references are missing!?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                The data is usually incomplete. Some DOIs cannot be found at all in some APIs and for those that are found, often some metadata like authors, abstracts or reference-lists are missing. For the local citation network and incoming suggestions, the completeness of the reference-lists is most important.
-              </p>
-              <p>
-                The estimated completeness of the reference-lists can be seen above the search bar in the "Input articles" tab and is calculated in the following way: For OpenAlex and OpenCitations it is the fraction of input articles that have reference-lists themselves (multiplied by the fraction of specified DOIs found, in case of a custom input list).
-              </p>
-              <p>
-                Semantic Scholar and Crossref allow for more subtle calculation, as they often also provide the total reference count, which is often larger than the reference-list of DOIs (older references often don't have DOIs and neither do some specific books, papers or conference abstracts). The estimated completeness is thus calculated as the product of three fractions:
-              </p>
-              <ol>
-                <li>Source reference completeness: (Number of input articles found in API) / (Total reference count of source or total number of lines in custom input list)</li>
-                <li>(Number of input articles (excluding source) that have reference-lists themselves) / (Number of input articles excluding source)</li>
-                <li>Average input articles' reference completeness among those input articles that do have reference-lists: (Length of reference-list) / (Total reference count)</li>
-              </ol>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="original-order" :open="indexFAQ === 'original-order'" @open="indexFAQ = 'original-order'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">How can I preserve the original order of references in the input article list?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                You can <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">use the bookmarklet</a> to open reference lists in their original order. Alternatively, you can use Crossref, which does seem to save the original order of references. See here <a @click="indexFAQ = 'switch-api'" href="#switch-api">how to switch the API used</a>.
-              </p>
-            </div>
-          </b-collapse>
-
-          <div class="card-header-title">
-            <h3 class="title is-3">Background</h3>
-          </div>
-          <b-collapse class="card" id="bibliometrics" :open="indexFAQ === 'bibliometrics'" @open="indexFAQ = 'bibliometrics'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">What is bibliometrics? What other software can you recommend?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                Bibliometrics is a part of information science that uses <a href="https://en.wikipedia.org/wiki/Bibliometrics" target="_blank">statistical methods to analyze publications</a>. It emcompasses scientometrics, which is specifically looking at scientific publications, and citation analysis.
-              </p>
-              <p>
-                The first tool similar in spirit to this one was <a href="http://citationgecko.com/" target="_blank">Citation Gecko</a> (based on Crossref and OpenCitations). The main difference is that you start with a small number of seed articles (5-6 are recommended) and incrementally increase the network by adding recommended articles to the pool of seed articles. Recommended articles include all references and global citations. Check out this <a href="https://leidenmadtrics.nl/articles/local-citation-network-and-citation-gecko-making-literature-discovery-fun" target="_blank">guest post I've written for the blog Leiden Madtrics in 12/2019 comparing the two tools</a>.
-              </p>
-              <p>
-                Lately, newer similar tools have emerged like <a href="https://www.connectedpapers.com/" target="_blank">Connected Papers</a>, <a href="https://www.litmaps.co/" target="_blank">Litmaps</a>, <a href="https://inciteful.xyz/" target="_blank">Inciteful</a> and <a href="https://www.researchrabbit.ai/" target="_blank">ResearchRabbit</a>. Aaron Tay has written a blog post in 06/2021 for <a href="https://musingsaboutlibrarianship.blogspot.com/2021/06/playing-devils-adovcate-why-newly.html" target="_blank">comparison</a>.
-              </p>
-              <p>
-                Other great software to help with bibliometric / scientometric analyses include <a href="https://harzing.com/resources/publish-or-perish" target="_blank">Anne-Wil Harzing's Publish or Perish</a>, which allows sophisticated queries of a plethora of APIs including Crossref but also Google Scholar, Scopus and Web of Science. If you're looking to create more complex networks than this web app allows, check out the Leiden University's great <a href="https://www.vosviewer.com/" target="_blank">VOSviewer</a> and <a href="https://www.citnetexplorer.nl/" target="_blank">CitNetExplorer</a>, which allow you to create and customize everything from citation networks to author networks, university networks and journal networks. VOSviewer also allows text mining and co-occurrence networks.
-              </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="google-scholar" :open="indexFAQ === 'google-scholar'" @open="indexFAQ = 'google-scholar'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">Why aren't you using Google Scholar?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                Unfortunately Google Scholar doesn't share their data and discourages webscraping. It doesn't have an API.
-              </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="idea" :open="indexFAQ === 'idea'" @open="indexFAQ = 'idea'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">I have an idea! Can you implement XYZ?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                It's great to see you're getting involved! While I see numerous ways to extend this project myself, I don't have much time to work on it anymore unfortunately. However, this web app is <a @click="indexFAQ = 'open-source'" href="#open-source">open source</a> and I'd be very happy to see others extend this project! In the meantime, check out <a @click="indexFAQ = 'bibliometrics'" href="#bibliometrics">these great applications</a>, which might already provide what you're looking for.
-              </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="open-source" :open="indexFAQ === 'open-source'" @open="indexFAQ = 'open-source'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">I'd like to contribute! Is this open source and are you looking for help? / Is this on GitHub?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                Yes, great! This project is open source (GPL-3) and <a href="https://github.com/timwoelfle/Local-Citation-Network" target="_blank">the source can be found on GitHub</a>. I don't have much more time to work on this project, so I'm actively looking for help and contributors. Bugfixes are always welcome but please <a @click="indexFAQ = 'contact'" href="#contact">contact me</a> before any large pull-requests so we can coordinate.
-              </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="privacy" :open="indexFAQ === 'privacy'" @open="indexFAQ = 'privacy'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">Does this web app use cookies? What's the privacy policy?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                No, this web app doesn't use any cookies. No user-tracking or fingerprinting is performed and no usage-data is collected by the author of this web app. Optionally, so-called localStorage can be used to cache results and settings locally when "Autosave results locally" is manually turned on (<a @click="indexFAQ = 'autosave'" href="#autosave">see autosave</a>).
-              </p>
-              <p>
-                This web app is running locally on your computer and only contacts the API servers during runtime. Crossref has a <a href="https://www.crossref.org/privacy/" target="_blank">general privacy statement</a>. This web app is hosted by GitHub pages, see their <a href="https://help.github.com/en/github/site-policy/github-privacy-statement#github-pages" target="_blank">privacy statement here</a>.
-              </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="technicalities" :open="indexFAQ === 'technicalities'" @open="indexFAQ = 'technicalities'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">Technicalities: Which JavaScript libraries are used and why no CDN?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                This web app uses <a href="https://vuejs.org/" target="_blank">Vue.js</a>, <a href="https://buefy.org/" target="_blank">Buefy</a> and <a href="https://visjs.org/" target="_blank">vis.js Network</a>. I opted against using content delivery networks (CDN) to speed up delivery of these JavaScript libraries and thus initial loading-time, because of the <a href="https://en.wikipedia.org/wiki/Content_delivery_network#Security_and_privacy" target="_blank">potential user-tracking by CDNs</a>. If you're interested, this rising problem is partly countered by the great browser-plugin <a href="https://decentraleyes.org/" target="_blank">Decentraleyes</a> (<a href="https://git.synz.io/Synzvato/decentraleyes/wikis/Frequently-Asked-Questions" target="_blank">see their FAQ</a> for more details).
-              </p>
-            </div>
-          </b-collapse>
-          <b-collapse class="card" id="contact" :open="indexFAQ === 'contact'" @open="indexFAQ = 'contact'" animation="none">
-            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">Who are you, why did you create this and how can I contact you?</h4>
-            </div>
-            <div class="card-content content">
-              <p>
-                I'm Tim Wölfle from Germany and started creating this project 2019 during the literature review for my Master's thesis. I've often manually scanned reference lists of papers to identify seminal articles and thought this must be automized. You can contact me on <a href="https://twitter.com/timwoelfle" target="_blank">Twitter</a> or by <a href="mailto:local-citation-network@timwoelfle.de">e-mail</a>.
-              </p>
-            </div>
-          </b-collapse>
-        </div>
-      </b-modal>
-
       <b-modal :active.sync="editListOfIds" :can-cancel="['x', 'outside']" has-modal-card @cancel="newSource=undefined; listOfIds=undefined; listName=undefined; bookmarkletURL=undefined">
         <div class="modal-card">
           <header class="modal-card-head">
             <content>
-              <h4 class="modal-card-title">Import custom list of DOIs</h4>
-              <p>Empty rows are placeholders in order to help preserve original numbering.</p>
+              <h3 class="modal-card-title">Import custom list of IDs</h3>
+              <p>Use OpenAlex / Semantic Scholar for PMIDs and prefix them with "pmid:" in each row. Empty rows are placeholders in order to help preserve original numbering.</p>
             </content>
           </header>
           <section style="position: relative; height:300px">
@@ -1070,6 +806,300 @@
             <b-button class="is-primary" @click="importList" :disabled="!(listOfIds || []).filter(Boolean).length" style="width: 100%">{{ newSource ? 'Import': 'Import with list name: '}}</b-button>
             <b-input v-if="!newSource" v-model.lazy="listName" maxlength="100" :has-counter="false" style="width: 100%"></b-input>
           </footer>
+        </div>
+      </b-modal>
+
+      <b-modal :active.sync="showFAQ" :width="840" scroll="keep">
+        <div class="card">
+          <div class="card-header-title">
+            <content>
+              <h3 class="title is-3">Instructions</h3>
+              <a @click="indexFAQ = ['about', 'how-to-use', 'bookmarklet', 'incoming-suggestions', 'outgoing-suggestions', 'citation-network', 'author-network', 'switch-api', 'autosave', 'supported-browsers', 'slow-queries', 'completeness', 'original-order', 'bibliometrics', 'google-scholar', 'idea', 'open-source', 'privacy', 'technicalities', 'contact']">open all</a> / 
+              <a @click="indexFAQ = []">collapse all</a>
+            </content>
+          </div>
+        
+          <b-collapse id="about" :open="indexFAQ.includes('about')" @open="indexFAQ = 'about'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">What is this web app about?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                This web app aims to help scientists with their literature review using metadata from <a href="https://openalex.org/" target="_blank">OpenAlex</a> (OA), <a href="https://semanticscholar.org/" target="_blank">Semantic Scholar</a> (S2), <a href="https://opencitations.net/" target="_blank">OpenCitations</a> (OC) and <a href="https://crossref.org" target="_blank">Crossref</a> (CR). Academic papers cite one another, thus creating a <a href="https://en.wikipedia.org/wiki/Citation_graph" target="_blank">citation network (= graph)</a>. Each node (= vertex) represents an article and each edge (= link / arrow) represents a reference (outgoing) / citation (incoming). Citation networks are a topic of <a @click="indexFAQ = 'bibliometrics'" href="#bibliometrics">bibliometrics, for which other great software exists as well</a>.
+              </p>
+              <p>
+                This web app visualizes subsets of the global citation network that I call 'local citation networks', defined by the references of a given set of input articles. In addition, the most cited references missing in the set of input articles are suggested for further review as <a @click="indexFAQ = 'incoming-suggestions'" href="#incoming-suggestions">incoming suggestions</a>. Other missing articles citing the highest number of input articles are <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>.
+              </p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="how-to-use" :open="indexFAQ.includes('how-to-use')" @open="indexFAQ = 'how-to-use'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">How to use this web app?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                There are basically two ways to create new networks:
+              </p>
+              <ol>
+                <li>Based on the references of a given paper ('source article'). This could be a review or just an interesting paper you'd like to dig into deeper. Either click the + button at the top right and enter the <a href="https://en.wikipedia.org/wiki/Digital_object_identifier" target="_blank">digital object identifier (DOI)</a> of the source article or use the <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">bookmarklet described below</a>.</li>
+                <li>The second way to create a new network is with a custom list of IDs. Either click the + button at the top right and then 'Enter custom list of IDs instead', or scan a plain text file for DOIs, which allows you to create your own unique lists of input articles. For example, this could be a .ris / .bib file exported by your reference manager (e.g. <a href="https://www.zotero.org/" target="_blank">Zotero</a> or EndNote). In theory, you can scan any plain text file (PDFs and Microsoft Office files don't work). However, due to the multitude of characters allowed in DOIs, the system might not catch all of them correctly (see <a href="https://www.crossref.org/blog/dois-and-matching-regular-expressions/" target="_blank">this blog post by Crossref for more explanation</a>).</li>
+              </ol>
+              <p>
+                Up to 5 tabs can be open at the same time, representing a different local citation network each. Only one query can be processed at a time, which is why some buttons are disabled when a query is still going on. The APIs can return errors when they're overloaded, the reference list is too long or your search frequency too high.
+              </p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="bookmarklet" :open="indexFAQ.includes('bookmarklet')" @open="indexFAQ = 'bookmarklet'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">How to use the bookmarklet to open references of a paper?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                A <a href="https://en.wikipedia.org/wiki/Bookmarklet" target="_blank">bookmarklet</a> is a small JavaScript program that can be saved as a bookmark in your browser. This particular bookmarklet allows you to open a new network in Local Citation Network directly when surfing many journals' websites (e.g. Nature, Science, Lancet, …) with the advantage that the <a @click="indexFAQ = 'original-order'" href="#original-order">original order</a> of references is preserved. Save the following link as a bookmark (e.g. by dragging it to your bookmarks bar) and then click on it when reading an article:
+                <b-tooltip dashed position="is-bottom" type="is-dark"
+                  label="Right-click → 'Bookmark Link'">
+                  <a @click="e => e.preventDefault()" href="javascript:(function(){if(!(sourceDOI=document.querySelector('meta[name=\'citation_doi\']')||document.querySelector('meta[name=\'evt-doiPage\']')||document.querySelector('meta[scheme=\'doi\']')||document.querySelector('meta[name=\'prism.doi\']')))return alert('Unfortunately could not extract source DOI.');sourceDOI=sourceDOI.content.toUpperCase(),(lis=document.querySelectorAll('#references-section ul > li')).length||(lis=document.querySelectorAll('ol.c-article-references > li')),lis.length||(lis=document.querySelectorAll('ol.cit-list > li')),lis.length||(lis=document.querySelectorAll('div.References')),lis.length||(lis=document.querySelectorAll('ol#referenceContent > li')),lis.length||(lis=document.querySelectorAll('ol.referenceList > li')),lis.length||(lis=document.querySelectorAll('.ref-list .ref')),lis.length||(lis=document.querySelectorAll('.references > li')),lis.length||(lis=document.querySelectorAll('li.ref')),lis.length||(lis=document.querySelectorAll('table.references tr')),lis.length||(lis=document.querySelectorAll('.footnotes > ol > li')),lis.length||(lis=document.querySelectorAll('.reference')),lis.length||(lis=document.querySelectorAll('#bibliography .citation')),lis.length||(lis=document.querySelectorAll('ol#top-references-list-1 > li')),lis.length||(lis=document.querySelectorAll('.text-base-md-lh div.reference-container')),(listOfReferences=Array.from(lis).map(e=>(id=decodeURIComponent(e.innerHTML).match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi))?id&&id.map(e=>e.toUpperCase()).filter(e=>e!==sourceDOI)[0]:((pubmed_a=e.querySelectorAll('a.reference-link:not([href*=\'pmc\'])')).length&&pubmed_a[0].attributes['data-ga-action']?id=pubmed_a[0].attributes['data-ga-action'].value:(a=e.querySelectorAll('a[href*=\'ncbi.nlm.nih.gov\']:not([href*=\'pmc\'])')).length&&(id=a[0].attributes.href.value.match(/\d+/g)[0]),id)?'pmid:'+id:void 0)).length?window.open('https://LocalCitationNetwork.github.io?source='+sourceDOI+'&listOfIds='+listOfReferences.join(',')+'&bookmarkletURL='+document.URL):alert('Unfortunately could not extract references.')}())">
+                    Open in Local Citation Network
+                  </a>
+                </b-tooltip>
+              </p>
+              <p>
+                The bookmarklet is particularly useful when you want to use Local Citation Network as a 'second screen' when you are reading a paper, showing you its references in the correct order and allowing you to view their abstracts and to identify seminal articles as well as additional suggested articles. When using the bookmarklet, the reference list is scanned directly from the website, thus preserving the original order of references.
+              </p>
+              <p>
+                <a href="https://pubmed.ncbi.nlm.nih.gov/" target="_blank">PubMed</a> is also supported by the bookmarket, giving access to a vast number of biomedical papers. Before clicking the bookmarklet, scroll down on the paper page (e.g. <a href="https://pubmed.ncbi.nlm.nih.gov/16060722/#references" target="_blank">this one</a>) and click "Show all X references". Make sure to use the <a @click="indexFAQ = 'switch-api'" href="#switch-api">OpenAlex (OA) or Semantic Scholar (S2) APIs </a>, as they are supporting PubMed IDs (PMIDs).
+              </p>
+              <p>
+                Unfortunately, not all journals' websites are supported. If you know how to code, check out the <a href="https://github.com/LocalCitationNetwork/LocalCitationNetwork.github.io/blob/master/bookmarklet.js" target="_blank">code of the bookmarklet on GitHub</a> and extend it to support more journals! In this light it might be worth updating the bookmark in your browser from time to time to benefit from possible improvements.
+              </p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="incoming-suggestions" :open="indexFAQ.includes('incoming-suggestions')" @open="indexFAQ = 'incoming-suggestions'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">Where do the 'Incoming suggestions' come from?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                'Incoming suggestions' are the most cited references by the input articles that are still missing, thus they have high in-degrees. In order to create the local citation network, this web apps attempts to retrieve reference-lists from all input articles (usually some are missed, <a @click="indexFAQ = 'completeness'" href="#completeness">see completeness</a>) and then orders these references by the number of local incoming citations (in-degree, <a @click="indexFAQ = 'citation-network'" href="#citation-network">see network</a>). Some of these references might be among the input articles, depending on how connected they are. However, some of them usually aren't among the input articles and then become 'incoming suggestions' (they must be referenced by at least two input articles). Currently the arbitrary maximum number of incoming suggestions is 20 in order to avoid API overload.
+              </p>
+              <p>
+                Keep in mind that because of the nature of this approach, 'incoming suggestions' are generally older than the input articles. This can help identifying seminal papers of the field but not newer state-of-the-art research. In order to identify newer articles, see <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>.
+              </p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="outgoing-suggestions" :open="indexFAQ.includes('outgoing-suggestions')" @open="indexFAQ = 'outgoing-suggestions'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">Where do the 'Outgoing suggestions' come from?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                'Outgoing suggestions' are citing the most input articles, thus they have high out-degrees. They are generally newer than the input articles. Local Citation Network currently supports this feature with the APIs of <a @click="indexFAQ = 'switch-api'" href="#switch-api">OpenAlex (OA), Semantic Scholar (S2) and OpenCitations (OC)</a>. Outgoing suggestions must cite at least 2 input articles and currently their arbitrary maximum is 20 in order to avoid API overload.
+              </p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="citation-network" :open="indexFAQ.includes('citation-network')" @open="indexFAQ = 'citation-network'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">How to read the citation network?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                Zoom by scrolling and pan by dragging. Each node (= vertex) represents an article. They are ordered by year from top (newer) to bottom (older), with each year colored differently. Alternatively, nodes can also be colored by the article's journal in 'network settings'. The size of the nodes depends on the sum of their 'in-degree', the number of citations the paper received from the input articles, and their 'out-degree', the number of input articles they cite. The local 'in-degree' is not always proportional to the global citation count. Input articles are circle-shaped (●), except for the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, which is diamond-shaped (◆). Up-pointing triangles (▲) represent <a @click="indexFAQ = 'incoming-suggestions'" href="#incoming-suggestions">incoming suggestions</a>, which are cited by the input articles. Down-pointing triangles (▼) are <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>, which are citing the input articles.
+              </p>
+              <p>
+                Each edge (= link / arrow) represents a reference and citation at the same time: They are references (=outgoing citations) for their source nodes and (incoming) citations for their target nodes. Usually papers can only cite older papers, hence edges tend to point downwards (or sidewards for citations of the same year). Technically a citation network is a <a href="https://en.wikipedia.org/wiki/Directed_acyclic_graph" target="_blank">directed acyclic graph</a>.
+              </p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="author-network" :open="indexFAQ.includes('author-network')" @open="indexFAQ = 'author-network'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">How to read the co-authorship network?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                This 'local' co-authorship network shows the most common authors among the source, input and suggested articles. Depending on the discipline, the number of (co)authors among a set of multiple articles can quickly rise to the hundreds, which is why this author network only shows authors with a minimum number of input & suggested articles (not to be mistaken with their global number of publications, which is usually higher). The default minimum number of input & suggested articles is determined so that this network shows no more than 50 authors, but it can be changed with the dropdown at the bottom from 2 to 10.
+              </p>
+              <p>
+                Each node (= vertex) represents an author. The size depends on their number of input & suggested articles and the color depends on the first or last article they first appear in. Authors of input articles are circle-shaped (●), except for authors of the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, who are diamond-shaped (◆). Up-pointing triangles (▲) represent authors of only <a @click="indexFAQ = 'incoming-suggestions'" href="#incoming-suggestions">incoming suggestions</a> and down-pointing triangles (▼) authors of only <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>. Click authors to filter input & suggested articles, ctrl+click to filter for more than one author.
+              </p>
+              <p>
+                Each edge (= link) represents a collaboration between two authors among the source, input and suggested articles, the width indicating the number of collaborations. Click edges to filter input & suggested articles.
+              </p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="switch-api" :open="indexFAQ.includes('switch-api')" @open="indexFAQ = 'switch-api'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">Which APIs are supported and how to switch?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                Switch the API with the button indicating "OA / S2 / OC / CR" in the top-right menu.
+              </p>
+              <p>
+                <a href="https://openalex.org/rest-api" target="_blank">OpenAlex</a> (OA) is the direct successor of Microsoft Academic, which was discontinued in 01/2022. It is fast, it has <a href="https://www.nature.com/articles/d41586-022-00138-y" target="_blank">high coverage</a>, serves most abstracts and provides <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>. It also serves a flag for retracted papers, which can be seen <a href="?API=OpenAlex&source=10.3390/en14227745">here for example</a> <a href="https://docs.openalex.org/about-the-data/work#is_retracted" target="_blank">(it can be missing though)</a>.
+              </p>
+              <p>
+                <a href="https://semanticscholar.org/product/api" target="_blank">Semantic Scholar</a> (S2) has <a href="https://doi.org/10.18653/v1/N18-3011" target="_blank">high coverage</a>, serves abstracts and allows accurate estimation of the <a @click="indexFAQ = 'completeness'" href="#completeness">reference-list completeness</a>. In addition, it provides <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>. However, it can be slower and has a <a href="https://semanticscholar.org/product/api" target="_blank">rate limit</a>.
+              </p>
+              <p>
+                The <a href="https://opencitations.net/index/api/v1#/metadata/{dois}" target="_blank">metadata API</a> from <a href="https://opencitations.net" target="_blank">OpenCitations</a> (OC) also features <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>. However, it does not provide abstracts, author information (like affiliation or ORCID) and it is quite slow.
+              </p>
+              <p>
+                <a href="https://www.crossref.org/services/metadata-delivery/rest-api/" target="_blank">Crossref</a> (CR) has the advantage that it usually returns reference lists in their <a @click="indexFAQ = 'original-order'" href="#original-order">original order</a> (you can use the <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">bookmarklet</a> for other APIs). Also, it allows for an accurate estimation of the <a @click="indexFAQ = 'completeness'" href="#completeness">reference-list completeness</a>, it's usually very fast and can handle fairly large input lists. Crossref is a not-for-profit organization that collects metadata from scholarly journals and publications.
+              </p>
+              <p>Thanks to the formidable <a href="https://i4oc.org/" target="_blank">Initiative for Open Citations (I4OC)</a>, the coverage of all of these services has increased vastly. However, some journals still do not support these ideals - feel free to write them, in case you find one!</p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="autosave" :open="indexFAQ.includes('autosave')" @open="indexFAQ = 'autosave'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">What does 'Autosave results locally' do?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                When activated, this option caches your recent networks (up to 5 tabs) and your preferred API locally in your browser in the so-called localStorage. When you revisit this web app, you can pick up where you left. When deactivated, this data is deleted. <a @click="indexFAQ = 'privacy'" href="#privacy">See privacy.</a>
+              </p>
+            </div>
+          </b-collapse>
+        
+          <div class="card-header-title">
+            <h3 class="title is-3">Troubleshooting</h3>
+          </div>
+          <b-collapse class="card" id="supported-browsers" :open="indexFAQ.includes('supported-browsers')" @open="indexFAQ = 'supported-browsers'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">This web app is not working!? Which browsers are supported?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                I've tested with the current version of Firefox (as of November 2022), but this web app should also run in current versions of Safari, Edge and Chrome. Microsoft Internet Explorer is not supported. This web app is meant for desktop use and not optimized for smartphones, which have only been tested sparsely. I'm a single developer and created this web app in my spare time for free and for fun, so I don't have the time and resources to test all possible devices, web browsers and scenarios. This web app is <a @click="indexFAQ = 'open-source'" href="#open-source">open source</a>, feel free to support it by extending compatibility or optimizing mobile / tablet use! If you find a bug or problem with the newest versions of Firefox / Safari / Edge / Chrome, please <a href="https://github.com/LocalCitationNetwork/LocalCitationNetwork.github.io/issues" target="_blank">report it on GitHub</a> or <a @click="indexFAQ = 'contact'" href="#contact">contact me</a>.
+               </p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="slow-queries" :open="indexFAQ.includes('slow-queries')" @open="indexFAQ = 'slow-queries'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">The queries have turned very slow!? / How to cancel loading?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                APIs are public with varying response speeds depending on their overall usage and workload. In addition, they might be throttling individual users (as identified by IP address) when they perform too many queries in a row. Checking your internet connection, only querying what's really important, <a @click="indexFAQ = 'switch-api'" href="#switch-api">switching to another API</a> and trying again later might help!
+              </p>
+              <p>
+                Sometimes (particularly with unstable internet connections) queries seem to run forever. In case you want to cancel loading, activate 'Autosave results locally' (<a @click="indexFAQ = 'autosave'" href="#autosave">see autosave</a>) and refresh the page. You can deactivate autosave afterwards again.
+              </p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="completeness" :open="indexFAQ.includes('completeness')" @open="indexFAQ = 'completeness'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">Is the data complete? / Some references are missing!?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                The data is usually incomplete. Some DOIs cannot be found at all in some APIs and for those that are found, often some metadata like authors, abstracts or reference-lists are missing or sometimes incorrect. For the local citation network and incoming suggestions, the completeness of the reference-lists is most important.
+              </p>
+              <p>
+                The estimated completeness of the reference-lists can be seen above the search bar in the "Input articles" tab and is calculated in the following way: For OpenAlex and OpenCitations it is the fraction of input articles that have reference-lists themselves (multiplied by the fraction of specified DOIs found, in case of a custom input list).
+              </p>
+              <p>
+                Semantic Scholar and Crossref allow for more subtle calculation, as they often also provide the total reference count, which is often larger than the reference-list of DOIs (older references often don't have DOIs and neither do some specific books, papers or conference abstracts). The estimated completeness is thus calculated as the product of three fractions:
+              </p>
+              <ol>
+                <li>Source reference completeness: (Number of input articles found in API) / (Total reference count of source or total number of lines in custom input list)</li>
+                <li>(Number of input articles (excluding source) that have reference-lists themselves) / (Number of input articles excluding source)</li>
+                <li>Average input articles' reference completeness among those input articles that do have reference-lists: (Length of reference-list) / (Total reference count)</li>
+              </ol>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="original-order" :open="indexFAQ.includes('original-order')" @open="indexFAQ = 'original-order'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">How can I preserve the original order of references in the input article list?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                You can <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">use the bookmarklet</a> to open reference lists in their original order. Alternatively, you can use Crossref, which does seem to save the original order of references. See here <a @click="indexFAQ = 'switch-api'" href="#switch-api">how to switch the API used</a>.
+              </p>
+            </div>
+          </b-collapse>
+
+          <div class="card-header-title">
+            <h3 class="title is-3">Background</h3>
+          </div>
+          <b-collapse class="card" id="bibliometrics" :open="indexFAQ.includes('bibliometrics')" @open="indexFAQ = 'bibliometrics'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">What is bibliometrics? What other software can you recommend?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                Bibliometrics is a part of information science that uses <a href="https://en.wikipedia.org/wiki/Bibliometrics" target="_blank">statistical methods to analyze publications</a>. It emcompasses scientometrics, which is specifically looking at scientific publications, and citation analysis.
+              </p>
+              <p>
+                Nowadays, there are many tools similar in spirit to this one: <a href="http://citationgecko.com/" target="_blank">Citation Gecko</a>, <a href="https://www.connectedpapers.com/" target="_blank">Connected Papers</a>, <a href="https://www.litmaps.co/" target="_blank">Litmaps</a>, <a href="https://inciteful.xyz/" target="_blank">Inciteful</a> and <a href="https://www.researchrabbit.ai/" target="_blank">ResearchRabbit</a>, among others. Aaron Tay has written a blog post in 06/2021 for <a href="https://musingsaboutlibrarianship.blogspot.com/2021/06/playing-devils-adovcate-why-newly.html" target="_blank">comparison</a>.
+              </p>
+              <p>
+                Other great software to help with bibliometric / scientometric analyses include <a href="https://harzing.com/resources/publish-or-perish" target="_blank">Anne-Wil Harzing's Publish or Perish</a>, which allows sophisticated queries of a plethora of APIs including Crossref but also Google Scholar, Scopus and Web of Science. If you're looking to create more complex networks than this web app allows, check out the Leiden University's great <a href="https://www.vosviewer.com/" target="_blank">VOSviewer</a> and <a href="https://www.citnetexplorer.nl/" target="_blank">CitNetExplorer</a>, which allow you to create and customize everything from citation networks to author networks, university networks and journal networks. VOSviewer also allows text mining and co-occurrence networks.
+              </p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="google-scholar" :open="indexFAQ.includes('google-scholar')" @open="indexFAQ = 'google-scholar'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">Why aren't you using Google Scholar?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                Unfortunately Google Scholar doesn't share their data and discourages webscraping. It doesn't have an API.
+              </p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="idea" :open="indexFAQ.includes('idea')" @open="indexFAQ = 'idea'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">I have an idea! Can you implement XYZ?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                It's great to see you're getting involved! While I see numerous ways to extend this project myself, I don't have much time to work on it anymore unfortunately. However, this web app is <a @click="indexFAQ = 'open-source'" href="#open-source">open source</a> and I'd be very happy to see others extend this project! In the meantime, check out <a @click="indexFAQ = 'bibliometrics'" href="#bibliometrics">these great applications</a>, which might already provide what you're looking for.
+              </p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="open-source" :open="indexFAQ.includes('open-source')" @open="indexFAQ = 'open-source'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">I'd like to contribute! Is this open source and are you looking for help? / Is this on GitHub?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                Yes, great! This project is open source (GPL-3) and <a href="https://github.com/LocalCitationNetwork/LocalCitationNetwork.github.io" target="_blank">the source can be found on GitHub</a>. I don't have much more time to work on this project, so I'm actively looking for help and contributors. Bugfixes are always welcome but please <a @click="indexFAQ = 'contact'" href="#contact">contact me</a> before any large pull-requests so we can coordinate.
+              </p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="privacy" :open="indexFAQ.includes('privacy')" @open="indexFAQ = 'privacy'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">Does this web app use cookies? What's the privacy policy?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                No, this web app doesn't use any cookies. No user-tracking or fingerprinting is performed and no usage-data is collected by the author of this web app. Optionally, so-called localStorage can be used to cache results and settings locally when "Autosave results locally" is manually turned on (<a @click="indexFAQ = 'autosave'" href="#autosave">see autosave</a>).
+              </p>
+              <p>
+                This web app is running locally on your computer and only contacts the API servers during runtime. Crossref has a <a href="https://www.crossref.org/privacy/" target="_blank">general privacy statement</a>. This web app is hosted by GitHub pages, see their <a href="https://help.github.com/en/github/site-policy/github-privacy-statement#github-pages" target="_blank">privacy statement here</a>.
+              </p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="technicalities" :open="indexFAQ.includes('technicalities')" @open="indexFAQ = 'technicalities'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">Technicalities: Which JavaScript libraries are used and why no CDN?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                This web app uses <a href="https://vuejs.org/" target="_blank">Vue.js</a>, <a href="https://buefy.org/" target="_blank">Buefy</a> and <a href="https://visjs.org/" target="_blank">vis.js Network</a>. I opted against using content delivery networks (CDN) to speed up delivery of these JavaScript libraries and thus initial loading-time, because of the <a href="https://en.wikipedia.org/wiki/Content_delivery_network#Security_and_privacy" target="_blank">potential user-tracking by CDNs</a>. If you're interested, this rising problem is partly countered by the great browser-plugin <a href="https://decentraleyes.org/" target="_blank">Decentraleyes</a> (<a href="https://git.synz.io/Synzvato/decentraleyes/wikis/Frequently-Asked-Questions" target="_blank">see their FAQ</a> for more details).
+              </p>
+            </div>
+          </b-collapse>
+          <b-collapse class="card" id="contact" :open="indexFAQ.includes('contact')" @open="indexFAQ = 'contact'" animation="none">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">Who are you, why did you create this and how can I contact you?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                I'm Tim Wölfle from Germany and started creating this project 2019 during the literature review for my Master's thesis. I've often manually scanned reference lists of papers to identify seminal articles and thought this must be automized. You can contact me on <a href="https://twitter.com/timwoelfle" target="_blank">Twitter</a> or by <a href="mailto:local-citation-network@timwoelfle.de">e-mail</a>.
+              </p>
+            </div>
+          </b-collapse>
         </div>
       </b-modal>
     </section>

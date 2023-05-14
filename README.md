@@ -6,8 +6,8 @@ This web app visualizes subsets of the global citation network that I call 'loca
 
 ## Open source contributions
 
-This project is open source (GPL-3). I don't have much more time to work on this project, so I'm actively looking for help and contributors! Bugfixes are always welcome but please contact me before any large pull-requests so we can coordinate. The "docs" folder represents the live version of the project, as that's the folder routed to github.io.
+This project is open source (GPL-3). I don't have much more time to work on this project, so I'm actively looking for help and contributors! Bugfixes are always welcome but please contact me before any large pull-requests so we can coordinate.
 
 ## FAQ
 
-For more details check out the FAQs in the [web app](https://timwoelfle.github.io/Local-Citation-Network/)!
+For more details check out the FAQs in the [web app](https://localcitationnetwork.github.io/#about)!
