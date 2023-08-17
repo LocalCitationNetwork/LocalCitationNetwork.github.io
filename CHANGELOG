@@ -1,5 +1,8 @@
+17.08.2023 v1.16
++ Articles can also be filtered by author affiliation now (OpenAlex seems to provide most complete affiliations)
+
 14.05.2023 v1.15
-+ Retrieve "Incoming suggestions" also with OpenAlex (OA) now. Results in 1 extra API call per input article (disable by running "vm.getCitationsOA = false" in browser console).
++ Retrieve "Outgoing suggestions" also with OpenAlex (OA) now. Results in 1 extra API call per input article (disable by running "vm.getCitationsOA = false" in browser console).
 + Added "↻" / "↺" link to rotate the citation network by 90° and stopped automatic rotation when fullscreen is toggled as it did not always fit shape of network.
 + Added option to color-group author nodes in co-authorship network by either their first or last article. Show which article they're color-grouped by in author-node-tooltip.
 * Network settings are now saved with each network (i.e. tab) separately and stored locally when "Autosave results locally" is on or a JSON of a network is downloaded (Citation network settings: "Node color", "Node size", "Show source article node", "↻" / "↺"; Co-authorship network settings: "Node color", "Show first names", "only authors with a minimum [2-10] input & suggested articles are shown"); consistent with "Number shown" for "Incoming suggestions" and "Outgoing suggestions" since v1.1.
@@ -21,7 +24,7 @@
 + It's now possible to download a network as a JSON file and reload it through the "File" button.
 + Added white background to networks' canvas so they can now properly be saved by right-click → "Open/Save Image".
 + Added option to also show first names in node labels for Co-authorship network.
-+ Added "Incoming suggestions" to OpenAlex experimentally (activate by running "vm.getCitationsOA = true" in browser console).
++ Added "Outgoing suggestions" to OpenAlex experimentally (activate by running "vm.getCitationsOA = true" in browser console).
 * "Number shown" for "Incoming suggestions" and "Outgoing suggestions" is now saved with each network (i.e. tab) separately and stored locally when "Autosave results locally" is on or a JSON of network is downloaded.
 * Authors are now again distinguished by their names in the Co-authorship network and not by their hidden internal OpenAlex (OA) / Semantic Scholar (S2) ID due to seemingly many duplicates.
 ! Fixed first/last name detection when name was formatted "last name, first name".

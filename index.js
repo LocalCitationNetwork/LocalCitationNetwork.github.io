@@ -1,4 +1,4 @@
-/* Local Citation Network v1.15 (GPL-3) */
+/* Local Citation Network v1.16 (GPL-3) */
 /* by Tim Woelfle */
 /* https://timwoelfle.github.io/Local-Citation-Network */
 
@@ -6,7 +6,7 @@
 
 'use strict'
 
-const localCitationNetworkVersion = 1.15
+const localCitationNetworkVersion = 1.16
 
 const arrSum = arr => arr.reduce((a, b) => a + b, 0)
 const arrAvg = arr => arrSum(arr) / arr.length
@@ -56,7 +56,7 @@ function semanticScholarPaper (id, getCitations, getReferenceContexts) {
 
 function semanticScholarResponseToArticleArray (data) {
   return data.filter(Boolean).map(article => {
-    const doi = article.externalIds && article.externalIds.DOI && article.externalIds.DOI.toUpperCase()
+    const doi = article.externalIds?.DOI?.toUpperCase()
 
     return {
       id: article.paperId,
@@ -67,7 +67,7 @@ function semanticScholarResponseToArticleArray (data) {
         const cutPoint = (author.name.lastIndexOf(',') !== -1) ? author.name.lastIndexOf(',') : author.name.lastIndexOf(' ')
         return {
           id: author.authorId,
-          orcid: author.externalIds && author.externalIds.ORCID,
+          orcid: author.externalIds?.ORCID,
           url: author.url,
           LN: author.name.substr(cutPoint + 1),
           FN: author.name.substr(0, cutPoint),
@@ -75,7 +75,7 @@ function semanticScholarResponseToArticleArray (data) {
         }
       }),
       year: article.year,
-      journal: (article.journal && article.journal.name) || article.venue,
+      journal: article.journal?.name || article.venue,
       references: (article.references) ? article.references.map(x => x.paperId) : [],
       citations: (article.citations) ? article.citations.map(x => x.paperId).filter(Boolean) : [],
       citationsCount: article.citationCount,
@@ -92,8 +92,10 @@ async function openAlexWrapper (ids, responseFunction, isLoadingProgress = false
   const responses = []
   ids = ids.map(id => {
     if (!id) return undefined
+    // OpenAlex usually formats ids as URLs (e.g. https://openalex.org/W2741809807 / https://doi.org/10.7717/peerj.4375 / https://pubmed.ncbi.nlm.nih.gov/29456894)
+    // Supported ids: https://docs.openalex.org/api-entities/works/work-object#id
     else if (id.includes('https://')) return id
-    else if (id.toLowerCase().match(/openalex:|doi:|mag:|pmid:|pmcid:/)) return id.toLowerCase()
+    else if (id.toLowerCase().match(/doi:|mag:|openalex:|pmid:|pmcid:/)) return id.toLowerCase()
     else if (id.includes('/')) return 'doi:' + id
     else return 'openalex:' + id
   })
@@ -144,18 +146,16 @@ function openAlexResponseToArticleArray (data) {
         const display_name = authorship.author.display_name || ''
         const cutPoint = (display_name.lastIndexOf(',') !== -1) ? display_name.lastIndexOf(',') : display_name.lastIndexOf(' ')
         return {
-          id: authorship.author.id && authorship.author.id.replace('https://openalex.org/', ''),
-          orcid: authorship.author.orcid && authorship.author.orcid.replace('https://orcid.org/', ''),
+          id: authorship.author.id?.replace('https://openalex.org/', ''),
+          orcid: authorship.author.orcid?.replace('https://orcid.org/', ''),
           LN: display_name.substr(cutPoint + 1),
           FN: display_name.substr(0, cutPoint),
           affil: (authorship.institutions || []).map(institution => institution.display_name + (institution.country_code ? ' (' + institution.country_code + ')' : '')).join(', ') || undefined
         }
       }),
       year: article.publication_year,
-      journal: (article.primary_location && article.primary_location.source && (
-        article.primary_location.source.display_name +
-        ((article.primary_location.source.host_organization_name && !article.primary_location.source.display_name.includes(article.primary_location.source.host_organization_name)) ? ' (' + article.primary_location.source.host_organization_name + ')' : '')
-      )) ?? undefined,
+      journal: article.primary_location?.source?.display_name +
+        ((article.primary_location.source.host_organization_name && !article.primary_location.source.display_name.includes(article.primary_location.source.host_organization_name)) ? ' (' + article.primary_location.source.host_organization_name + ')' : ''),
       references: (article.referenced_works || []).map(x => x.replace('https://openalex.org/', '')),
       citations: (article.citations) ? article.citations.results.map(x => x.id.replace('https://openalex.org/', '')) : [],
       citationsCount: article.cited_by_count,
@@ -208,20 +208,20 @@ function crossrefWorks (id) {
 
 function crossrefResponseToArticleArray (data) {
   return data.filter(Boolean).map(article => {
-    const doi = article.DOI && article.DOI.toUpperCase()
+    const doi = article.DOI?.toUpperCase()
 
     return {
       id: doi,
       numberInSourceReferences: data.indexOf(article) + 1,
       doi: doi,
       title: String(article.title), // most of the time title is an array with length=1, but I've also seen pure strings
-      authors: (article.author && article.author.length) ? article.author.map(x => ({
+      authors: (article.author?.length) ? article.author.map(x => ({
         orcid: x.ORCID,
         LN: x.family || x.name,
         FN: x.given,
-        affil: (x.affiliation && x.affiliation.length) ? x.affiliation.map(aff => aff.name).join(', ') : (typeof (x.affiliation) === 'string' ? x.affiliation : undefined)
+        affil: (x.affiliation?.length) ? x.affiliation.map(aff => aff.name).join(', ') : (typeof (x.affiliation) === 'string' ? x.affiliation : undefined)
       })) : [{ LN: article.author || undefined }],
-      year: article.issued['date-parts'] && article.issued['date-parts'][0] && article.issued['date-parts'][0][0],
+      year: article.issued['date-parts']?.[0]?.[0],
       journal: String(article['container-title']),
       // Crossref "references" array contains null positions for references it doesn't have DOIs for, thus preserving the original number of references
       references: (typeof article.reference === 'object') ? article.reference.map(x => (x.DOI) ? x.DOI.toUpperCase() : undefined) : [],
@@ -268,7 +268,7 @@ function openCitationsMetadata (id) {
 
 function openCitationsResponseToArticleArray (data) {
   return data.filter(Boolean).map(article => {
-    const doi = article.doi && article.doi.toUpperCase()
+    const doi = article.doi?.toUpperCase()
 
     return {
       id: doi,
@@ -341,7 +341,7 @@ function initCitationNetwork (app) {
     group: article[app.citationNetworkNodeColor],
     value: arrSum([['in', 'both'].includes(app.citationNetworkNodeSize) ? app.inDegree(article.id) : 0, ['out', 'both'].includes(app.citationNetworkNodeSize) ? app.outDegree(article.id) : 0]),
     shape: (app.currentGraph.source.id === article.id) ? 'diamond' : (app.inputArticlesIds.includes(article.id) ? 'dot' : (app.incomingSuggestionsIds.includes(article.id) ? 'triangle' : 'triangleDown')),
-    label: (article.authors[0] && article.authors[0].LN) + '\n' + article.year
+    label: article.authors[0]?.LN + '\n' + article.year
   }))
 
   // Create network
@@ -518,8 +518,8 @@ function initAuthorNetwork (app, minPublications = undefined) {
     if (authorId1 === authorId2) return false
 
     // Is there already a link for this pair? If so, make it stronger
-    if (links[authorId1] && links[authorId1][authorId2]) return links[authorId1][authorId2]++
-    if (links[authorId2] && links[authorId2][authorId1]) return links[authorId2][authorId1]++
+    if (links[authorId1]?.[authorId2]) return links[authorId1][authorId2]++
+    if (links[authorId2]?.[authorId1]) return links[authorId2][authorId1]++
 
     // Create new link
     if (!links[authorId1]) links[authorId1] = {}
@@ -763,11 +763,11 @@ const vm = new Vue({
     },
     // The following are settings and their default values
     maxIncomingSuggestions: {
-      get: function () { return this.currentGraph.maxIncomingSuggestions ?? Math.min(10, this.currentGraph.incomingSuggestions && this.currentGraph.incomingSuggestions.length) },
+      get: function () { return this.currentGraph.maxIncomingSuggestions ?? Math.min(10, this.currentGraph.incomingSuggestions?.length) },
       set: function (x) { this.$set(this.currentGraph, 'maxIncomingSuggestions', x) }
     },
     maxOutgoingSuggestions: {
-      get: function () { return this.currentGraph.maxOutgoingSuggestions ?? Math.min(10, this.currentGraph.outgoingSuggestions && this.currentGraph.outgoingSuggestions.length) },
+      get: function () { return this.currentGraph.maxOutgoingSuggestions ?? Math.min(10, this.currentGraph.outgoingSuggestions?.length) },
       set: function (x) { this.$set(this.currentGraph, 'maxOutgoingSuggestions', x) }
     },
     citationNetworkNodeColor: {
@@ -1155,6 +1155,7 @@ const vm = new Vue({
       }
 
       network.selectNodes(selectedNodeIds)
+      // Only highlight connected nodes in citationNetwork
       const connectedNodes = (!this.showAuthorNetwork) ? network.getConnectedNodes(selectedNodeIds) : []
 
       // Code loosely adapted from: https://github.com/visjs/vis-network/blob/master/examples/network/exampleApplications/neighbourhoodHighlight.html
@@ -1201,11 +1202,11 @@ const vm = new Vue({
       this.currentGraph.input.sort(this.sortInDegree)
       this.selectedInputArticle = this.currentGraph.input[0]
 
-      if (this.currentGraph.incomingSuggestions && this.currentGraph.incomingSuggestions.length) {
+      if (this.currentGraph.incomingSuggestions?.length) {
         this.currentGraph.incomingSuggestions.sort(this.sortInDegree)
         this.selectedIncomingSuggestionsArticle = this.currentGraph.incomingSuggestions[0]
       }
-      if (this.currentGraph.outgoingSuggestions && this.currentGraph.outgoingSuggestions.length) {
+      if (this.currentGraph.outgoingSuggestions?.length) {
         this.currentGraph.outgoingSuggestions.sort(this.sortOutDegree)
         this.selectedOutgoingSuggestionsArticle = this.currentGraph.outgoingSuggestions[0]
       }
@@ -1343,9 +1344,9 @@ const vm = new Vue({
       const re = new RegExp(this.filterString, 'gi')
       switch (this.filterColumn) {
         case 'titleAbstract':
-          return articles.filter(article => String(article.numberInSourceReferences).match(new RegExp(this.filterString, 'y')) || (article.title && article.title.match(re)) || (article.abstract && article.abstract.match(re)))
+          return articles.filter(article => String(article.numberInSourceReferences).match(new RegExp(this.filterString, 'y')) || (article.title?.match(re)) || (article.abstract?.match(re)))
         case 'authors':
-          return articles.filter(article => this.authorString(article.authors).match(re))
+          return articles.filter(article => this.authorString(article.authors).match(re) || article.authors.map(author => author.affil?.match(re)).some(Boolean))
         case 'year':
           return articles.filter(article => String(article.year).match(re))
         case 'journal':
@@ -1355,10 +1356,10 @@ const vm = new Vue({
       }
     },
     authorString: function (authors) {
-      return (authors && authors.length) ? authors.map(x => ((x.FN) ? (x.FN) + ' ' : '') + x.LN).join(', ') : ''
+      return (authors?.length) ? authors.map(x => ((x.FN) ? (x.FN) + ' ' : '') + x.LN).join(', ') : ''
     },
     authorStringShort: function (authors) {
-      return (authors && authors.length > 5) ? this.authorString(authors.slice(0, 5).concat({ LN: '(' + (authors.length - 5) + ' more)' })) : this.authorString(authors)
+      return (authors?.length > 5) ? this.authorString(authors.slice(0, 5).concat({ LN: '(' + (authors.length - 5) + ' more)' })) : this.authorString(authors)
     },
     clickToggleAutosave: function () {
       this.autosaveResults = !this.autosaveResults
