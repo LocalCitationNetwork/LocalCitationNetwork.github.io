@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <title>Local Citation Network</title>
-    <meta name="description" content="This web app aims to help scientists with their literature review using reference data from OpenAlex, Semantic Scholar, OpenCitations and Crossref. It visualizes citation networks defined by the references (and citations) of a given set of input articles, where the locally most relevant references (and citations) are suggested for further review.">
+    <meta name="description" content="This web app aims to help scientists with their literature review using reference data from OpenAlex, Semantic Scholar, OpenCitations and Crossref. It visualizes citation networks defined by the references (and citations) of a given set of input articles, where the top references (and top citations) are suggested for further review.">
     <meta name="author" content="Tim Woelfle">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="lib/buefy.min.css">
@@ -151,10 +151,8 @@
               </b-button>
             </b-navbar-item>
             <b-navbar-item tag="li">
-              <b-button v-if="isLoading" :loading="isLoadingTotal <= 1" :disabled="isLoadingTotal > 1" rounded style="width: 130px">
-                <b-progress :value="isLoadingIndex/isLoadingTotal*100" size="is-large" show-value v-if="isLoadingTotal > 1" title="To cancel loading activate 'Save' button on the right and refresh page." style="width: 100px">
-                  {{isLoadingIndex}} / {{isLoadingTotal}}
-                </b-progress>
+              <b-button v-if="isLoading" disabled rounded style="width: 130px">
+                <b-progress :value="(isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-large" show-value format="percent" :precision="0" title="To cancel loading activate 'Save' button on the right and refresh page." style="width: 100px"></b-progress>
               </b-button>
             </b-navbar-item>
           </ul>
@@ -165,8 +163,8 @@
             <b-navbar-item tag="li"><b-button @click="clickButtonAdd" rounded type="is-dark" title="Add network based on references from a single source DOI" :disabled="isLoading"><span style="font-size: 1.8em; line-height: 0.9 ">+</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-upload v-model="file" :disabled="isLoading"><a class="button is-dark is-rounded" title="Scan plain text file for DOIs" :disabled="isLoading" style="margin: 0 0 6px 0"><span style="font-size: 1.2em">File</span></a></b-upload></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="clickCloseAllTabs" rounded type="is-dark" title="Close all tabs" :disabled="!graphs.length"><span style="font-size: 1.2em">Close</span></b-button></b-navbar-item>
-            <b-navbar-item tag="li"><b-button @click="clickToggleAutosave" rounded :type="(autosaveResults) ? '' : 'is-dark'" title="Autosave results locally"><span style="font-size: 1.2em">Save</span></b-button></b-navbar-item>
-            <b-navbar-item tag="li"><b-button @click="clickToggleAPI" rounded type="is-dark" title="Toggle API: OpenAlex (OA) / Semantic Scholar (S2) / OpenCitations (OC) / Crossref (CR)" :disabled="isLoading"><span  style="font-size: 1.2em">{{ abbreviateAPI(API) }}</span></b-button></b-navbar-item>
+            <b-navbar-item tag="li"><b-button @click="clickToggleAutosave" rounded :type="(autosaveResults) ? '' : 'is-dark'" title="Autosave results locally (only up to 100 References & Citations are kept because of space constraints - if all are needed, use 'download full network: JSON')"><span style="font-size: 1.2em">Save</span></b-button></b-navbar-item>
+            <b-navbar-item tag="li"><b-button @click="showOptionsAPI = !showOptionsAPI" rounded type="is-dark" title="API Options: OpenAlex (OA) / Semantic Scholar (S2) / OpenCitations (OC) / Crossref (CR)" :disabled="isLoading"><span  style="font-size: 1.2em">{{ abbreviateAPI(API) }}</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="showFAQ = !showFAQ" rounded type="is-dark" title="Frequently asked questions"><span style="font-size: 1.8em">?</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><a @click="indexFAQ = 'contact'; showFAQ = true;" href="#contact" class="button is-dark is-rounded" title="Contact app creator"><span style="font-size: 1.8em">✉</span></a></b-navbar-item>
           </ul>
@@ -174,12 +172,24 @@
       </b-navbar>
 
       <div class="section columns" v-if="currentTabIndex !== undefined">
-        <b-tabs v-model="showArticlesTab" class="column is-three-fifths" size="is-small" :style="'display: ' + ((fullscreenNetwork) ? 'none' : 'block')">
+        <b-tabs v-model="showArticlesTab" :class="'column' + (fullscreenTable ? '' : ' is-three-fifths')" size="is-small" :style="'display: ' + ((fullscreenNetwork) ? 'none' : 'block')">
           <b-tab-item value="inputArticles">
             <template slot="header">
               <h2 class="title is-4">Input articles ({{ currentGraph.input.length }})</h2>
             </template>
             <div class="content">
+              <p>
+                <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
+                download input articles: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(currentGraph.input)">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(currentGraph.input)">RIS</a></b-tooltip> /
+                <!-- Make sure network is fully loaded (otherwise incomingSuggestions / outgoingSuggestions tabs would show eternal spinning wheels) -->
+                <template v-if="currentGraph.incomingSuggestions && currentGraph.outgoingSuggestions">
+                  download full network:
+                  <b-tooltip dashed multilined position="is-bottom" type="is-dark"
+                    label="Can be reloaded through the 'File' button at the top right">
+                    <a @click="downloadJSON">JSON</a>
+                  </b-tooltip>
+                </template>
+              </p>
               <p>
                 <template v-if="currentGraph.source.id">
                   Based on the
@@ -193,17 +203,9 @@
                   Based on the following custom list: {{ currentGraph.tabLabel }}
                 </template>
                 (<b-tooltip dashed multilined position="is-bottom" type="is-dark"
-                  label="Copy this link's address and share! (Right-click → 'Copy Link')">
+                  label="Copy this link's address and share - network data will be retrieved from scratch (Right-click → 'Copy Link')">
                   <a :href="linkToShareAppendix" @click="e => e.preventDefault()">link to share</a>
-                </b-tooltip> /
-                <!-- Make sure network is fully loaded (otherwise incomingSuggestions / outgoingSuggestions tabs would show eternal spinning wheels) -->
-                <template v-if="currentGraph.incomingSuggestions && currentGraph.outgoingSuggestions">
-                  <b-tooltip dashed multilined position="is-bottom" type="is-dark"
-                    label="Can be loaded again through the 'File' button at the top right!">
-                    <a @click="downloadJSON">download network</a>
-                  </b-tooltip> /
-                </template>
-                <a @click="downloadCSVData(inputArticlesFiltered)">download {{ filterString ? 'filtered ' : '' }}input table</a>)
+                </b-tooltip>)
               </p>
               <p v-if="currentGraph.source.id">
                 <b-tooltip dashed multilined position="is-bottom" type="is-dark"
@@ -229,7 +231,7 @@
             </div>
             <b-field>
               <b-select v-model="filterColumn">
-                <option value="titleAbstract">Title & Abstract</option>
+                <option value="titleAbstract">Title, Abstract, ID</option>
                 <option value="authors">Authors</option>
                 <option value="year">Year</option>
                 <option value="journal">Journal</option>
@@ -244,10 +246,11 @@
               default-sort="inDegree" default-sort-direction="desc"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
-              detailed hoverable striped narrowed focusable>
+              detailed :has-detailed-visible="row => (row.authors.length || inDegree(row.id) || outDegree(row.id) || row.abstract)"
+              hoverable striped narrowed focusable>
               <template slot="detail" slot-scope="props">
                 <p class="content">
-                  Authors:
+                  <b>Authors ({{ props.row.authors.length }}):</b>
                   <template v-for="(author, index) in props.row.authors">
                     <template v-if="index !== 0">; </template>
                     <b-tooltip
@@ -264,10 +267,25 @@
                         <a :href="'https://scholar.google.com/scholar?q=' + authorString([author])" target="_blank">Google Scholar</a>
                       </template>
                       <a>{{ authorString([author]) }}</a>
-                  </b-tooltip>
+                    </b-tooltip>
                   </template>
                 </p>
-                <p v-if="props.row.abstract" v-html="formatTags(props.row.abstract)" class="content"></p>
+                <p class="content" v-if="currentGraph.referenced[props.row.id]">
+                  <b>Local citations (from other input articles, In-Degree {{ currentGraph.referenced[props.row.id].length }}):</b>
+                  <template v-for="(id, index) in currentGraph.referenced[props.row.id]">
+                    <template v-if="index !== 0">; </template><a @click="showArticlesTab = 'inputArticles'; selected = currentGraph.input.filter(x => x.id == id)?.[0]">{{currentGraph.input.filter(x => x.id == id)?.[0].authors[0]?.LN + ' ' + currentGraph.input.filter(x => x.id == id)?.[0]?.year}}</a>
+                  </template>
+                </p>
+                <p class="content" v-if="currentGraph.citing[props.row.id]">
+                  <b>Local references (to other input articles, Out-Degree {{ currentGraph.citing[props.row.id].length }}):</b>
+                  <template v-for="(id, index) in currentGraph.citing[props.row.id]">
+                    <template v-if="index !== 0">; </template><a @click="showArticlesTab = 'inputArticles'; selected = currentGraph.input.filter(x => x.id == id)?.[0]">{{currentGraph.input.filter(x => x.id == id)?.[0].authors[0]?.LN + ' ' + currentGraph.input.filter(x => x.id == id)?.[0]?.year}}</a>
+                  </template>
+                </p>
+                <template v-if="props.row.abstract">
+                  <h4 class="title is-6">Abstract</h4>
+                  <p v-html="formatTags(props.row.abstract)" class="content"></p>
+                </template>
                 <template v-if="currentGraph.source.referenceContexts?.[props.row.id]?.length">
                   <h4 class="title is-6">Reference contexts in source article, {{ currentGraph.source.authors[0].LN + ' ' + currentGraph.source.year }} (experimental):</h4>
                   <ul style="list-style-type: disc">
@@ -290,7 +308,8 @@
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
                   {{ props.row.isSource ? 'Source: ' : ''  }}
-                  <a :href="articleLink(props.row)" target="_blank" v-html="formatTags(props.row.title)"></a>
+                  <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank">{{ formatTags(props.row.title) }}</a>
+                  <template v-else>{{ formatTags(props.row.title) }}</template>
                 </span>
               </b-table-column>
               <b-table-column field="authors" label="First Author" v-slot="props">
@@ -330,7 +349,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="inDegree" label="InDeg" meta="In-Degree: Number of incoming citations from input articles (excluding suggestions)"
+              <b-table-column label="InDeg" meta="In-Degree: Number of incoming citations from input articles (excluding suggestions)"
                 sortable :custom-sort="sortInDegreeWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -343,7 +362,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="outDegree" label="OutDeg" meta="Out-Degree: Number of references (outgoing citations) data (excluding suggestions)"
+              <b-table-column label="OutDeg" meta="Out-Degree: Number of references (outgoing citations) data (excluding suggestions)"
                 sortable :custom-sort="sortOutDegreeWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -356,7 +375,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="references.length" label="Ref" meta="References in paper" sortable>
+              <b-table-column label="Ref" meta="References in paper" 
+              sortable :custom-sort="sortReferencesWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     {{ column.label }}
@@ -366,36 +386,43 @@
                   <b-tooltip label="Open new graph for the references of this article" position="is-left" type="is-dark">
                     <b-button @click.stop="clickOpenReferences(props.row)" type="is-primary" size="is-small"
                       :inverted="(selected === props.row) ? true : false"
-                      :disabled="(isLoading || props.row.references.length === 0 || props.row.isSource) ? true : false">
-                      {{ props.row.references.length }} ↻
+                      :disabled="isLoading || (!props.row.referencesCount && !props.row.references.length) || props.row.isSource">
+                      {{ props.row.referencesCount || props.row.references?.length }}
                     </b-button>
                   </b-tooltip>
                 </template>
               </b-table-column>
             </b-table>
           </b-tab-item>
-          <b-tab-item value="incomingSuggestions" :disabled="currentGraph.incomingSuggestions === undefined" v-if="currentGraph.incomingSuggestions === undefined || currentGraph.incomingSuggestions.length">
+          <b-tab-item value="topReferences" :disabled="currentGraph.incomingSuggestions === undefined" v-if="currentGraph.incomingSuggestions === undefined || currentGraph.incomingSuggestions.length">
             <template slot="header">
-              <h2 class="title is-4">Incoming suggestions 
+              <h2 class="title is-4">Top references
                 (<template v-if="currentGraph.incomingSuggestions?.length">▲ {{ maxIncomingSuggestions }}</template>
-                <a v-else class="button is-loading" style="display:inline; border: 0"></a>)
+                <b-progress v-else :value="(isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-medium" show-value format="percent" :precision="0" style="width: 50px; display: inline-block"></b-progress>)
               </h2>
             </template>
             <div class="content" v-if="currentGraph.incomingSuggestions?.length">
               <p>
-                <a @click="indexFAQ = 'incoming-suggestions'; showFAQ = true;" href="#incoming-suggestions">Incoming suggestions</a> are the most cited references by the input articles that are still missing, thus they have high in-degrees. They tend to be older than most input articles. Number shown:
-                <select v-model="maxIncomingSuggestions" @change="changeCurrentNetworkSettings(true)">
-                  <template v-for="val in [...Array(currentGraph.incomingSuggestions.length+1).keys()]">
-                    <option :value="val">{{ val }}</option>
-                  </template>
-                </select>
-                <a @click="downloadCSVData(incomingSuggestionsFiltered)">(download {{ filterString ? 'filtered ' : '' }} incoming suggestions table)</a>
+                <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
+                download references: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(currentGraph.incomingSuggestions)">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(currentGraph.incomingSuggestions)">RIS</a></b-tooltip> /
+                <!-- Make sure network is fully loaded (otherwise incomingSuggestions / outgoingSuggestions tabs would show eternal spinning wheels) -->
+                <template v-if="currentGraph.incomingSuggestions && currentGraph.outgoingSuggestions">
+                  download full network:
+                  <b-tooltip dashed multilined position="is-bottom" type="is-dark"
+                    label="Can be reloaded through the 'File' button at the top right!">
+                    <a @click="downloadJSON">JSON</a>
+                  </b-tooltip>
+                </template>
+              </p>
+              <p>
+                <a @click="indexFAQ = 'top-references'; showFAQ = true;" href="#top-references">Top references</a> are the most cited references by the input articles, thus they have high in-degrees. They tend to be older than most input articles. They are derived through backward citation searching (backward in time). Number shown:
+                <input v-model.lazy="maxIncomingSuggestions" @change="changeCurrentNetworkSettings(true)" type="number" min="0" :max="currentGraph.incomingSuggestions.length" step="1" required style="width: 60px"> / {{currentGraph.incomingSuggestions.length}}
               </p>
             </div>
             <!-- The following b-field and b-table are near identical with those of input articles. Different lines are indicated by comment. -->
             <b-field>
               <b-select v-model="filterColumn">
-                <option value="titleAbstract">Title & Abstract</option>
+                <option value="titleAbstract">Title, Abstract, ID</option>
                 <option value="authors">Authors</option>
                 <option value="year">Year</option>
                 <option value="journal">Journal</option>
@@ -404,18 +431,16 @@
                 :icon-right="filterString ? 'close' : undefined"
                 icon-right-clickable
                 @icon-right-click="filterString=''"></b-input>
-              <!-- this line differs from input articles -->
               <span class="button is-static">{{ incomingSuggestionsFiltered.length + " / " + maxIncomingSuggestions }}</span>
             </b-field>
-            <!-- 'ref', 'data', 'selected.sync' differ from input articles -->
-            <b-table ref="incomingSuggestionsTable" :data="incomingSuggestionsFiltered" :selected.sync="selectedIncomingSuggestionsArticle"
+            <b-table ref="topReferencesTable" :data="incomingSuggestionsFiltered" :selected.sync="selectedIncomingSuggestionsArticle"
               default-sort="inDegree" default-sort-direction="desc"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
               detailed hoverable striped narrowed focusable>
               <template slot="detail" slot-scope="props">
                 <p class="content">
-                  Authors:
+                  <b>Authors ({{ props.row.authors.length }}):</b>
                   <template v-for="(author, index) in props.row.authors">
                     <template v-if="index !== 0">, </template>
                     <b-tooltip
@@ -432,10 +457,25 @@
                         <a :href="'https://scholar.google.com/scholar?q=' + authorString([author])" target="_blank">Google Scholar</a>
                       </template>
                       <a>{{ authorString([author]) }}</a>
-                  </b-tooltip>
+                    </b-tooltip>
                   </template>
                 </p>
-                <p v-if="props.row.abstract" v-html="formatTags(props.row.abstract)" class="content"></p>
+                <p class="content" v-if="currentGraph.referenced[props.row.id]">
+                  <b>Local citations (from input articles, In-Degree {{ currentGraph.referenced[props.row.id].length }}):</b>
+                  <template v-for="(id, index) in currentGraph.referenced[props.row.id]">
+                    <template v-if="index !== 0">; </template><a @click="showArticlesTab = 'inputArticles'; selected = currentGraph.input.filter(x => x.id == id)?.[0]">{{currentGraph.input.filter(x => x.id == id)?.[0].authors[0]?.LN + ' ' + currentGraph.input.filter(x => x.id == id)?.[0].year}}</a>
+                  </template>
+                </p>
+                <p class="content" v-if="currentGraph.citing[props.row.id]">
+                  <b>Local references (to input articles, Out-Degree {{ currentGraph.citing[props.row.id].length }}):</b>
+                  <template v-for="(id, index) in currentGraph.citing[props.row.id]">
+                    <template v-if="index !== 0">; </template><a @click="showArticlesTab = 'inputArticles'; selected = currentGraph.input.filter(x => x.id == id)?.[0]">{{currentGraph.input.filter(x => x.id == id)?.[0].authors[0]?.LN + ' ' + currentGraph.input.filter(x => x.id == id)?.[0].year}}</a>
+                  </template>
+                </p>
+                <template v-if="props.row.abstract">
+                  <h4 class="title is-6">Abstract</h4>
+                  <p v-html="formatTags(props.row.abstract)" class="content"></p>
+                </template>
               </template>
               
               <b-table-column label="Title" v-slot="props">
@@ -481,7 +521,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="inDegree" label="InDeg" meta="In-Degree: Number of incoming citations from input articles (excluding suggestions)"
+              <b-table-column label="InDeg" meta="In-Degree: Number of incoming citations from input articles (excluding suggestions)"
                 sortable :custom-sort="sortInDegreeWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -494,7 +534,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="outDegree" label="OutDeg" meta="Out-Degree: Number of references (outgoing citations) data (excluding suggestions)"
+              <b-table-column label="OutDeg" meta="Out-Degree: Number of references (outgoing citations) data (excluding suggestions)"
                 sortable :custom-sort="sortOutDegreeWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -507,7 +547,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="references.length" label="Ref" meta="References in paper" sortable>
+              <b-table-column label="Ref" meta="References in paper" 
+              sortable :custom-sort="sortReferencesWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     {{ column.label }}
@@ -517,35 +558,42 @@
                   <b-tooltip label="Open new graph for the references of this article" position="is-left" type="is-dark">
                     <b-button @click.stop="clickOpenReferences(props.row)" type="is-primary" size="is-small"
                       :inverted="(selected === props.row) ? true : false"
-                      :disabled="(isLoading || props.row.references.length === 0 || props.row.isSource) ? true : false">
-                      {{ props.row.references.length }} ↻
+                      :disabled="isLoading || (!props.row.referencesCount && !props.row.references.length) || props.row.isSource">
+                      {{ props.row.referencesCount || props.row.references?.length }}
                     </b-button>
                   </b-tooltip>
                 </template>
               </b-table-column>
             </b-table>
           </b-tab-item>
-          <b-tab-item value="outgoingSuggestions" :disabled="currentGraph.outgoingSuggestions === undefined" v-if="currentGraph.outgoingSuggestions === undefined || currentGraph.outgoingSuggestions.length">
+          <b-tab-item value="topCitations" :disabled="currentGraph.outgoingSuggestions === undefined" v-if="currentGraph.outgoingSuggestions === undefined || currentGraph.outgoingSuggestions.length">
             <template slot="header">
-              <h2 class="title is-4">Outgoing suggestions 
+              <h2 class="title is-4">Top citations
                 (<template v-if="currentGraph.outgoingSuggestions?.length">▼ {{ maxOutgoingSuggestions }}</template>
-                <a v-else class="button is-loading" style="display:inline; border: 0"></a>)
+                <b-progress v-else :value="(currentGraph.incomingSuggestions === undefined) ? undefined : (isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-medium" show-value format="percent" :precision="0" style="width: 50px; display: inline-block"></b-progress>)
             </template>
             <div class="content" v-if="currentGraph.outgoingSuggestions?.length">
               <p>
-                <a @click="indexFAQ = 'outgoing-suggestions'; showFAQ = true;" href="#outgoing-suggestions">Outgoing suggestions</a> are citing the most input articles, thus they have high out-degrees. They tend to be newer than most input articles. Number shown:
-                <select v-model="maxOutgoingSuggestions" @change="changeCurrentNetworkSettings(true)">
-                  <template v-for="val in [...Array(currentGraph.outgoingSuggestions.length+1).keys()]">
-                    <option :value="val">{{ val }}</option>
-                  </template>
-                </select>
-                <a @click="downloadCSVData(outgoingSuggestionsFiltered)">(download {{ filterString ? 'filtered ' : '' }} outgoing suggestions table)</a>
+                <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
+                download citations: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(currentGraph.outgoingSuggestions)">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(currentGraph.outgoingSuggestions)">RIS</a></b-tooltip> /
+                <!-- Make sure network is fully loaded (otherwise incomingSuggestions / outgoingSuggestions tabs would show eternal spinning wheels) -->
+                <template v-if="currentGraph.incomingSuggestions && currentGraph.outgoingSuggestions">
+                  download full network:
+                  <b-tooltip dashed multilined position="is-bottom" type="is-dark"
+                    label="Can be reloaded through the 'File' button at the top right!">
+                    <a @click="downloadJSON">JSON</a>
+                  </b-tooltip>
+                </template>
+              </p>
+              <p>
+                <a @click="indexFAQ = 'top-citations'; showFAQ = true;" href="#top-citations">Top citations</a> are citing the most input articles, thus they have high out-degrees. They are derived through forward citation searching (forward in time). They tend to be newer than most input articles. Number shown:
+                <input v-model.lazy="maxOutgoingSuggestions" @change="changeCurrentNetworkSettings(true)" type="number" min="0" :max="currentGraph.outgoingSuggestions.length" step="1" required style="width: 60px"> / {{currentGraph.outgoingSuggestions.length}}
               </p>
             </div>
             <!-- The following b-field and b-table are near identical with those of input articles. Different lines are indicated by comment. -->
             <b-field>
               <b-select v-model="filterColumn">
-                <option value="titleAbstract">Title & Abstract</option>
+                <option value="titleAbstract">Title, Abstract, ID</option>
                 <option value="authors">Authors</option>
                 <option value="year">Year</option>
                 <option value="journal">Journal</option>
@@ -554,18 +602,16 @@
                 :icon-right="filterString ? 'close' : undefined"
                 icon-right-clickable
                 @icon-right-click="filterString=''"></b-input>
-              <!-- this line differs from input articles -->
               <span class="button is-static">{{ outgoingSuggestionsFiltered.length + " / " + maxOutgoingSuggestions }}</span>
             </b-field>
-            <!-- 'ref', 'data', 'selected.sync', 'default-sort' differ from input articles -->
-            <b-table ref="outgoingSuggestionsTable" :data="outgoingSuggestionsFiltered" :selected.sync="selectedOutgoingSuggestionsArticle"
+            <b-table ref="topCitationsTable" :data="outgoingSuggestionsFiltered" :selected.sync="selectedOutgoingSuggestionsArticle"
               default-sort="outDegree" default-sort-direction="desc"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
               detailed hoverable striped narrowed focusable>
               <template slot="detail" slot-scope="props">
                 <p class="content">
-                  Authors:
+                  <b>Authors ({{ props.row.authors.length }}):</b>
                   <template v-for="(author, index) in props.row.authors">
                     <template v-if="index !== 0">, </template>
                     <b-tooltip
@@ -582,7 +628,23 @@
                         <a :href="'https://scholar.google.com/scholar?q=' + authorString([author])" target="_blank">Google Scholar</a>
                       </template>
                       <a>{{ authorString([author]) }}</a>
-                  </b-tooltip>
+                    </b-tooltip>
+                  </template>
+                  <p class="content" v-if="currentGraph.referenced[props.row.id]">
+                    <b>Local citations (from input articles, In-Degree {{ currentGraph.referenced[props.row.id].length }}):</b>
+                    <template v-for="(id, index) in currentGraph.referenced[props.row.id]">
+                      <template v-if="index !== 0">; </template><a @click="showArticlesTab = 'inputArticles'; selected = currentGraph.input.filter(x => x.id == id)?.[0]">{{currentGraph.input.filter(x => x.id == id)?.[0].authors[0]?.LN + ' ' + currentGraph.input.filter(x => x.id == id)?.[0].year}}</a>
+                    </template>
+                  </p>
+                  <p class="content" v-if="currentGraph.citing[props.row.id]">
+                    <b>Local references (to input articles, Out-Degree {{ currentGraph.citing[props.row.id].length }}):</b>
+                    <template v-for="(id, index) in currentGraph.citing[props.row.id]">
+                      <template v-if="index !== 0">; </template><a @click="showArticlesTab = 'inputArticles'; selected = currentGraph.input.filter(x => x.id == id)?.[0]">{{currentGraph.input.filter(x => x.id == id)?.[0].authors[0]?.LN + ' ' + currentGraph.input.filter(x => x.id == id)?.[0].year}}</a>
+                    </template>
+                  </p>
+                  <template v-if="props.row.abstract">
+                    <h4 class="title is-6">Abstract</h4>
+                    <p v-html="formatTags(props.row.abstract)" class="content"></p>
                   </template>
                 </p>
                 <p v-if="props.row.abstract" v-html="formatTags(props.row.abstract)" class="content"></p>
@@ -631,7 +693,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="inDegree" label="InDeg" meta="In-Degree: Number of incoming citations from input articles (excluding suggestions)"
+              <b-table-column label="InDeg" meta="In-Degree: Number of incoming citations from input articles (excluding suggestions)"
                 sortable :custom-sort="sortInDegreeWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -644,7 +706,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="outDegree" label="OutDeg" meta="Out-Degree: Number of references (outgoing citations) data (excluding suggestions)"
+              <b-table-column label="OutDeg" meta="Out-Degree: Number of references (outgoing citations) data (excluding suggestions)"
                 sortable :custom-sort="sortOutDegreeWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -657,7 +719,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="references.length" label="Ref" meta="References in paper" sortable>
+              <b-table-column label="Ref" meta="References in paper" 
+                sortable :custom-sort="sortReferencesWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     {{ column.label }}
@@ -667,8 +730,8 @@
                   <b-tooltip label="Open new graph for the references of this article" position="is-left" type="is-dark">
                     <b-button @click.stop="clickOpenReferences(props.row)" type="is-primary" size="is-small"
                       :inverted="(selected === props.row) ? true : false"
-                      :disabled="(isLoading || props.row.references.length === 0 || props.row.isSource) ? true : false">
-                      {{ props.row.references.length }} ↻
+                      :disabled="isLoading || (!props.row.referencesCount && !props.row.references.length) || props.row.isSource">
+                      {{ props.row.referencesCount || props.row.references?.length }}
                     </b-button>
                   </b-tooltip>
                 </template>
@@ -677,7 +740,7 @@
           </b-tab-item>
         </b-tabs>
 
-        <b-tabs v-model="showAuthorNetwork" class="column" size="is-small" :animated="false">
+        <b-tabs v-model="showAuthorNetwork" class="column" size="is-small" :animated="false" :style="'display: ' + ((fullscreenTable) ? 'none' : 'block')">
           <b-tab-item :loading="true">
             <template slot="header"><h2 class="title is-4">Citation network</h2></template>
             
@@ -726,7 +789,11 @@
       
       <b-modal :active.sync="showCitationNetworkSettings" :destroy-on-hide="false" :width="750" style="visibility: hidden" id="citationNetworkSettingsModal">
         <div class="card">
-          <div class="card-header-title"><h3 class="title is-3">Citation network settings</h3></div>
+          <header class="modal-card-head">
+            <content>
+              <h3 class="modal-card-title">Citation network settings</h3>
+            </content>
+          </header>
           <div class="card-content">
             <b-field grouped>
               <b-field label="Node color">
@@ -749,6 +816,14 @@
                 </b-select>
               </b-field>
             </b-field>
+            <b-field grouped>
+              <b-field label="Minimum degree references">
+                <b-input v-model="minDegreeIncomingSuggestions" type="number" :min="1" @input="changeCurrentNetworkSettings()" style="width: 75px">
+              </b-field>
+              <b-field label="Minimum degree citations">
+                <b-input v-model="minDegreeOutgoingSuggestions" type="number" :min="1" @input="changeCurrentNetworkSettings()" style="width: 75px">
+              </b-field>
+            </b-field>
             <p class="content">
               Warning: The settings below are only temporary, will not be saved and will be reset when re-initialising the network (e.g. changing the settings above, loading another network, changing the network tab, ...)! They are provided by the <a href="https://visjs.github.io/vis-network/docs/network/" target="_blank">vis.js network library</a> used.
             </p>
@@ -759,7 +834,11 @@
 
       <b-modal :active.sync="showAuthorNetworkSettings" :destroy-on-hide="false" :width="750" style="visibility: hidden" id="authorNetworkSettingsModal">
         <div class="card">
-          <div class="card-header-title"><h3 class="title is-3">Co-authorship network settings</h3></div>
+          <header class="modal-card-head">
+            <content>
+              <h3 class="modal-card-title">Co-authorship network settings</h3>
+            </content>
+          </header>
           <div class="card-content">
             <b-field grouped>
               <b-field label="Node color">
@@ -796,16 +875,54 @@
             <textarea id="DOIs" style="height: 100%; width: calc(100% - 50px); position: absolute; left: 50px; padding: 0px 5px; resize: none" spellcheck="false" onscroll="document.getElementById('rownumber').scrollTop = this.scrollTop" v-model="editedListOfIds"></textarea>
           </section>
           <footer class="modal-card-foot">
-            <b-select v-model="API" style="margin-right: 0.5em">
-              <option value="OpenAlex">API: OpenAlex (OA)</option>
-              <option value="Semantic Scholar">API: Semantic Scholar (S2)</option>
-              <option value="OpenCitations">API: OpenCitations (OC)</option>
-              <option value="Crossref">API: Crossref (CR)</option>
-            </b-select>
+            <b-button @click="showOptionsAPI = !showOptionsAPI" style="width: 100%">API: {{ API }} ({{ abbreviateAPI(API) }})</b-button>
             <b-button @click="clickButtonAdd" style="width: 100%">{{ newSource ? 'Source: ' + newSource.substr(0, 20) : 'No source' }}</b-button>
             <b-button class="is-primary" @click="importList" :disabled="!(listOfIds || []).filter(Boolean).length" style="width: 100%">{{ newSource ? 'Import': 'Import with list name: '}}</b-button>
             <b-input v-if="!newSource" v-model.lazy="listName" maxlength="100" :has-counter="false" style="width: 100%"></b-input>
           </footer>
+        </div>
+      </b-modal>
+
+      <b-modal :active.sync="showOptionsAPI" :width="750">
+        <div class="card">
+          <header class="modal-card-head">
+            <content>
+              <h3 class="modal-card-title">API options</h3>
+            </content>
+          </header>
+          <div class="card-content">
+            <p class="content">
+              References can be retrieved through all <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">APIs</a>. Citations can be retrieved through OpenAlex (OA), Semantic Scholar (S2) and OpenCitations (OC). <a @click="indexFAQ = 'top-references'; showFAQ = true;" href="#top-references">Top references</a> are the most cited references by the input articles. <a @click="indexFAQ = 'top-citations'; showFAQ = true;" href="#top-citations">Top citations</a> are citing the most input articles. Retrieving all references / citations works best with OpenAlex (OA, truly all references / citations thanks to cursor paging) & Semantic Scholar (S2, currently max. 1000 referenes / citations per paper).
+            </p>
+            <b-field grouped>
+              <b-field label="Select API">
+                <b-select v-model="API" @input="saveState(false)">
+                  <option value="OpenAlex">OpenAlex (OA)</option>
+                  <option value="Semantic Scholar">Semantic Scholar (S2)</option>
+                  <option value="OpenCitations">OpenCitations (OC)</option>
+                  <option value="Crossref">Crossref (CR)</option>
+                </b-select>
+              </b-field>
+              <b-field label="Retrieve references">
+                <b-select v-model="retrieveReferences" @input="saveState(false)">
+                  <option :value="0">None</option>
+                  <option :value="10">Top 10</option>
+                  <option :value="20">Top 20</option>
+                  <option :value="50">Top 50</option>
+                  <option :value="Infinity">All</option>
+                </b-select>
+              </b-field>
+              <b-field label="Retrieve citations" v-if="API !== 'Crossref'">
+                <b-select v-model="retrieveCitations" @input="saveState(false)">
+                  <option :value="0">None</option>
+                  <option :value="10">Top 10</option>
+                  <option :value="20">Top 20</option>
+                  <option :value="50">Top 50</option>
+                  <option :value="Infinity">All</option>
+                </b-select>
+              </b-field>
+            </b-field>
+          </div>
         </div>
       </b-modal>
 
@@ -814,7 +931,7 @@
           <div class="card-header-title">
             <content>
               <h3 class="title is-3">Instructions</h3>
-              <a @click="indexFAQ = ['about', 'how-to-use', 'bookmarklet', 'incoming-suggestions', 'outgoing-suggestions', 'citation-network', 'author-network', 'switch-api', 'autosave', 'supported-browsers', 'slow-queries', 'completeness', 'original-order', 'bibliometrics', 'google-scholar', 'idea', 'open-source', 'privacy', 'technicalities', 'contact']">open all</a> / 
+              <a @click="indexFAQ = ['about', 'how-to-use', 'bookmarklet', 'top-references', 'top-citations', 'citation-network', 'author-network', 'switch-api', 'autosave', 'supported-browsers', 'slow-queries', 'completeness', 'original-order', 'bibliometrics', 'google-scholar', 'idea', 'open-source', 'privacy', 'technicalities', 'contact']">open all</a> / 
               <a @click="indexFAQ = []">collapse all</a>
             </content>
           </div>
@@ -828,7 +945,7 @@
                 This web app aims to help scientists with their literature review using metadata from <a href="https://openalex.org/" target="_blank">OpenAlex</a> (OA), <a href="https://semanticscholar.org/" target="_blank">Semantic Scholar</a> (S2), <a href="https://opencitations.net/" target="_blank">OpenCitations</a> (OC) and <a href="https://crossref.org" target="_blank">Crossref</a> (CR). Academic papers cite one another, thus creating a <a href="https://en.wikipedia.org/wiki/Citation_graph" target="_blank">citation network (= graph)</a>. Each node (= vertex) represents an article and each edge (= link / arrow) represents a reference (outgoing) / citation (incoming). Citation networks are a topic of <a @click="indexFAQ = 'bibliometrics'" href="#bibliometrics">bibliometrics, for which other great software exists as well</a>.
               </p>
               <p>
-                This web app visualizes subsets of the global citation network that I call 'local citation networks', defined by the references of a given set of input articles. In addition, the most cited references missing in the set of input articles are suggested for further review as <a @click="indexFAQ = 'incoming-suggestions'" href="#incoming-suggestions">incoming suggestions</a>. Other missing articles citing the highest number of input articles are <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>.
+                This web app visualizes subsets of the global citation network that I call 'local citation networks', defined by the references of a given set of input articles. In addition, the most cited references missing in the set of input articles are suggested for further review as <a @click="indexFAQ = 'top-references'" href="#top-references">'Top references'</a>. Other missing articles citing the highest number of input articles are <a @click="indexFAQ = 'top-citations'" href="#top-citations">'Top citations'</a>.
               </p>
             </div>
           </b-collapse>
@@ -874,26 +991,26 @@
               </p>
             </div>
           </b-collapse>
-          <b-collapse class="card" id="incoming-suggestions" :open="indexFAQ.includes('incoming-suggestions')" @open="indexFAQ = 'incoming-suggestions'" animation="none">
+          <b-collapse class="card" id="top-references" :open="indexFAQ.includes('top-references')" @open="indexFAQ = 'top-references'" animation="none">
             <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">Where do the 'Incoming suggestions' come from?</h4>
+              <h4 class="card-header-title">Where do the 'Top references' come from?</h4>
             </div>
             <div class="card-content content">
               <p>
-                'Incoming suggestions' are the most cited references by the input articles that are still missing, thus they have high in-degrees. In order to create the local citation network, this web apps attempts to retrieve reference-lists from all input articles (usually some are missed, <a @click="indexFAQ = 'completeness'" href="#completeness">see completeness</a>) and then orders these references by the number of local incoming citations (in-degree, <a @click="indexFAQ = 'citation-network'" href="#citation-network">see network</a>). Some of these references might be among the input articles, depending on how connected they are. However, some of them usually aren't among the input articles and then become 'incoming suggestions' (they must be referenced by at least two input articles). Currently the arbitrary maximum number of incoming suggestions is 20 in order to avoid API overload.
+                'Top references' are the most cited references by the input articles that are still missing, thus they have high in-degrees. In order to create the local citation network, this web apps attempts to retrieve reference-lists from all input articles (usually some are missed, <a @click="indexFAQ = 'completeness'" href="#completeness">see completeness</a>) and then orders these references by the number of local incoming citations (in-degree, <a @click="indexFAQ = 'citation-network'" href="#citation-network">see network</a>). Some of these references might be among the input articles, depending on how connected they are. However, some of them usually aren't among the input articles and then become 'Top references'.
               </p>
               <p>
-                Keep in mind that because of the nature of this approach, 'incoming suggestions' are generally older than the input articles. This can help identifying seminal papers of the field but not newer state-of-the-art research. In order to identify newer articles, see <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>.
+                Keep in mind that because of the nature of this approach, 'Top references' are generally older than the input articles. This can help identifying seminal papers of the field but not newer state-of-the-art research. In order to identify newer articles, see <a @click="indexFAQ = 'top-citations'" href="#top-citations">'Top citations'</a>.
               </p>
             </div>
           </b-collapse>
-          <b-collapse class="card" id="outgoing-suggestions" :open="indexFAQ.includes('outgoing-suggestions')" @open="indexFAQ = 'outgoing-suggestions'" animation="none">
+          <b-collapse class="card" id="top-citations" :open="indexFAQ.includes('top-citations')" @open="indexFAQ = 'top-citations'" animation="none">
             <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">Where do the 'Outgoing suggestions' come from?</h4>
+              <h4 class="card-header-title">Where do the 'Top citations' come from?</h4>
             </div>
             <div class="card-content content">
               <p>
-                'Outgoing suggestions' are citing the most input articles, thus they have high out-degrees. They are generally newer than the input articles. Local Citation Network currently supports this feature with the APIs of <a @click="indexFAQ = 'switch-api'" href="#switch-api">OpenAlex (OA), Semantic Scholar (S2) and OpenCitations (OC)</a>. Outgoing suggestions must cite at least 2 input articles and currently their arbitrary maximum is 20 in order to avoid API overload.
+                'Top citations' are citing the most input articles, thus they have high out-degrees. They are generally newer than the input articles. Local Citation Network currently supports this feature with the APIs of <a @click="indexFAQ = 'switch-api'" href="#switch-api">OpenAlex (OA), Semantic Scholar (S2) and OpenCitations (OC)</a>.
               </p>
             </div>
           </b-collapse>
@@ -903,7 +1020,7 @@
             </div>
             <div class="card-content content">
               <p>
-                Zoom by scrolling and pan by dragging. Each node (= vertex) represents an article. They are ordered by year from top (newer) to bottom (older), with each year colored differently. Alternatively, nodes can also be colored by the article's journal in 'network settings'. The size of the nodes depends on the sum of their 'in-degree', the number of citations the paper received from the input articles, and their 'out-degree', the number of input articles they cite. The local 'in-degree' is not always proportional to the global citation count. Input articles are circle-shaped (●), except for the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, which is diamond-shaped (◆). Up-pointing triangles (▲) represent <a @click="indexFAQ = 'incoming-suggestions'" href="#incoming-suggestions">incoming suggestions</a>, which are cited by the input articles. Down-pointing triangles (▼) are <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>, which are citing the input articles.
+                Zoom by scrolling and pan by dragging. Each node (= vertex) represents an article. They are ordered by year from top (newer) to bottom (older), with each year colored differently. Alternatively, nodes can also be colored by the article's journal in 'network settings'. The size of the nodes depends on the sum of their 'in-degree', the number of citations the paper received from the input articles, and their 'out-degree', the number of input articles they cite. The local 'in-degree' is not always proportional to the global citation count. Input articles are circle-shaped (●), except for the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, which is diamond-shaped (◆). Up-pointing triangles (▲) represent <a @click="indexFAQ = 'top-references'" href="#top-references">'Top references'</a>, which are cited by the input articles. Down-pointing triangles (▼) are <a @click="indexFAQ = 'top-citations'" href="#top-citations">'Top citations'</a>, which are citing the input articles.
               </p>
               <p>
                 Each edge (= link / arrow) represents a reference and citation at the same time: They are references (=outgoing citations) for their source nodes and (incoming) citations for their target nodes. Usually papers can only cite older papers, hence edges tend to point downwards (or sidewards for citations of the same year). Technically a citation network is a <a href="https://en.wikipedia.org/wiki/Directed_acyclic_graph" target="_blank">directed acyclic graph</a>.
@@ -919,7 +1036,7 @@
                 This 'local' co-authorship network shows the most common authors among the source, input and suggested articles. Depending on the discipline, the number of (co)authors among a set of multiple articles can quickly rise to the hundreds, which is why this author network only shows authors with a minimum number of input & suggested articles (not to be mistaken with their global number of publications, which is usually higher). The default minimum number of input & suggested articles is determined so that this network shows no more than 50 authors, but it can be changed with the dropdown at the bottom from 2 to 10.
               </p>
               <p>
-                Each node (= vertex) represents an author. The size depends on their number of input & suggested articles and the color depends on the first or last article they first appear in. Authors of input articles are circle-shaped (●), except for authors of the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, who are diamond-shaped (◆). Up-pointing triangles (▲) represent authors of only <a @click="indexFAQ = 'incoming-suggestions'" href="#incoming-suggestions">incoming suggestions</a> and down-pointing triangles (▼) authors of only <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>. Click authors to filter input & suggested articles, ctrl+click to filter for more than one author.
+                Each node (= vertex) represents an author. The size depends on their number of input & suggested articles and the color depends on the first or last article they first appear in. Authors of input articles are circle-shaped (●), except for authors of the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, who are diamond-shaped (◆). Up-pointing triangles (▲) represent authors of only <a @click="indexFAQ = 'top-references'" href="#top-references">'Top references'</a> and down-pointing triangles (▼) authors of only <a @click="indexFAQ = 'top-citations'" href="#top-citations">'Top citations'</a>. Click authors to filter input & suggested articles, ctrl+click to filter for more than one author.
               </p>
               <p>
                 Each edge (= link) represents a collaboration between two authors among the source, input and suggested articles, the width indicating the number of collaborations. Click edges to filter input & suggested articles.
@@ -932,19 +1049,19 @@
             </div>
             <div class="card-content content">
               <p>
-                Switch the API with the button indicating "OA / S2 / OC / CR" in the top-right menu.
+                Switch the API with the button indicating "OA / S2 / OC / CR" in the top-right menu. All APIs provide <a @click="indexFAQ = 'top-references'" href="#top-references">references</a>.
               </p>
               <p>
-                <a href="https://openalex.org/rest-api" target="_blank">OpenAlex</a> (OA) is the direct successor of Microsoft Academic, which was discontinued in 01/2022. It is fast, it has <a href="https://www.nature.com/articles/d41586-022-00138-y" target="_blank">high coverage</a>, serves most abstracts and provides <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>. It also serves a flag for retracted papers, which can be seen <a href="?API=OpenAlex&source=10.3390/en14227745">here for example</a> <a href="https://docs.openalex.org/about-the-data/work#is_retracted" target="_blank">(it can be missing though)</a>.
+                <a href="https://openalex.org/rest-api" target="_blank">OpenAlex</a> (OA) is an open source successor of Microsoft Academic, which was discontinued in 01/2022. It is fast, it has <a href="https://www.nature.com/articles/d41586-022-00138-y" target="_blank">high coverage</a>, serves most abstracts and provides <a @click="indexFAQ = 'top-citations'" href="#top-citations">citations</a>. It also serves a flag for retracted papers, which can be seen <a href="?API=OpenAlex&source=10.3390/en14227745">here for example</a> <a href="https://docs.openalex.org/about-the-data/work#is_retracted" target="_blank">(it can be missing though)</a>.
               </p>
               <p>
-                <a href="https://semanticscholar.org/product/api" target="_blank">Semantic Scholar</a> (S2) has <a href="https://doi.org/10.18653/v1/N18-3011" target="_blank">high coverage</a>, serves abstracts and allows accurate estimation of the <a @click="indexFAQ = 'completeness'" href="#completeness">reference-list completeness</a>. In addition, it provides <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>. However, it can be slower and has a <a href="https://semanticscholar.org/product/api" target="_blank">rate limit</a>.
+                <a href="https://semanticscholar.org/product/api" target="_blank">Semantic Scholar</a> (S2) has <a href="https://doi.org/10.18653/v1/N18-3011" target="_blank">high coverage</a>, serves most abstracts and provides <a @click="indexFAQ = 'top-citations'" href="#top-citations">citations</a>. In addition, it allows accurate estimation of the <a @click="indexFAQ = 'completeness'" href="#completeness">reference-list completeness</a>. However, it can be slower and has a <a href="https://semanticscholar.org/product/api" target="_blank">rate limit</a>.
               </p>
               <p>
-                The <a href="https://opencitations.net/index/api/v1#/metadata/{dois}" target="_blank">metadata API</a> from <a href="https://opencitations.net" target="_blank">OpenCitations</a> (OC) also features <a @click="indexFAQ = 'outgoing-suggestions'" href="#outgoing-suggestions">outgoing suggestions</a>. However, it does not provide abstracts, author information (like affiliation or ORCID) and it is quite slow.
+                The <a href="https://opencitations.net/index/api/v1#/metadata/{dois}" target="_blank">metadata API</a> from <a href="https://opencitations.net" target="_blank">OpenCitations</a> (OC) builds upon Crossref but also features <a @click="indexFAQ = 'top-citations'" href="#top-citations">citations</a>. However, it does not provide abstracts, author information (like affiliation or ORCID) and it is quite slow.
               </p>
               <p>
-                <a href="https://www.crossref.org/services/metadata-delivery/rest-api/" target="_blank">Crossref</a> (CR) has the advantage that it usually returns reference lists in their <a @click="indexFAQ = 'original-order'" href="#original-order">original order</a> (you can use the <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">bookmarklet</a> for other APIs). Also, it allows for an accurate estimation of the <a @click="indexFAQ = 'completeness'" href="#completeness">reference-list completeness</a>, it's usually very fast and can handle fairly large input lists. Crossref is a not-for-profit organization that collects metadata from scholarly journals and publications.
+                <a href="https://www.crossref.org/services/metadata-delivery/rest-api/" target="_blank">Crossref</a> (CR) usually returns reference lists in their <a @click="indexFAQ = 'original-order'" href="#original-order">original order</a> (you can use the <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">bookmarklet</a> for other APIs). Also, it allows for an accurate estimation of the <a @click="indexFAQ = 'completeness'" href="#completeness">reference-list completeness</a>, it's usually very fast and can handle fairly large input lists. Crossref is a not-for-profit organization that collects metadata from scholarly journals and publications. However, it does not provide <a @click="indexFAQ = 'top-citations'" href="#top-citations">citations</a>.
               </p>
               <p>Thanks to the formidable <a href="https://i4oc.org/" target="_blank">Initiative for Open Citations (I4OC)</a>, the coverage of all of these services has increased vastly. However, some journals still do not support these ideals - feel free to write them, in case you find one!</p>
             </div>
@@ -992,7 +1109,7 @@
             </div>
             <div class="card-content content">
               <p>
-                The data is usually incomplete. Some DOIs cannot be found at all in some APIs and for those that are found, often some metadata like authors, abstracts or reference-lists are missing or sometimes incorrect. For the local citation network and incoming suggestions, the completeness of the reference-lists is most important.
+                The data is usually incomplete. Some DOIs cannot be found at all in some APIs and for those that are found, often some metadata like authors, abstracts or reference-lists are missing or sometimes incorrect. For the local citation network and 'Top references', the completeness of the reference-lists is most important.
               </p>
               <p>
                 The estimated completeness of the reference-lists can be seen above the search bar in the "Input articles" tab and is calculated in the following way: For OpenAlex and OpenCitations it is the fraction of input articles that have reference-lists themselves (multiplied by the fraction of specified DOIs found, in case of a custom input list).

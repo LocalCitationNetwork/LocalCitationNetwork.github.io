@@ -1,5 +1,21 @@
+22.08.2023 v1.20
++ New API settings: The number of retrieved "Top references" (formerly "Incoming suggestions") and "Top citations" (formerly "Outgoing suggestions") can now be set: None / Top 10 (default) / Top 20 / Top 50 / All. The retrieval of all references / citations is fairly fast with OpenAlex (OA) & Semantic Scholar (S2) but slow with OpenCitations (OC) & Crossref (CR).
++ New Citation network settings: "Minimum degree references" and "Minimum degree citations" (default 2).
++ Data can now be downloaded in the RIS format in addtion to the CSV format
++ Tables can now be toggled to full screen. In this case the networks are deactived, increasing performance when large tables are shown.
++ Retrieve and save article type, publication date, volume, issue, firstPage, lastPage.
+* Renaming: "Incoming suggestions" become "Top references" and "Outgoing suggestions" become "Top citations" for consistency with the academic literature and other tools (e.g. CitationChaser: https://estech.shinyapps.io/citationchaser/)
++ Link to Local citations and Local references in article table details (folding out).  
++ Articles can also be filtered by article ID & DOI.
+* "Top references" must not be referenced by at least 2 input articles anymore and "Top citations" must not be cited by at least 2 input articles anymore.
+* Don't show edges between "Top references" / "Top citations" anymore so the number of incoming/outgoing edges (arrows) is equivalent to their in-degree and out-degree (also using Semantic Scholar's references/citations endpoints doesn't provide reference lists so the relations between them are unknown, only their relations to the input articles).
+* Autosave now only saves up to 100 Top references & Top citations because of space constraints. Use "download full network: JSON" to save full network.
+* Show loading-progress for "Top references" / "Top citations"
+* Download JSON, CSV, RIS as blob, allowing much larger file sizes.
+! Fix escaping of quotes in CSV exports.
+
 17.08.2023 v1.16
-+ Articles can also be filtered by author affiliation now (OpenAlex seems to provide most complete affiliations)
++ Articles can also be filtered by author affiliation now (OpenAlex seems to provide most complete affiliations).
 
 14.05.2023 v1.15
 + Retrieve "Outgoing suggestions" also with OpenAlex (OA) now. Results in 1 extra API call per input article (disable by running "vm.getCitationsOA = false" in browser console).
