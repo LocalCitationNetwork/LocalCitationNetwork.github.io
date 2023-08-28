@@ -107,6 +107,11 @@
         color: #fff !important;
       }
 
+      .mdi-chevron-left:before {
+        content: "❰";
+        font-style: normal;
+      }
+
       .mdi-chevron-right:before {
         content: "❯";
         font-style: normal;
@@ -242,12 +247,15 @@
                 @icon-right-click="filterString=''"></b-input>
               <span class="button is-static">{{ inputArticlesFiltered.length + " / " + currentGraph.input.length }}</span>
             </b-field>
-            <b-table ref="inputArticlesTable" :data="inputArticlesFiltered" :selected.sync="selectedInputArticle"
+            <b-table ref="inputArticlesTable" :data="inputArticlesFiltered" :selected.sync="selectedInputArticle" :current-page.sync="inputArticlesTablePage"
               default-sort="inDegree" default-sort-direction="desc"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
+              @keydown.native.arrow-up.capture="tableArrowUpChangePage"
+              @keydown.native.arrow-down.capture="tableArrowDownChangePage"
               detailed :has-detailed-visible="row => (row.authors.length || inDegree(row.id) || outDegree(row.id) || row.abstract)"
-              hoverable striped narrowed focusable>
+              hoverable striped narrowed focusable
+              :paginated="inputArticlesFiltered.length > 10" per-page="10" pagination-position="top">
               <template slot="detail" slot-scope="props">
                 <p class="content">
                   <b>Authors ({{ props.row.authors.length }}):</b>
@@ -312,7 +320,7 @@
                   <template v-else>{{ formatTags(props.row.title) }}</template>
                 </span>
               </b-table-column>
-              <b-table-column field="authors" label="First Author" v-slot="props">
+              <b-table-column field="authors" label="Author" v-slot="props">
                 <b-tooltip dashed multilined :label="authorString(props.row.authors)" position="is-left" type="is-dark">
                   {{ props.row.authors[0]?.LN }}
                 </b-tooltip>
@@ -349,7 +357,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="InDeg" meta="In-Degree: Number of incoming citations from input articles (excluding suggestions)"
+              <b-table-column field="inDegree" label="InDeg" meta="In-Degree: Number of incoming citations from input articles (excluding suggestions)"
                 sortable :custom-sort="sortInDegreeWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -362,7 +370,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="OutDeg" meta="Out-Degree: Number of references (outgoing citations) data (excluding suggestions)"
+              <b-table-column field="outDegree" label="OutDeg" meta="Out-Degree: Number of references (outgoing citations) data (excluding suggestions)"
                 sortable :custom-sort="sortOutDegreeWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -376,7 +384,7 @@
                 </template>
               </b-table-column>
               <b-table-column label="Ref" meta="References in paper" 
-              sortable :custom-sort="sortReferencesWrapper">
+                sortable :custom-sort="sortReferencesWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     {{ column.label }}
@@ -396,8 +404,8 @@
           </b-tab-item>
           <b-tab-item value="topReferences" :disabled="currentGraph.incomingSuggestions === undefined" v-if="currentGraph.incomingSuggestions === undefined || currentGraph.incomingSuggestions.length">
             <template slot="header">
-              <h2 class="title is-4">Top references
-                (<template v-if="currentGraph.incomingSuggestions?.length">▲ {{ maxIncomingSuggestions }}</template>
+              <h2 class="title is-4">{{ currentGraph.allReferences ? 'All' : 'Top' }} references
+                (<template v-if="currentGraph.incomingSuggestions?.length">{{ currentGraph.incomingSuggestions?.length }}</template>
                 <b-progress v-else :value="(isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-medium" show-value format="percent" :precision="0" style="width: 50px; display: inline-block"></b-progress>)
               </h2>
             </template>
@@ -415,11 +423,9 @@
                 </template>
               </p>
               <p>
-                <a @click="indexFAQ = 'top-references'; showFAQ = true;" href="#top-references">Top references</a> are the most cited references by the input articles, thus they have high in-degrees. They tend to be older than most input articles. They are derived through backward citation searching (backward in time). Number shown:
-                <input v-model.lazy="maxIncomingSuggestions" @change="changeCurrentNetworkSettings(true)" type="number" min="0" :max="currentGraph.incomingSuggestions.length" step="1" required style="width: 60px"> / {{currentGraph.incomingSuggestions.length}}
+                References are cited by the input articles. They are sorted by in-degree, with the <a @click="indexFAQ = 'top-references'; showFAQ = true;" href="#top-references">top references</a> listed at the top. They tend to be older than most input articles. They are derived through backward citation searching (backward in time). This table is de-duplicated and does not contain any input articles.
               </p>
             </div>
-            <!-- The following b-field and b-table are near identical with those of input articles. Different lines are indicated by comment. -->
             <b-field>
               <b-select v-model="filterColumn">
                 <option value="titleAbstract">Title, Abstract, ID</option>
@@ -431,13 +437,16 @@
                 :icon-right="filterString ? 'close' : undefined"
                 icon-right-clickable
                 @icon-right-click="filterString=''"></b-input>
-              <span class="button is-static">{{ incomingSuggestionsFiltered.length + " / " + maxIncomingSuggestions }}</span>
+              <span class="button is-static">{{ incomingSuggestionsFiltered.length + " / " + currentGraph.incomingSuggestions?.length }}</span>
             </b-field>
-            <b-table ref="topReferencesTable" :data="incomingSuggestionsFiltered" :selected.sync="selectedIncomingSuggestionsArticle"
+            <b-table ref="topReferencesTable" :data="incomingSuggestionsFiltered" :selected.sync="selectedIncomingSuggestionsArticle" :current-page.sync="topReferencesTablePage"
               default-sort="inDegree" default-sort-direction="desc"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
-              detailed hoverable striped narrowed focusable>
+              @keydown.native.arrow-up.capture="tableArrowUpChangePage"
+              @keydown.native.arrow-down.capture="tableArrowDownChangePage"
+              detailed hoverable striped narrowed focusable
+              :paginated="incomingSuggestionsFiltered.length > 10" per-page="10" pagination-position="top">
               <template slot="detail" slot-scope="props">
                 <p class="content">
                   <b>Authors ({{ props.row.authors.length }}):</b>
@@ -481,10 +490,11 @@
               <b-table-column label="Title" v-slot="props">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
+                  {{ props.row.isInputArticle ? 'Input article: ' : ''  }}
                   <a :href="articleLink(props.row)" target="_blank" v-html="formatTags(props.row.title)"></a>
                 </span>
               </b-table-column>
-              <b-table-column field="authors" label="First Author" v-slot="props">
+              <b-table-column field="authors" label="Author" v-slot="props">
                 <b-tooltip dashed multilined :label="authorString(props.row.authors)" position="is-left" type="is-dark">
                   {{ props.row.authors[0]?.LN }}
                 </b-tooltip>
@@ -521,7 +531,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="InDeg" meta="In-Degree: Number of incoming citations from input articles (excluding suggestions)"
+              <b-table-column field="inDegree" label="InDeg" meta="In-Degree: Number of incoming citations from input articles (excluding suggestions)"
                 sortable :custom-sort="sortInDegreeWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -534,7 +544,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="OutDeg" meta="Out-Degree: Number of references (outgoing citations) data (excluding suggestions)"
+              <b-table-column field="outDegree" label="OutDeg" meta="Out-Degree: Number of references (outgoing citations) data (excluding suggestions)"
                 sortable :custom-sort="sortOutDegreeWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -548,7 +558,7 @@
                 </template>
               </b-table-column>
               <b-table-column label="Ref" meta="References in paper" 
-              sortable :custom-sort="sortReferencesWrapper">
+                sortable :custom-sort="sortReferencesWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     {{ column.label }}
@@ -568,8 +578,8 @@
           </b-tab-item>
           <b-tab-item value="topCitations" :disabled="currentGraph.outgoingSuggestions === undefined" v-if="currentGraph.outgoingSuggestions === undefined || currentGraph.outgoingSuggestions.length">
             <template slot="header">
-              <h2 class="title is-4">Top citations
-                (<template v-if="currentGraph.outgoingSuggestions?.length">▼ {{ maxOutgoingSuggestions }}</template>
+              <h2 class="title is-4">{{ currentGraph.allCitations ? 'All' : 'Top' }} citations
+                (<template v-if="currentGraph.outgoingSuggestions?.length">{{ currentGraph.outgoingSuggestions?.length }}</template>
                 <b-progress v-else :value="(currentGraph.incomingSuggestions === undefined) ? undefined : (isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-medium" show-value format="percent" :precision="0" style="width: 50px; display: inline-block"></b-progress>)
             </template>
             <div class="content" v-if="currentGraph.outgoingSuggestions?.length">
@@ -586,11 +596,9 @@
                 </template>
               </p>
               <p>
-                <a @click="indexFAQ = 'top-citations'; showFAQ = true;" href="#top-citations">Top citations</a> are citing the most input articles, thus they have high out-degrees. They are derived through forward citation searching (forward in time). They tend to be newer than most input articles. Number shown:
-                <input v-model.lazy="maxOutgoingSuggestions" @change="changeCurrentNetworkSettings(true)" type="number" min="0" :max="currentGraph.outgoingSuggestions.length" step="1" required style="width: 60px"> / {{currentGraph.outgoingSuggestions.length}}
+                Citations are citing the input articles. Tey are sorted by out-degree, with the <a @click="indexFAQ = 'top-citations'; showFAQ = true;" href="#top-citations">top citations</a> listed at the top. They are derived through forward citation searching (forward in time). They tend to be newer than most input articles. This table is de-duplicated and does not contain any input articles / references.
               </p>
             </div>
-            <!-- The following b-field and b-table are near identical with those of input articles. Different lines are indicated by comment. -->
             <b-field>
               <b-select v-model="filterColumn">
                 <option value="titleAbstract">Title, Abstract, ID</option>
@@ -602,13 +610,16 @@
                 :icon-right="filterString ? 'close' : undefined"
                 icon-right-clickable
                 @icon-right-click="filterString=''"></b-input>
-              <span class="button is-static">{{ outgoingSuggestionsFiltered.length + " / " + maxOutgoingSuggestions }}</span>
+              <span class="button is-static">{{ outgoingSuggestionsFiltered.length + " / " + currentGraph.outgoingSuggestions?.length }}</span>
             </b-field>
-            <b-table ref="topCitationsTable" :data="outgoingSuggestionsFiltered" :selected.sync="selectedOutgoingSuggestionsArticle"
+            <b-table ref="topCitationsTable" :data="outgoingSuggestionsFiltered" :selected.sync="selectedOutgoingSuggestionsArticle" :current-page.sync="topCitationsTablePage"
               default-sort="outDegree" default-sort-direction="desc"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
-              detailed hoverable striped narrowed focusable>
+              @keydown.native.arrow-up.capture="tableArrowUpChangePage"
+              @keydown.native.arrow-down.capture="tableArrowDownChangePage"
+              detailed hoverable striped narrowed focusable
+              :paginated="outgoingSuggestionsFiltered.length > 10" per-page="10" pagination-position="top">
               <template slot="detail" slot-scope="props">
                 <p class="content">
                   <b>Authors ({{ props.row.authors.length }}):</b>
@@ -653,10 +664,11 @@
               <b-table-column label="Title" v-slot="props">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
+                  {{ props.row.isInputArticle ? 'Input article: ' : ''  }}
                   <a :href="articleLink(props.row)" target="_blank" v-html="formatTags(props.row.title)"></a>
                 </span>
               </b-table-column>
-              <b-table-column field="authors" label="First Author" v-slot="props">
+              <b-table-column field="authors" label="Author" v-slot="props">
                 <b-tooltip dashed multilined :label="authorString(props.row.authors)" position="is-left" type="is-dark">
                   {{ props.row.authors[0]?.LN }}
                 </b-tooltip>
@@ -693,7 +705,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="InDeg" meta="In-Degree: Number of incoming citations from input articles (excluding suggestions)"
+              <b-table-column field="inDegree" label="InDeg" meta="In-Degree: Number of incoming citations from input articles (excluding suggestions)"
                 sortable :custom-sort="sortInDegreeWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -706,7 +718,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="OutDeg" meta="Out-Degree: Number of references (outgoing citations) data (excluding suggestions)"
+              <b-table-column field="outDegree" label="OutDeg" meta="Out-Degree: Number of references (outgoing citations) data (excluding suggestions)"
                 sortable :custom-sort="sortOutDegreeWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -765,11 +777,11 @@
             <span style="position:absolute; bottom: 0px; left: 10px">
               (only authors with a minimum of
               <select v-model="authorNetworkMinPublications" @change="changeCurrentNetworkSettings()">
-                <template v-for="val in [...Array(11).keys()].splice(2)">
+                <template v-for="val in [...Array(101).keys()].splice(1)">
                   <option :value="val">{{ val }}</option>
                 </template>
               </select>
-              input & suggested articles are shown)
+              input articles are shown)
             </span>
           </b-tab-item>
         </b-tabs>
@@ -796,32 +808,44 @@
           </header>
           <div class="card-content">
             <b-field grouped>
-              <b-field label="Node color">
+              <b-field label="Node color" label-position="on-border">
                 <b-select v-model="citationNetworkNodeColor" @input="changeCurrentNetworkSettings()">
                   <option value="year">Year</option>
                   <option value="journal">Journal</option>
                 </b-select>
               </b-field>
-              <b-field label="Node size">
+              <b-field label="Node size" label-position="on-border">
                 <b-select v-model="citationNetworkNodeSize" @input="changeCurrentNetworkSettings()">
                   <option value="both">Sum of In- & Out-Degree</option>
                   <option value="in">In-Degree only</option>
                   <option value="out">Out-Degree only</option>
                 </b-select>
               </b-field>
-              <b-field label="Show source article node">
-                <b-select v-model="citationNetworkShowSource" @input="changeCurrentNetworkSettings()">
+              <b-field label="Show source article node" label-position="on-border">
+                <b-select v-model="citationNetworkShowSource" @input="changeCurrentNetworkSettings()" style="width: 150px">
                   <option :value="false">No</option>
                   <option :value="true">Yes</option>
                 </b-select>
               </b-field>
             </b-field>
             <b-field grouped>
-              <b-field label="Minimum degree references">
-                <b-input v-model="minDegreeIncomingSuggestions" type="number" :min="1" @input="changeCurrentNetworkSettings()" style="width: 75px">
+              <b-field label="Minimum degree references" label-position="on-border">
+                <b-input v-model.lazy="minDegreeIncomingSuggestions" type="number" :min="1" :step="1" 
+                  @blur="changeCurrentNetworkSettings()" required style="width: 150px">
               </b-field>
-              <b-field label="Minimum degree citations">
-                <b-input v-model="minDegreeOutgoingSuggestions" type="number" :min="1" @input="changeCurrentNetworkSettings()" style="width: 75px">
+              <b-field label="Maximum references" label-position="on-border">
+                <b-input v-model.lazy="maxIncomingSuggestions" type="number" :min="0" :max="currentGraph.incomingSuggestions?.length" :step="1" 
+                  @blur="changeCurrentNetworkSettings()" required style="width: 150px">
+              </b-field>
+            </b-field>
+            <b-field grouped>
+              <b-field label="Minimum degree citations" label-position="on-border">
+                <b-input v-model.lazy="minDegreeOutgoingSuggestions" type="number" :min="1" :step="1"
+                  @blur="changeCurrentNetworkSettings()" required style="width: 150px">
+              </b-field>
+              <b-field label="Maximum citations" label-position="on-border">
+                <b-input v-model.lazy="maxOutgoingSuggestions" type="number" :min="0" :max="currentGraph.outgoingSuggestions?.length" :step="1" 
+                  @blur="changeCurrentNetworkSettings()" required style="width: 150px">
               </b-field>
             </b-field>
             <p class="content">
@@ -841,14 +865,14 @@
           </header>
           <div class="card-content">
             <b-field grouped>
-              <b-field label="Node color">
+              <b-field label="Node color" label-position="on-border">
                 <b-select v-model="authorNetworkNodeColor" @input="changeCurrentNetworkSettings()">
                   <option value="firstArticle">First article</option>
                   <option value="lastArticle">Last article</option>
                 </b-select>
               </b-field>
-              <b-field label="Show first names">
-                <b-select v-model="authorNetworkFirstNames" @input="changeCurrentNetworkSettings()">
+              <b-field label="Show first names" label-position="on-border">
+                <b-select v-model="authorNetworkFirstNames" @input="changeCurrentNetworkSettings()" style="width: 150px">
                   <option :value="false">No</option>
                   <option :value="true">Yes</option>
                 </b-select>
@@ -867,7 +891,7 @@
           <header class="modal-card-head">
             <content>
               <h3 class="modal-card-title">Import custom list of IDs</h3>
-              <p>Use OpenAlex / Semantic Scholar for PMIDs and prefix them with "pmid:" in each row. Empty rows are placeholders in order to help preserve original numbering.</p>
+              <p>One ID per row. Use OpenAlex / Semantic Scholar for PMIDs. Empty rows are placeholders in order to help preserve original numbering.</p>
             </content>
           </header>
           <section style="position: relative; height:300px">
@@ -1033,10 +1057,10 @@
             </div>
             <div class="card-content content">
               <p>
-                This 'local' co-authorship network shows the most common authors among the source, input and suggested articles. Depending on the discipline, the number of (co)authors among a set of multiple articles can quickly rise to the hundreds, which is why this author network only shows authors with a minimum number of input & suggested articles (not to be mistaken with their global number of publications, which is usually higher). The default minimum number of input & suggested articles is determined so that this network shows no more than 50 authors, but it can be changed with the dropdown at the bottom from 2 to 10.
+                This 'local' co-authorship network shows the most common authors among the input articles. Depending on the discipline, the number of (co)authors among a set of multiple articles can quickly rise to the hundreds, which is why this author network only shows authors with a minimum number of input articles (not to be mistaken with their global number of publications, which is usually higher). The default minimum number of input articles is determined so that this network shows no more than 50 authors, but it can be changed with the dropdown at the bottom.
               </p>
               <p>
-                Each node (= vertex) represents an author. The size depends on their number of input & suggested articles and the color depends on the first or last article they first appear in. Authors of input articles are circle-shaped (●), except for authors of the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, who are diamond-shaped (◆). Up-pointing triangles (▲) represent authors of only <a @click="indexFAQ = 'top-references'" href="#top-references">'Top references'</a> and down-pointing triangles (▼) authors of only <a @click="indexFAQ = 'top-citations'" href="#top-citations">'Top citations'</a>. Click authors to filter input & suggested articles, ctrl+click to filter for more than one author.
+                Each node (= vertex) represents an author. The size depends on their number of input & suggested articles and the color depends on the first or last article they first appear in. Authors of input articles are circle-shaped (●), except for authors of the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, who are diamond-shaped (◆). Click authors to filter articles-tables, ctrl+click to filter for more than one author.
               </p>
               <p>
                 Each edge (= link) represents a collaboration between two authors among the source, input and suggested articles, the width indicating the number of collaborations. Click edges to filter input & suggested articles.

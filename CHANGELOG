@@ -1,3 +1,10 @@
+28.08.2023 v1.21
++ Tables are paginated now.
+* Tables now show all retrieved references / citations (either "Top x" or "All"), the "number shown" setting was moved to the citation network settings as "Maximum references" and "Maximum citations".
+* Co-authorship network now only shows authors of input articles.
+* Removed comment in RIS export and always use type "JOUR" (journal article, compare https://en.wikipedia.org/wiki/RIS_(file_format)#Type_of_reference ) for better compatibility with EndNote.
+* PMIDs don't need "pmid:" prefix anymore (supported by OpenAlex (OA) & Semantic Scholar (S2)).
+
 22.08.2023 v1.20
 + New API settings: The number of retrieved "Top references" (formerly "Incoming suggestions") and "Top citations" (formerly "Outgoing suggestions") can now be set: None / Top 10 (default) / Top 20 / Top 50 / All. The retrieval of all references / citations is fairly fast with OpenAlex (OA) & Semantic Scholar (S2) but slow with OpenCitations (OC) & Crossref (CR).
 + New Citation network settings: "Minimum degree references" and "Minimum degree citations" (default 2).

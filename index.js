@@ -6,7 +6,7 @@
 
 'use strict'
 
-const localCitationNetworkVersion = 1.20
+const localCitationNetworkVersion = 1.21
 
 /*
 For now, old terminology is kept in-code because of back-compatibility with old saved graphs objects (localStorage & JSON)
@@ -23,6 +23,12 @@ const arrSort = (arr, fun, ascending = true) => arr.sort((b, a) => (ascending) ?
 
 async function semanticScholarWrapper (ids, responseFunction, phase, retrieveAllReferences = false, retrieveAllCitations = false) {
   let responses = []
+
+  ids = ids.map(id => {
+    if (!id) return undefined
+    else if (!isNaN(Number(id))) return 'pmid:' + id
+    else return id
+  })
 
   let selectFields = 'externalIds,title,abstract,journal,venue,year,referenceCount,citationCount,publicationTypes,publicationDate'
 
@@ -135,6 +141,7 @@ async function openAlexWrapper (ids, responseFunction, phase, retrieveAllReferen
     else if (id.includes('https://')) return id
     else if (id.toLowerCase().match(/doi:|mag:|openalex:|pmid:|pmcid:/)) return id.toLowerCase()
     else if (id.includes('/')) return 'doi:' + id
+    else if (!isNaN(Number(id))) return 'pmid:' + id
     else return 'openalex:' + id
   })
 
@@ -404,8 +411,14 @@ function initCitationNetwork (app, minDegreeIncomingSuggestions = 2, minDegreeOu
 
   // Filter articles (must have year (for hierarchical layout))
   const inputArticles = app.currentGraph.input.filter(article => (app.citationNetworkShowSource ? true : !article.isSource)).filter(article => article.year)
-  const incomingSuggestions = app.incomingSuggestionsSliced.filter(article => app.inDegree(article.id) + app.outDegree(article.id) >= minDegreeIncomingSuggestions).filter(article => article.year)
-  const outgoingSuggestions = app.outgoingSuggestionsSliced.filter(article => app.inDegree(article.id) + app.outDegree(article.id) >= minDegreeOutgoingSuggestions).filter(article => article.year)
+  const incomingSuggestions = (app.currentGraph.incomingSuggestions ?? [])
+    .slice(0, app.maxIncomingSuggestions)
+    .filter(article => article.year)
+    .filter(article => app.inDegree(article.id) + app.outDegree(article.id) >= minDegreeIncomingSuggestions)
+  const outgoingSuggestions = (app.currentGraph.outgoingSuggestions ?? [])
+    .slice(0, app.maxOutgoingSuggestions)
+    .filter(article => article.year)
+    .filter(article => app.inDegree(article.id) + app.outDegree(article.id) >= minDegreeOutgoingSuggestions)
 
   // Create an array with edges
   // Only keep connected articles (no singletons)
@@ -595,12 +608,10 @@ function initAuthorNetwork (app, minPublications = undefined) {
 
   app.authorNetworkIsLoading = true
 
-  // Deep copy articles because otherwise later "x.id = ..." would overwrite currentGraph's articles' authors' ids
-  const articles = JSON.parse(JSON.stringify(
-    arrSort(app.currentGraph.input, x => x.year, app.authorNetworkNodeColor === 'firstArticle')
-      .concat(arrSort(app.incomingSuggestionsSliced, x => x.year, app.authorNetworkNodeColor === 'firstArticle'))
-      .concat(arrSort(app.outgoingSuggestionsSliced, x => x.year, app.authorNetworkNodeColor === 'firstArticle'))
-  ))
+  // Deep copy articles because otherwise sorting (and setting "x.id = ..." later) would overwrite currentGraph's articles
+  let articles = JSON.parse(JSON.stringify(app.currentGraph.input))
+  articles = arrSort(articles, x => x.year, app.authorNetworkNodeColor === 'firstArticle')
+
   // Used to be "x.id = x.id || x.name" but caused too many duplicates (at least on OA), double check in the future if this has been fixed
   let allAuthors = articles.map(article => article.authors.map(x => { x.name = app.authorString([x]); x.id = x.name; return x }))
   let authorIdGroups = allAuthors.map(authorGroup => authorGroup.map(author => author.id))
@@ -654,17 +665,15 @@ function initAuthorNetwork (app, minPublications = undefined) {
     const author = allAuthors[authorId]
     const isSourceAuthor = app.authorString(app.currentGraph.source.authors).includes(author.name)
     const inputArticlesAuthoredCount = app.currentGraph.input.filter(article => app.authorString(article.authors).includes(author.name)).length
-    const incomingSuggestionsAuthoredCount = app.incomingSuggestionsSliced.filter(article => app.authorString(article.authors).includes(author.name)).length
-    const outgoingSuggestionsAuthoredCount = app.outgoingSuggestionsSliced.filter(article => app.authorString(article.authors).includes(author.name)).length
     const authorIdGroupIndex = authorIdGroups.map(group => group.includes(author.id)).indexOf(true)
     return {
       id: author.id,
-      title: htmlTitle(author.name + ': author of ' + inputArticlesAuthoredCount + ' input articles ' + (isSourceAuthor ? '(including source) ' : '') + '& ' + (incomingSuggestionsAuthoredCount + outgoingSuggestionsAuthoredCount) + ' suggested articles.<br>' + (author.affil ? 'Affiliation(s): ' + author.affil + '<br>' : '') + ' Color by ' + ((app.authorNetworkNodeColor === 'firstArticle') ? 'first' : 'last') + ' article: ' + articles[authorIdGroupIndex].title + ' <br>(Double click opens author: <a>' + app.authorLink(author).substr(0, 28) + '...</a>)'),
+      title: htmlTitle(author.name + ': author of ' + inputArticlesAuthoredCount + ' input articles' + (isSourceAuthor ? ' (including source)' : '') + '.<br>' + (author.affil ? 'Affiliation(s): ' + author.affil + '<br>' : '') + ' Color by ' + ((app.authorNetworkNodeColor === 'firstArticle') ? 'first' : 'last') + ' article: ' + articles[authorIdGroupIndex].title + ' <br>(Double click opens author: <a>' + app.authorLink(author).substr(0, 28) + '...</a>)'),
       group: authorIdGroupIndex,
       label: ((app.authorNetworkFirstNames) ? (author.FN + ' ') : '') + author.LN,
       value: publicationsCount[author.id],
       mass: publicationsCount[author.id],
-      shape: (isSourceAuthor) ? 'diamond' : (inputArticlesAuthoredCount ? 'dot' : (incomingSuggestionsAuthoredCount ? 'triangle' : 'triangleDown'))
+      shape: (isSourceAuthor) ? 'diamond' : 'dot'
     }
   })
 
@@ -804,6 +813,9 @@ const vm = new Vue({
     selectedInputArticle: undefined,
     selectedIncomingSuggestionsArticle: undefined,
     selectedOutgoingSuggestionsArticle: undefined,
+    inputArticlesTablePage: 1,
+    topReferencesTablePage: 1,
+    topCitationsTablePage: 1,
     currentTabIndex: undefined,
     showArticlesTab: 'inputArticles',
     showAuthorNetwork: 0,
@@ -828,29 +840,23 @@ const vm = new Vue({
       if (this.currentTabIndex === undefined) return {}
       return this.graphs[this.currentTabIndex]
     },
-    incomingSuggestionsSliced: function () {
-      return (this.currentGraph.incomingSuggestions || []).slice(0, this.maxIncomingSuggestions)
-    },
-    outgoingSuggestionsSliced: function () {
-      return (this.currentGraph.outgoingSuggestions || []).slice(0, this.maxOutgoingSuggestions)
-    },
     inputArticlesIds: function () {
       return this.currentGraph.input.map(article => article.id)
     },
     incomingSuggestionsIds: function () {
-      return this.incomingSuggestionsSliced.map(article => article.id)
+      return this.currentGraph.incomingSuggestions.map(article => article.id)
     },
     outgoingSuggestionsIds: function () {
-      return this.outgoingSuggestionsSliced.map(article => article.id)
+      return this.currentGraph.outgoingSuggestions.map(article => article.id)
     },
     inputArticlesFiltered: function () {
       return this.filterArticles(this.currentGraph.input)
     },
     incomingSuggestionsFiltered: function () {
-      return this.filterArticles(this.incomingSuggestionsSliced)
+      return this.filterArticles(this.currentGraph.incomingSuggestions ?? [])
     },
     outgoingSuggestionsFiltered: function () {
-      return this.filterArticles(this.outgoingSuggestionsSliced)
+      return this.filterArticles(this.currentGraph.outgoingSuggestions ?? [])
     },
     selected: {
       get: function () {
@@ -862,9 +868,18 @@ const vm = new Vue({
       },
       set: function (x) {
         switch (this.showArticlesTab) {
-          case 'inputArticles': this.selectedInputArticle = x
-          case 'topReferences': this.selectedIncomingSuggestionsArticle = x
-          case 'topCitations': this.selectedOutgoingSuggestionsArticle = x
+          case 'inputArticles':
+            this.selectedInputArticle = x
+            if (x) this.inputArticlesTablePage = Math.ceil((this.$refs.inputArticlesTable.newData.indexOf(x) + 1) / 10)
+            break
+          case 'topReferences':
+            this.selectedIncomingSuggestionsArticle = x
+            if (x) this.topReferencesTablePage = Math.ceil((this.$refs.topReferencesTable.newData.indexOf(x) + 1) / 10)
+            break
+          case 'topCitations':
+            this.selectedOutgoingSuggestionsArticle = x
+            if (x) this.topCitationsTablePage = Math.ceil((this.$refs.topCitationsTable.newData.indexOf(x) + 1) / 10)
+            break
         }
         if (x && document.getElementById(x.id)) document.getElementById(x.id).scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
@@ -890,11 +905,11 @@ const vm = new Vue({
     // The following are settings and their default values
     maxIncomingSuggestions: {
       get: function () { return this.currentGraph.maxIncomingSuggestions ?? Math.min(10, this.currentGraph.incomingSuggestions?.length) },
-      set: function (x) { if (x >= 0 && x <= this.currentGraph.incomingSuggestions?.length) this.$set(this.currentGraph, 'maxIncomingSuggestions', x) }
+      set: function (x) { if (x >= 0 && x <= this.currentGraph.incomingSuggestions?.length) this.$set(this.currentGraph, 'maxIncomingSuggestions', Number(x)) }
     },
     maxOutgoingSuggestions: {
       get: function () { return this.currentGraph.maxOutgoingSuggestions ?? Math.min(10, this.currentGraph.outgoingSuggestions?.length) },
-      set: function (x) { if (x >= 0 && x <= this.currentGraph.outgoingSuggestions?.length) this.$set(this.currentGraph, 'maxOutgoingSuggestions', x) }
+      set: function (x) { if (x >= 0 && x <= this.currentGraph.outgoingSuggestions?.length) this.$set(this.currentGraph, 'maxOutgoingSuggestions', Number(x)) }
     },
     minDegreeIncomingSuggestions: {
       get: function () { return this.currentGraph.minDegreeIncomingSuggestions ?? 2 },
@@ -1138,6 +1153,8 @@ const vm = new Vue({
           timestamp: Date.now(),
           localCitationNetworkVersion: localCitationNetworkVersion
         }
+        if (retrieveReferences === Infinity) newGraph.allReferences = true
+        if (retrieveCitations === Infinity) newGraph.allCitations = true
         this.pushGraph(newGraph)
         this.isLoading = false
         this.listName = undefined
@@ -1503,16 +1520,20 @@ const vm = new Vue({
     },
     saveState: function (saveGraphs = true, saveSettings = true) {
       if (this.autosaveResults) {
+        const maxReferencesCitations = 100
         if (saveGraphs) {
           const copiedGraphs = JSON.parse(JSON.stringify(this.graphs))
           localStorage.graphs = JSON.stringify(copiedGraphs.map(graph => {
+            // Delete these two possibly existing flags so that only "Top references" / "Top citations" instead of "All references" / "All citations" will be shown
+            if (graph.incomingSuggestions === undefined || graph.incomingSuggestions.length > maxReferencesCitations) delete graph.allReferences
+            if (graph.outgoingSuggestions === undefined || graph.outgoingSuggestions.length > maxReferencesCitations) delete graph.allCitations
             // Don't save suggestions still in loading phase
             // Otherwise suggestions would be saved in loading state (undefined) but after reload they do not continue to load!
-            // Only save up to 100 incomingSuggestions (References) & outgoingSuggestions (Citations) for space constraints
             if (graph.incomingSuggestions === undefined) graph.incomingSuggestions = []
-            else graph.incomingSuggestions = graph.incomingSuggestions.slice(0, Math.max(100, graph.maxIncomingSuggestions || 10))
+            // Only save up to 100 incomingSuggestions (References) & outgoingSuggestions (Citations) for space constraints
+            else graph.incomingSuggestions = graph.incomingSuggestions.slice(0, maxReferencesCitations)
             if (graph.outgoingSuggestions === undefined) graph.outgoingSuggestions = []
-            else graph.outgoingSuggestions = graph.outgoingSuggestions.slice(0, Math.max(100, graph.maxOutgoingSuggestions || 10))
+            else graph.outgoingSuggestions = graph.outgoingSuggestions.slice(0, maxReferencesCitations)
 
             return graph
           }))
@@ -1585,6 +1606,17 @@ const vm = new Vue({
     toggleArticle: function () {
       this.$refs[this.showArticlesTab + 'Table'].toggleDetails(this.selected)
     },
+    tableArrowUpChangePage: function () {
+      if (this[this.showArticlesTab + 'TablePage'] > 1 && (this.$refs[this.showArticlesTab + 'Table'].newData.indexOf(this.selected) + 1) % 10 === 1) {
+        return this[this.showArticlesTab + 'TablePage'] -= 1
+      }
+    },
+    tableArrowDownChangePage: function () {
+      const maxPage = Math.ceil(this.$refs[this.showArticlesTab + 'Table'].newData.length / 10)
+      if (this[this.showArticlesTab + 'TablePage'] < maxPage && (this.$refs[this.showArticlesTab + 'Table'].newData.indexOf(this.selected) + 1) % 10 === 0) {
+        return this[this.showArticlesTab + 'TablePage'] += 1
+      }
+    },
     formatTags: function (text) {
       // 'a' tags only without attributes for blue color in network tooltips!
       const tags = ['a', 'b', 'br', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'i', 'p', 'subtitle', 'sup', 'u']
@@ -1629,10 +1661,9 @@ const vm = new Vue({
       else if (Number(author.id) && this.currentGraph.API === 'Semantic Scholar') return 'https://semanticscholar.org/author/' + author.id
       else return 'https://scholar.google.com/scholar?q=' + author.name
     },
-    changeCurrentNetworkSettings: function (resetBothNetworks = false) {
+    changeCurrentNetworkSettings: function () {
       if (this.fullscreenTable) return false
-      if (resetBothNetworks) this.resetBothNetworks()
-      else this.resetCurrentNetwork()
+      this.resetCurrentNetwork()
       this.initCurrentNetwork()
       this.saveState()
     },
@@ -1665,14 +1696,12 @@ const vm = new Vue({
       anchor.remove()
     },
     downloadRISData: function (table) {
-      // TODO: map types to RIS types instead of always using "TY  - GEN" (Generic)
+      // TODO: consider mapping types to RIS types instead of always using "TY  - JOUR" (journal article)
       // OpenAlex types: https://api.openalex.org/works?group_by=type
       // RIS Types: https://en.wikipedia.org/wiki/RIS_(file_format)#Type_of_reference
       let ris = ''
-      ris += '# https://LocalCitationNetwork.github.io/' + this.linkToShareAppendix + '\n'
-      ris += '# Data retrieved through ' + this.currentGraph.API + ' (' + this.abbreviateAPI(this.currentGraph.API) + ') on ' + new Date(this.currentGraph.timestamp).toLocaleString() + '\n'
       table.forEach(row => {
-        ris += 'TY  - GEN\n'
+        ris += 'TY  - JOUR\n'
         ris += 'ID  - ' + row.id + '\n'
         ris += 'DO  - ' + row.doi + '\n'
         ris += 'TI  - ' + row.title + '\n'
