@@ -1,3 +1,17 @@
+01.06.2024 v1.22
++ For Input Articles: Added "Filter References" and "Filter Citations" in article details.
++ For all articles: Added "Filter Input Articles cited by this" (corresponds to Out-Degree) and "Filter Input Articles citing this" (corresponds to In-Degree).
++ Added "Too Long Didn't Read" (TLDR) summaries for Semantic Scholar (S2).
+* Use batch API for Semantic Scholar (S2), which allows much faster retrievals and much fewer API-overloads (error 429). (Unfortunately seems to have a bug, compare below "Known bugs")
+* In case "All references" or "All citations" are retrieved (OA & S2 only): don't de-duplicate them anymore so that numbers in the respective tabs are correct, also when filtering them.
+* Let users choose number of articles per page.
+* Deactivated S2 reference contexts for now (simultaneous API call often led to API-overload (error 429)).
+* Bumped Buefy, Vue and vis.js Network to newest versions. Use "render-on-mounted" for modals, introduced in new Buefy version, and removed previously necessary hack.
+! Fixed "Show source article node" in Citation network settings.
+
+Known bugs:
+- Top Citations are wrong with Semantic Scholar (S2), they are pretty random citations and not the top ones. This seems to be a bug on their side (which now affects Local Citation Network because of using the batch API endpoint) which I have reported: https://github.com/allenai/s2-folks/issues/199
+
 28.08.2023 v1.21
 + Tables are paginated now.
 * Tables now show all retrieved references / citations (either "Top x" or "All"), the "number shown" setting was moved to the citation network settings as "Maximum references" and "Maximum citations".
@@ -14,7 +28,7 @@
 * Renaming: "Incoming suggestions" become "Top references" and "Outgoing suggestions" become "Top citations" for consistency with the academic literature and other tools (e.g. CitationChaser: https://estech.shinyapps.io/citationchaser/)
 + Link to Local citations and Local references in article table details (folding out).  
 + Articles can also be filtered by article ID & DOI.
-* "Top references" must not be referenced by at least 2 input articles anymore and "Top citations" must not be cited by at least 2 input articles anymore.
+* "Top references" don't have to be referenced by at least 2 input articles anymore and "Top citations" don't have to be cited by at least 2 input articles anymore.
 * Don't show edges between "Top references" / "Top citations" anymore so the number of incoming/outgoing edges (arrows) is equivalent to their in-degree and out-degree (also using Semantic Scholar's references/citations endpoints doesn't provide reference lists so the relations between them are unknown, only their relations to the input articles).
 * Autosave now only saves up to 100 Top references & Top citations because of space constraints. Use "download full network: JSON" to save full network.
 * Show loading-progress for "Top references" / "Top citations"

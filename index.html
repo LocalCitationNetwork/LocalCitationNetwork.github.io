@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <title>Local Citation Network</title>
-    <meta name="description" content="This web app aims to help scientists with their literature review using reference data from OpenAlex, Semantic Scholar, OpenCitations and Crossref. It visualizes citation networks defined by the references (and citations) of a given set of input articles, where the top references (and top citations) are suggested for further review.">
+    <meta name="description" content="This web app aims to help scientists with their literature review using reference data from OpenAlex, Semantic Scholar, OpenCitations and Crossref. It visualizes citation networks defined by the references (and citations) of a given set of Input Articles, where the Top References (and Top Citations) are suggested for further review.">
     <meta name="author" content="Tim Woelfle">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="lib/buefy.min.css">
@@ -124,7 +124,7 @@
 
       .mdi-close:before {
         content: "×";
-        font: 1.3em bold sans-serif;
+        font: 2.3em bold sans-serif;
       }
 
       /* Vis.js Network tooltip */
@@ -171,7 +171,7 @@
             <b-navbar-item tag="li"><b-button @click="clickToggleAutosave" rounded :type="(autosaveResults) ? '' : 'is-dark'" title="Autosave results locally (only up to 100 References & Citations are kept because of space constraints - if all are needed, use 'download full network: JSON')"><span style="font-size: 1.2em">Save</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="showOptionsAPI = !showOptionsAPI" rounded type="is-dark" title="API Options: OpenAlex (OA) / Semantic Scholar (S2) / OpenCitations (OC) / Crossref (CR)" :disabled="isLoading"><span  style="font-size: 1.2em">{{ abbreviateAPI(API) }}</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="showFAQ = !showFAQ" rounded type="is-dark" title="Frequently asked questions"><span style="font-size: 1.8em">?</span></b-button></b-navbar-item>
-            <b-navbar-item tag="li"><a @click="indexFAQ = 'contact'; showFAQ = true;" href="#contact" class="button is-dark is-rounded" title="Contact app creator"><span style="font-size: 1.8em">✉</span></a></b-navbar-item>
+            <b-navbar-item tag="li"><a @click="indexFAQ = 'contact'; showFAQ = true;" href="#contact" class="button is-dark is-rounded" title="Contact app creator"><span style="font-size: 1.2em">Mail</span></a></b-navbar-item>
           </ul>
         </template>
       </b-navbar>
@@ -180,12 +180,12 @@
         <b-tabs v-model="showArticlesTab" :class="'column' + (fullscreenTable ? '' : ' is-three-fifths')" size="is-small" :style="'display: ' + ((fullscreenNetwork) ? 'none' : 'block')">
           <b-tab-item value="inputArticles">
             <template slot="header">
-              <h2 class="title is-4">Input articles ({{ currentGraph.input.length }})</h2>
+              <h2 class="title is-4">Input Articles ({{ currentGraph.input.length }})</h2>
             </template>
             <div class="content">
               <p>
                 <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
-                download input articles: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(currentGraph.input)">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(currentGraph.input)">RIS</a></b-tooltip> /
+                download Input Articles: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(currentGraph.input)">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(currentGraph.input)">RIS</a></b-tooltip> /
                 <!-- Make sure network is fully loaded (otherwise incomingSuggestions / outgoingSuggestions tabs would show eternal spinning wheels) -->
                 <template v-if="currentGraph.incomingSuggestions && currentGraph.outgoingSuggestions">
                   download full network:
@@ -240,6 +240,8 @@
                 <option value="authors">Authors</option>
                 <option value="year">Year</option>
                 <option value="journal">Journal</option>
+                <option value="citedById">Cited by ID</option>
+                <option value="citingId">Citing ID</option>
               </b-select>
               <b-input v-model="filterString" icon="magnify" placeholder="Filter articles…" expanded
                 :icon-right="filterString ? 'close' : undefined"
@@ -255,8 +257,31 @@
               @keydown.native.arrow-down.capture="tableArrowDownChangePage"
               detailed :has-detailed-visible="row => (row.authors.length || inDegree(row.id) || outDegree(row.id) || row.abstract)"
               hoverable striped narrowed focusable
-              :paginated="inputArticlesFiltered.length > 10" per-page="10" pagination-position="top">
+              :paginated="inputArticlesFiltered.length > 10" :per-page="articlesPerPage" pagination-position="top">
               <template slot="detail" slot-scope="props">
+                <p class="content">
+                  <b-button v-if="(props.row.referencesCount || props.row.references.length) && !props.row.isSource" 
+                    @click.stop="clickOpenReferences(props.row)"
+                    :disabled="isLoading">
+                    Add network for references
+                  </b-button>
+                  <b-button v-if="(currentGraph.allReferences) ? (props.row.referencesCount || props.row.references.length) : citedByInputArticleId(currentGraph.incomingSuggestions, props.row.id).length" 
+                    @click="showArticlesTab='topReferences'; filterColumn='citedByInputArticleId'; filterString=props.row.id">
+                    Filter References ({{ (currentGraph.allReferences) ? (props.row.referencesCount || props.row.references.length) : citedByInputArticleId(currentGraph.incomingSuggestions, props.row.id).length }})
+                  </b-button>
+                  <b-button v-if="(currentGraph.allCitations) ? props.row.citationsCount : citesInputArticleId(currentGraph.outgoingSuggestions, props.row.id).length"
+                    @click="showArticlesTab='topCitations'; filterColumn='citesInputArticleId'; filterString=props.row.id">
+                    Filter Citations ({{ (currentGraph.allCitations) ? props.row.citationsCount : citesInputArticleId(currentGraph.outgoingSuggestions, props.row.id).length }})
+                  </b-button>
+                  <b-button v-if="outDegree(props.row.id)"
+                    @click="showArticlesTab='inputArticles'; filterColumn='citedById'; filterString=props.row.id">
+                    Filter Input Articles cited by this ({{ outDegree(props.row.id) }})
+                  </b-button>
+                  <b-button v-if="inDegree(props.row.id)"
+                    @click="showArticlesTab='inputArticles'; filterColumn='citingId'; filterString=props.row.id">
+                    Filter Input Articles citing this ({{ inDegree(props.row.id) }})
+                  </b-button>
+                </p>
                 <p class="content">
                   <b>Authors ({{ props.row.authors.length }}):</b>
                   <template v-for="(author, index) in props.row.authors">
@@ -278,17 +303,8 @@
                     </b-tooltip>
                   </template>
                 </p>
-                <p class="content" v-if="currentGraph.referenced[props.row.id]">
-                  <b>Local citations (from other input articles, In-Degree {{ currentGraph.referenced[props.row.id].length }}):</b>
-                  <template v-for="(id, index) in currentGraph.referenced[props.row.id]">
-                    <template v-if="index !== 0">; </template><a @click="showArticlesTab = 'inputArticles'; selected = currentGraph.input.filter(x => x.id == id)?.[0]">{{currentGraph.input.filter(x => x.id == id)?.[0].authors[0]?.LN + ' ' + currentGraph.input.filter(x => x.id == id)?.[0]?.year}}</a>
-                  </template>
-                </p>
-                <p class="content" v-if="currentGraph.citing[props.row.id]">
-                  <b>Local references (to other input articles, Out-Degree {{ currentGraph.citing[props.row.id].length }}):</b>
-                  <template v-for="(id, index) in currentGraph.citing[props.row.id]">
-                    <template v-if="index !== 0">; </template><a @click="showArticlesTab = 'inputArticles'; selected = currentGraph.input.filter(x => x.id == id)?.[0]">{{currentGraph.input.filter(x => x.id == id)?.[0].authors[0]?.LN + ' ' + currentGraph.input.filter(x => x.id == id)?.[0]?.year}}</a>
-                  </template>
+                <p class="content" v-if="props.row.tldr">
+                  <b><a href="https://www.semanticscholar.org/faq#tldr" target="_blank">TLDR:</a></b> {{ formatTags(props.row.tldr) }}
                 </p>
                 <template v-if="props.row.abstract">
                   <h4 class="title is-6">Abstract</h4>
@@ -301,7 +317,18 @@
                   </ul>
                 </template>
               </template>
-              
+
+              <template slot="top-left" slot-scope="props">
+                <div style="width: 133px">
+                  <b-select v-model="articlesPerPage" expanded>
+                    <option value="10">10 per page</option>
+                    <option value="20">20 per page</option>
+                    <option value="50">50 articles</option>
+                    <option value="100">100 per page</option>
+                  </b-select>
+                </div>
+              </template>
+
               <b-table-column field="numberInSourceReferences" label="#" :meta="currentGraph.source.id ? 'Original reference number in source' : 'Number in custom list'" :visible="showNumberInSourceReferences" sortable>
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-right" type="is-dark">
@@ -315,7 +342,7 @@
               <b-table-column label="Title" v-slot="props">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
-                  {{ props.row.isSource ? 'Source: ' : ''  }}
+                  {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : '' }}
                   <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank">{{ formatTags(props.row.title) }}</a>
                   <template v-else>{{ formatTags(props.row.title) }}</template>
                 </span>
@@ -337,52 +364,6 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citationsCount" label="Cit" meta="Estimated global incoming citations (how many papers cite this one)" sortable>
-                <template v-slot:header="{ column }">
-                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
-                    {{ column.label }}
-                  </b-tooltip>
-                </template>
-                <template v-slot="props">
-                  <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark">
-                    <a :href="'https://openalex.org/' + props.row.id" target="_blank" v-if="currentGraph.API === 'OpenAlex'">
-                      {{ props.row.citationsCount }}
-                    </a>
-                    <a :href="'https://semanticscholar.org/paper/' + props.row.id + '#citing-papers'" target="_blank" v-else-if="currentGraph.API === 'Semantic Scholar'">
-                      {{ props.row.citationsCount }}
-                    </a>
-                    <template v-else>
-                      {{ props.row.citationsCount }}
-                    </template>
-                  </b-tooltip>
-                </template>
-              </b-table-column>
-              <b-table-column field="inDegree" label="InDeg" meta="In-Degree: Number of incoming citations from input articles (excluding suggestions)"
-                sortable :custom-sort="sortInDegreeWrapper">
-                <template v-slot:header="{ column }">
-                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
-                    {{ column.label }}
-                  </b-tooltip>
-                </template>
-                <template v-slot="props">
-                  <b-tooltip label="In-Degree: Number of incoming citations from input articles (excluding suggestions)" dashed position="is-left" type="is-dark">
-                    {{ inDegree(props.row.id) }}
-                  </b-tooltip>
-                </template>
-              </b-table-column>
-              <b-table-column field="outDegree" label="OutDeg" meta="Out-Degree: Number of references (outgoing citations) data (excluding suggestions)"
-                sortable :custom-sort="sortOutDegreeWrapper">
-                <template v-slot:header="{ column }">
-                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
-                    {{ column.label }}
-                  </b-tooltip>
-                </template>
-                <template v-slot="props">
-                  <b-tooltip label="Out-Degree: Number of references (outgoing citations) to input articles (excluding suggestions)" dashed position="is-left" type="is-dark">
-                    {{ outDegree(props.row.id) }}
-                  </b-tooltip>
-                </template>
-              </b-table-column>
               <b-table-column label="Ref" meta="References in paper" 
                 sortable :custom-sort="sortReferencesWrapper">
                 <template v-slot:header="{ column }">
@@ -391,20 +372,63 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="Open new graph for the references of this article" position="is-left" type="is-dark">
-                    <b-button @click.stop="clickOpenReferences(props.row)" type="is-primary" size="is-small"
-                      :inverted="(selected === props.row) ? true : false"
-                      :disabled="isLoading || (!props.row.referencesCount && !props.row.references.length) || props.row.isSource">
-                      {{ props.row.referencesCount || props.row.references?.length }}
-                    </b-button>
+                  <a :href="referencesLink(props.row)" target="_blank" v-if="referencesLink(props.row)">
+                    {{ props.row.referencesCount || props.row.references?.length }}
+                  </a>
+                  <template v-else>
+                    {{ props.row.referencesCount || props.row.references?.length }}
+                  </template>
+                </template>
+              </b-table-column>
+              <b-table-column field="citationsCount" label="Cit" meta="Estimated global incoming citations (how many papers cite this one)" sortable>
+                <template v-slot:header="{ column }">
+                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                    {{ column.label }}
+                  </b-tooltip>
+                </template>
+                <template v-slot="props">
+                  <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark">
+                    <a :href="citationsLink(props.row)" target="_blank" v-if="citationsLink(props.row)">
+                      {{ props.row.citationsCount }}
+                    </a>
+                    <template v-else>
+                      {{ props.row.citationsCount }}
+                    </template>
+                  </b-tooltip>
+                </template>
+              </b-table-column>
+              <b-table-column field="outDegree" label="OutDeg" meta="Out-Degree: Number of Input Articles cited by this"
+                sortable :custom-sort="sortOutDegreeWrapper">
+                <template v-slot:header="{ column }">
+                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                    {{ column.label }}
+                  </b-tooltip>
+                </template>
+                <template v-slot="props">
+                  <b-tooltip label="Out-Degree: Number of Input Articles cited by this" dashed position="is-left" type="is-dark">
+                    {{ outDegree(props.row.id) }}
+                  </b-tooltip>
+                </template>
+              </b-table-column>
+              <b-table-column field="inDegree" label="InDeg" meta="In-Degree: Number of Input Articles citing this"
+                sortable :custom-sort="sortInDegreeWrapper">
+                <template v-slot:header="{ column }">
+                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                    {{ column.label }}
+                  </b-tooltip>
+                </template>
+                <template v-slot="props">
+                  <b-tooltip label="In-Degree: Number of Input Articles citing this" dashed position="is-left" type="is-dark">
+                    {{ inDegree(props.row.id) }}
                   </b-tooltip>
                 </template>
               </b-table-column>
             </b-table>
           </b-tab-item>
+
           <b-tab-item value="topReferences" :disabled="currentGraph.incomingSuggestions === undefined" v-if="currentGraph.incomingSuggestions === undefined || currentGraph.incomingSuggestions.length">
             <template slot="header">
-              <h2 class="title is-4">{{ currentGraph.allReferences ? 'All' : 'Top' }} references
+              <h2 class="title is-4">{{ currentGraph.allReferences ? 'All' : 'Top' }} References
                 (<template v-if="currentGraph.incomingSuggestions?.length">{{ currentGraph.incomingSuggestions?.length }}</template>
                 <b-progress v-else :value="(isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-medium" show-value format="percent" :precision="0" style="width: 50px; display: inline-block"></b-progress>)
               </h2>
@@ -423,7 +447,7 @@
                 </template>
               </p>
               <p>
-                References are cited by the input articles. They are sorted by in-degree, with the <a @click="indexFAQ = 'top-references'; showFAQ = true;" href="#top-references">top references</a> listed at the top. They tend to be older than most input articles. They are derived through backward citation searching (backward in time). This table is de-duplicated and does not contain any input articles.
+                References are cited by the Input Articles. They are sorted by in-degree, with the <a @click="indexFAQ = 'top-references'; showFAQ = true;" href="#top-references">Top References</a> listed at the top. They tend to be older than most Input Articles. They are derived through backward citation searching (backward in time). {{ (currentGraph.allReferences) ? 'All References are not de-duplicated and may also contain Input Articles.' : 'Top References are de-duplicated against Input Articles.'}}
               </p>
             </div>
             <b-field>
@@ -432,6 +456,7 @@
                 <option value="authors">Authors</option>
                 <option value="year">Year</option>
                 <option value="journal">Journal</option>
+                <option value="citedByInputArticleId">Cited by Input Article ID</option>
               </b-select>
               <b-input v-model="filterString" icon="magnify" placeholder="Filter articles…" expanded
                 :icon-right="filterString ? 'close' : undefined"
@@ -446,8 +471,20 @@
               @keydown.native.arrow-up.capture="tableArrowUpChangePage"
               @keydown.native.arrow-down.capture="tableArrowDownChangePage"
               detailed hoverable striped narrowed focusable
-              :paginated="incomingSuggestionsFiltered.length > 10" per-page="10" pagination-position="top">
+              :paginated="incomingSuggestionsFiltered.length > 10" :per-page="articlesPerPage" pagination-position="top">
               <template slot="detail" slot-scope="props">
+                <p class="content">
+                  <b-button v-if="(props.row.referencesCount || props.row.references.length) && !props.row.isSource" @click.stop="clickOpenReferences(props.row)"
+                    :disabled="isLoading">
+                    Add network for references
+                  </b-button>
+                  <b-button v-if="outDegree(props.row.id)" @click="showArticlesTab='inputArticles'; filterColumn='citedById'; filterString=props.row.id">
+                    Filter Input Articles cited by this ({{ outDegree(props.row.id) }})
+                  </b-button>
+                  <b-button v-if="inDegree(props.row.id)" @click="showArticlesTab='inputArticles'; filterColumn='citingId'; filterString=props.row.id">
+                    Filter Input Articles citing this ({{ inDegree(props.row.id) }})
+                  </b-button>
+                </p>
                 <p class="content">
                   <b>Authors ({{ props.row.authors.length }}):</b>
                   <template v-for="(author, index) in props.row.authors">
@@ -469,28 +506,30 @@
                     </b-tooltip>
                   </template>
                 </p>
-                <p class="content" v-if="currentGraph.referenced[props.row.id]">
-                  <b>Local citations (from input articles, In-Degree {{ currentGraph.referenced[props.row.id].length }}):</b>
-                  <template v-for="(id, index) in currentGraph.referenced[props.row.id]">
-                    <template v-if="index !== 0">; </template><a @click="showArticlesTab = 'inputArticles'; selected = currentGraph.input.filter(x => x.id == id)?.[0]">{{currentGraph.input.filter(x => x.id == id)?.[0].authors[0]?.LN + ' ' + currentGraph.input.filter(x => x.id == id)?.[0].year}}</a>
-                  </template>
-                </p>
-                <p class="content" v-if="currentGraph.citing[props.row.id]">
-                  <b>Local references (to input articles, Out-Degree {{ currentGraph.citing[props.row.id].length }}):</b>
-                  <template v-for="(id, index) in currentGraph.citing[props.row.id]">
-                    <template v-if="index !== 0">; </template><a @click="showArticlesTab = 'inputArticles'; selected = currentGraph.input.filter(x => x.id == id)?.[0]">{{currentGraph.input.filter(x => x.id == id)?.[0].authors[0]?.LN + ' ' + currentGraph.input.filter(x => x.id == id)?.[0].year}}</a>
-                  </template>
+                <p class="content" v-if="props.row.tldr">
+                  <b><a href="https://www.semanticscholar.org/faq#tldr" target="_blank">TLDR:</a></b> {{ formatTags(props.row.tldr) }}
                 </p>
                 <template v-if="props.row.abstract">
                   <h4 class="title is-6">Abstract</h4>
                   <p v-html="formatTags(props.row.abstract)" class="content"></p>
                 </template>
               </template>
+
+              <template slot="top-left" slot-scope="props">
+                <div style="width: 133px">
+                  <b-select v-model="articlesPerPage" expanded>
+                    <option value="10">10 per page</option>
+                    <option value="20">20 per page</option>
+                    <option value="50">50 articles</option>
+                    <option value="100">100 per page</option>
+                  </b-select>
+                </div>
+              </template>
               
               <b-table-column label="Title" v-slot="props">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
-                  {{ props.row.isInputArticle ? 'Input article: ' : ''  }}
+                  {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : (inputArticlesIds.includes(props.row.id) ? 'Input Article: ' : '') }}
                   <a :href="articleLink(props.row)" target="_blank" v-html="formatTags(props.row.title)"></a>
                 </span>
               </b-table-column>
@@ -511,52 +550,6 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citationsCount" label="Cit" meta="Estimated global incoming citations (how many papers cite this one)" sortable>
-                <template v-slot:header="{ column }">
-                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
-                    {{ column.label }}
-                  </b-tooltip>
-                </template>
-                <template v-slot="props">
-                  <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark">
-                    <a :href="'https://openalex.org/' + props.row.id" target="_blank" v-if="currentGraph.API === 'OpenAlex'">
-                      {{ props.row.citationsCount }}
-                    </a>
-                    <a :href="'https://semanticscholar.org/paper/' + props.row.id + '#citing-papers'" target="_blank" v-else-if="currentGraph.API === 'Semantic Scholar'">
-                      {{ props.row.citationsCount }}
-                    </a>
-                    <template v-else>
-                      {{ props.row.citationsCount }}
-                    </template>
-                  </b-tooltip>
-                </template>
-              </b-table-column>
-              <b-table-column field="inDegree" label="InDeg" meta="In-Degree: Number of incoming citations from input articles (excluding suggestions)"
-                sortable :custom-sort="sortInDegreeWrapper">
-                <template v-slot:header="{ column }">
-                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
-                    {{ column.label }}
-                  </b-tooltip>
-                </template>
-                <template v-slot="props">
-                  <b-tooltip label="In-Degree: Number of incoming citations from input articles (excluding suggestions)" dashed position="is-left" type="is-dark">
-                    {{ inDegree(props.row.id) }}
-                  </b-tooltip>
-                </template>
-              </b-table-column>
-              <b-table-column field="outDegree" label="OutDeg" meta="Out-Degree: Number of references (outgoing citations) data (excluding suggestions)"
-                sortable :custom-sort="sortOutDegreeWrapper">
-                <template v-slot:header="{ column }">
-                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
-                    {{ column.label }}
-                  </b-tooltip>
-                </template>
-                <template v-slot="props">
-                  <b-tooltip label="Out-Degree: Number of references (outgoing citations) to input articles (excluding suggestions)" dashed position="is-left" type="is-dark">
-                    {{ outDegree(props.row.id) }}
-                  </b-tooltip>
-                </template>
-              </b-table-column>
               <b-table-column label="Ref" meta="References in paper" 
                 sortable :custom-sort="sortReferencesWrapper">
                 <template v-slot:header="{ column }">
@@ -565,12 +558,54 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="Open new graph for the references of this article" position="is-left" type="is-dark">
-                    <b-button @click.stop="clickOpenReferences(props.row)" type="is-primary" size="is-small"
-                      :inverted="(selected === props.row) ? true : false"
-                      :disabled="isLoading || (!props.row.referencesCount && !props.row.references.length) || props.row.isSource">
-                      {{ props.row.referencesCount || props.row.references?.length }}
-                    </b-button>
+                  <a :href="referencesLink(props.row)" target="_blank" v-if="referencesLink(props.row)">
+                    {{ props.row.referencesCount || props.row.references?.length }}
+                  </a>
+                  <template v-else>
+                    {{ props.row.referencesCount || props.row.references?.length }}
+                  </template>
+                </template>
+              </b-table-column>
+              <b-table-column field="citationsCount" label="Cit" meta="Estimated global incoming citations (how many papers cite this one)" sortable>
+                <template v-slot:header="{ column }">
+                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                    {{ column.label }}
+                  </b-tooltip>
+                </template>
+                <template v-slot="props">
+                  <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark">
+                    <a :href="citationsLink(props.row)" target="_blank" v-if="citationsLink(props.row)">
+                      {{ props.row.citationsCount }}
+                    </a>
+                    <template v-else>
+                      {{ props.row.citationsCount }}
+                    </template>
+                  </b-tooltip>
+                </template>
+              </b-table-column>
+              <b-table-column field="outDegree" label="OutDeg" meta="Out-Degree: Number of Input Articles cited by this"
+                sortable :custom-sort="sortOutDegreeWrapper">
+                <template v-slot:header="{ column }">
+                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                    {{ column.label }}
+                  </b-tooltip>
+                </template>
+                <template v-slot="props">
+                  <b-tooltip label="Out-Degree: Number of Input Articles cited by this" dashed position="is-left" type="is-dark">
+                    {{ outDegree(props.row.id) }}
+                  </b-tooltip>
+                </template>
+              </b-table-column>
+              <b-table-column field="inDegree" label="InDeg" meta="In-Degree: Number of Input Articles citing this"
+                sortable :custom-sort="sortInDegreeWrapper">
+                <template v-slot:header="{ column }">
+                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                    {{ column.label }}
+                  </b-tooltip>
+                </template>
+                <template v-slot="props">
+                  <b-tooltip label="In-Degree: Number of Input Articles citing this" dashed position="is-left" type="is-dark">
+                    {{ inDegree(props.row.id) }}
                   </b-tooltip>
                 </template>
               </b-table-column>
@@ -578,7 +613,7 @@
           </b-tab-item>
           <b-tab-item value="topCitations" :disabled="currentGraph.outgoingSuggestions === undefined" v-if="currentGraph.outgoingSuggestions === undefined || currentGraph.outgoingSuggestions.length">
             <template slot="header">
-              <h2 class="title is-4">{{ currentGraph.allCitations ? 'All' : 'Top' }} citations
+              <h2 class="title is-4">{{ currentGraph.allCitations ? 'All' : 'Top' }} Citations
                 (<template v-if="currentGraph.outgoingSuggestions?.length">{{ currentGraph.outgoingSuggestions?.length }}</template>
                 <b-progress v-else :value="(currentGraph.incomingSuggestions === undefined) ? undefined : (isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-medium" show-value format="percent" :precision="0" style="width: 50px; display: inline-block"></b-progress>)
             </template>
@@ -596,7 +631,7 @@
                 </template>
               </p>
               <p>
-                Citations are citing the input articles. Tey are sorted by out-degree, with the <a @click="indexFAQ = 'top-citations'; showFAQ = true;" href="#top-citations">top citations</a> listed at the top. They are derived through forward citation searching (forward in time). They tend to be newer than most input articles. This table is de-duplicated and does not contain any input articles / references.
+                Citations are citing the Input Articles. Tey are sorted by out-degree, with the <a @click="indexFAQ = 'top-citations'; showFAQ = true;" href="#top-citations">Top Citations</a> listed at the top. They are derived through forward citation searching (forward in time). They tend to be newer than most Input Articles. {{ (currentGraph.allCitations) ? 'All Citations are not de-duplicated and may also contain Input Articles and References.' : 'Top Citations are de-duplicated against Input Articles and References.'}}
               </p>
             </div>
             <b-field>
@@ -605,6 +640,7 @@
                 <option value="authors">Authors</option>
                 <option value="year">Year</option>
                 <option value="journal">Journal</option>
+                <option value="citesInputArticleId">Citing Input Article ID</option>
               </b-select>
               <b-input v-model="filterString" icon="magnify" placeholder="Filter articles…" expanded
                 :icon-right="filterString ? 'close' : undefined"
@@ -619,8 +655,20 @@
               @keydown.native.arrow-up.capture="tableArrowUpChangePage"
               @keydown.native.arrow-down.capture="tableArrowDownChangePage"
               detailed hoverable striped narrowed focusable
-              :paginated="outgoingSuggestionsFiltered.length > 10" per-page="10" pagination-position="top">
+              :paginated="outgoingSuggestionsFiltered.length > 10" :per-page="articlesPerPage" pagination-position="top">
               <template slot="detail" slot-scope="props">
+                <p class="content">
+                  <b-button v-if="(props.row.referencesCount || props.row.references.length) && !props.row.isSource" @click.stop="clickOpenReferences(props.row)"
+                    :disabled="isLoading">
+                    Add network for references
+                  </b-button>
+                  <b-button v-if="outDegree(props.row.id)" @click="showArticlesTab='inputArticles'; filterColumn='citedById'; filterString=props.row.id">
+                    Filter Input Articles cited by this ({{ outDegree(props.row.id) }})
+                  </b-button>
+                  <b-button v-if="inDegree(props.row.id)" @click="showArticlesTab='inputArticles'; filterColumn='citingId'; filterString=props.row.id">
+                    Filter Input Articles citing this ({{ inDegree(props.row.id) }})
+                  </b-button>
+                </p>
                 <p class="content">
                   <b>Authors ({{ props.row.authors.length }}):</b>
                   <template v-for="(author, index) in props.row.authors">
@@ -641,30 +689,31 @@
                       <a>{{ authorString([author]) }}</a>
                     </b-tooltip>
                   </template>
-                  <p class="content" v-if="currentGraph.referenced[props.row.id]">
-                    <b>Local citations (from input articles, In-Degree {{ currentGraph.referenced[props.row.id].length }}):</b>
-                    <template v-for="(id, index) in currentGraph.referenced[props.row.id]">
-                      <template v-if="index !== 0">; </template><a @click="showArticlesTab = 'inputArticles'; selected = currentGraph.input.filter(x => x.id == id)?.[0]">{{currentGraph.input.filter(x => x.id == id)?.[0].authors[0]?.LN + ' ' + currentGraph.input.filter(x => x.id == id)?.[0].year}}</a>
-                    </template>
-                  </p>
-                  <p class="content" v-if="currentGraph.citing[props.row.id]">
-                    <b>Local references (to input articles, Out-Degree {{ currentGraph.citing[props.row.id].length }}):</b>
-                    <template v-for="(id, index) in currentGraph.citing[props.row.id]">
-                      <template v-if="index !== 0">; </template><a @click="showArticlesTab = 'inputArticles'; selected = currentGraph.input.filter(x => x.id == id)?.[0]">{{currentGraph.input.filter(x => x.id == id)?.[0].authors[0]?.LN + ' ' + currentGraph.input.filter(x => x.id == id)?.[0].year}}</a>
-                    </template>
-                  </p>
-                  <template v-if="props.row.abstract">
-                    <h4 class="title is-6">Abstract</h4>
-                    <p v-html="formatTags(props.row.abstract)" class="content"></p>
-                  </template>
                 </p>
-                <p v-if="props.row.abstract" v-html="formatTags(props.row.abstract)" class="content"></p>
+                <p class="content" v-if="props.row.tldr">
+                  <b><a href="https://www.semanticscholar.org/faq#tldr" target="_blank">TLDR:</a></b> {{ formatTags(props.row.tldr) }}
+                </p>
+                <template v-if="props.row.abstract">
+                  <h4 class="title is-6">Abstract</h4>
+                  <p v-html="formatTags(props.row.abstract)" class="content"></p>
+                </template>
+              </template>
+
+              <template slot="top-left" slot-scope="props">
+                <div style="width: 133px">
+                  <b-select v-model="articlesPerPage" expanded>
+                    <option value="10">10 per page</option>
+                    <option value="20">20 per page</option>
+                    <option value="50">50 articles</option>
+                    <option value="100">100 per page</option>
+                  </b-select>
+                </div>
               </template>
               
               <b-table-column label="Title" v-slot="props">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
-                  {{ props.row.isInputArticle ? 'Input article: ' : ''  }}
+                  {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : (inputArticlesIds.includes(props.row.id) ? 'Input Article: ' : (incomingSuggestionsIds.includes(props.row.id) ? 'Reference: ' : '')) }}
                   <a :href="articleLink(props.row)" target="_blank" v-html="formatTags(props.row.title)"></a>
                 </span>
               </b-table-column>
@@ -685,52 +734,6 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citationsCount" label="Cit" meta="Estimated global incoming citations (how many papers cite this one)" sortable>
-                <template v-slot:header="{ column }">
-                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
-                    {{ column.label }}
-                  </b-tooltip>
-                </template>
-                <template v-slot="props">
-                  <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark">
-                    <a :href="'https://openalex.org/' + props.row.id" target="_blank" v-if="currentGraph.API === 'OpenAlex'">
-                      {{ props.row.citationsCount }}
-                    </a>
-                    <a :href="'https://semanticscholar.org/paper/' + props.row.id + '#citing-papers'" target="_blank" v-else-if="currentGraph.API === 'Semantic Scholar'">
-                      {{ props.row.citationsCount }}
-                    </a>
-                    <template v-else>
-                      {{ props.row.citationsCount }}
-                    </template>
-                  </b-tooltip>
-                </template>
-              </b-table-column>
-              <b-table-column field="inDegree" label="InDeg" meta="In-Degree: Number of incoming citations from input articles (excluding suggestions)"
-                sortable :custom-sort="sortInDegreeWrapper">
-                <template v-slot:header="{ column }">
-                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
-                    {{ column.label }}
-                  </b-tooltip>
-                </template>
-                <template v-slot="props">
-                  <b-tooltip label="In-Degree: Number of incoming citations from input articles (excluding suggestions)" dashed position="is-left" type="is-dark">
-                    {{ inDegree(props.row.id) }}
-                  </b-tooltip>
-                </template>
-              </b-table-column>
-              <b-table-column field="outDegree" label="OutDeg" meta="Out-Degree: Number of references (outgoing citations) data (excluding suggestions)"
-                sortable :custom-sort="sortOutDegreeWrapper">
-                <template v-slot:header="{ column }">
-                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
-                    {{ column.label }}
-                  </b-tooltip>
-                </template>
-                <template v-slot="props">
-                  <b-tooltip label="Out-Degree: Number of references (outgoing citations) to input articles (excluding suggestions)" dashed position="is-left" type="is-dark">
-                    {{ outDegree(props.row.id) }}
-                  </b-tooltip>
-                </template>
-              </b-table-column>
               <b-table-column label="Ref" meta="References in paper" 
                 sortable :custom-sort="sortReferencesWrapper">
                 <template v-slot:header="{ column }">
@@ -739,12 +742,54 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="Open new graph for the references of this article" position="is-left" type="is-dark">
-                    <b-button @click.stop="clickOpenReferences(props.row)" type="is-primary" size="is-small"
-                      :inverted="(selected === props.row) ? true : false"
-                      :disabled="isLoading || (!props.row.referencesCount && !props.row.references.length) || props.row.isSource">
-                      {{ props.row.referencesCount || props.row.references?.length }}
-                    </b-button>
+                  <a :href="referencesLink(props.row)" target="_blank" v-if="referencesLink(props.row)">
+                    {{ props.row.referencesCount || props.row.references?.length }}
+                  </a>
+                  <template v-else>
+                    {{ props.row.referencesCount || props.row.references?.length }}
+                  </template>
+                </template>
+              </b-table-column>
+              <b-table-column field="citationsCount" label="Cit" meta="Estimated global incoming citations (how many papers cite this one)" sortable>
+                <template v-slot:header="{ column }">
+                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                    {{ column.label }}
+                  </b-tooltip>
+                </template>
+                <template v-slot="props">
+                  <b-tooltip label="Estimated number of global citations" dashed position="is-left" type="is-dark">
+                    <a :href="citationsLink(props.row)" target="_blank" v-if="citationsLink(props.row)">
+                      {{ props.row.citationsCount }}
+                    </a>
+                    <template v-else>
+                      {{ props.row.citationsCount }}
+                    </template>
+                  </b-tooltip>
+                </template>
+              </b-table-column>
+              <b-table-column field="outDegree" label="OutDeg" meta="Out-Degree: Number of Input Articles cited by this"
+                sortable :custom-sort="sortOutDegreeWrapper">
+                <template v-slot:header="{ column }">
+                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                    {{ column.label }}
+                  </b-tooltip>
+                </template>
+                <template v-slot="props">
+                  <b-tooltip label="Out-Degree: Number of Input Articles cited by this" dashed position="is-left" type="is-dark">
+                    {{ outDegree(props.row.id) }}
+                  </b-tooltip>
+                </template>
+              </b-table-column>
+              <b-table-column field="inDegree" label="InDeg" meta="In-Degree: Number of Input Articles citing this"
+                sortable :custom-sort="sortInDegreeWrapper">
+                <template v-slot:header="{ column }">
+                  <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
+                    {{ column.label }}
+                  </b-tooltip>
+                </template>
+                <template v-slot="props">
+                  <b-tooltip label="In-Degree: Number of Input Articles citing this" dashed position="is-left" type="is-dark">
+                    {{ inDegree(props.row.id) }}
                   </b-tooltip>
                 </template>
               </b-table-column>
@@ -781,7 +826,7 @@
                   <option :value="val">{{ val }}</option>
                 </template>
               </select>
-              input articles are shown)
+              Input Articles are shown)
             </span>
           </b-tab-item>
         </b-tabs>
@@ -799,7 +844,7 @@
         </div>
       </section>
       
-      <b-modal :active.sync="showCitationNetworkSettings" :destroy-on-hide="false" :width="750" style="visibility: hidden" id="citationNetworkSettingsModal">
+      <b-modal :active.sync="showCitationNetworkSettings" :render-on-mounted="true" :destroy-on-hide="false" :width="750" id="citationNetworkSettingsModal">
         <div class="card">
           <header class="modal-card-head">
             <content>
@@ -856,7 +901,7 @@
         </div>
       </b-modal>
 
-      <b-modal :active.sync="showAuthorNetworkSettings" :destroy-on-hide="false" :width="750" style="visibility: hidden" id="authorNetworkSettingsModal">
+      <b-modal :active.sync="showAuthorNetworkSettings" :render-on-mounted="true" :destroy-on-hide="false" :width="750" id="authorNetworkSettingsModal">
         <div class="card">
           <header class="modal-card-head">
             <content>
@@ -916,7 +961,7 @@
           </header>
           <div class="card-content">
             <p class="content">
-              References can be retrieved through all <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">APIs</a>. Citations can be retrieved through OpenAlex (OA), Semantic Scholar (S2) and OpenCitations (OC). <a @click="indexFAQ = 'top-references'; showFAQ = true;" href="#top-references">Top references</a> are the most cited references by the input articles. <a @click="indexFAQ = 'top-citations'; showFAQ = true;" href="#top-citations">Top citations</a> are citing the most input articles. Retrieving all references / citations works best with OpenAlex (OA, truly all references / citations thanks to cursor paging) & Semantic Scholar (S2, currently max. 1000 referenes / citations per paper).
+              References can be retrieved through all <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">APIs</a>. Citations can be retrieved through OpenAlex (OA), Semantic Scholar (S2) and OpenCitations (OC). <a @click="indexFAQ = 'top-references'; showFAQ = true;" href="#top-references">Top References</a> are the most cited references by the Input Articles. <a @click="indexFAQ = 'top-citations'; showFAQ = true;" href="#top-citations">Top Citations</a> are citing the most Input Articles. Retrieving All References / Citations works best with OpenAlex (OA, truly All References / Citations thanks to cursor paging) & Semantic Scholar (S2, currently max. 1000 referenes / citations per paper).
             </p>
             <b-field grouped>
               <b-field label="Select API">
@@ -969,7 +1014,7 @@
                 This web app aims to help scientists with their literature review using metadata from <a href="https://openalex.org/" target="_blank">OpenAlex</a> (OA), <a href="https://semanticscholar.org/" target="_blank">Semantic Scholar</a> (S2), <a href="https://opencitations.net/" target="_blank">OpenCitations</a> (OC) and <a href="https://crossref.org" target="_blank">Crossref</a> (CR). Academic papers cite one another, thus creating a <a href="https://en.wikipedia.org/wiki/Citation_graph" target="_blank">citation network (= graph)</a>. Each node (= vertex) represents an article and each edge (= link / arrow) represents a reference (outgoing) / citation (incoming). Citation networks are a topic of <a @click="indexFAQ = 'bibliometrics'" href="#bibliometrics">bibliometrics, for which other great software exists as well</a>.
               </p>
               <p>
-                This web app visualizes subsets of the global citation network that I call 'local citation networks', defined by the references of a given set of input articles. In addition, the most cited references missing in the set of input articles are suggested for further review as <a @click="indexFAQ = 'top-references'" href="#top-references">'Top references'</a>. Other missing articles citing the highest number of input articles are <a @click="indexFAQ = 'top-citations'" href="#top-citations">'Top citations'</a>.
+                This web app visualizes subsets of the global citation network that I call 'local citation networks', defined by the references of a given set of Input Articles. In addition, the most cited references missing in the set of Input Articles are suggested for further review as <a @click="indexFAQ = 'top-references'" href="#top-references">'Top References'</a>. Other missing articles citing the highest number of Input Articles are <a @click="indexFAQ = 'top-citations'" href="#top-citations">'Top Citations'</a>.
               </p>
             </div>
           </b-collapse>
@@ -983,7 +1028,7 @@
               </p>
               <ol>
                 <li>Based on the references of a given paper ('source article'). This could be a review or just an interesting paper you'd like to dig into deeper. Either click the + button at the top right and enter the <a href="https://en.wikipedia.org/wiki/Digital_object_identifier" target="_blank">digital object identifier (DOI)</a> of the source article or use the <a @click="indexFAQ = 'bookmarklet'" href="#bookmarklet">bookmarklet described below</a>.</li>
-                <li>The second way to create a new network is with a custom list of IDs. Either click the + button at the top right and then 'Enter custom list of IDs instead', or scan a plain text file for DOIs, which allows you to create your own unique lists of input articles. For example, this could be a .ris / .bib file exported by your reference manager (e.g. <a href="https://www.zotero.org/" target="_blank">Zotero</a> or EndNote). In theory, you can scan any plain text file (PDFs and Microsoft Office files don't work). However, due to the multitude of characters allowed in DOIs, the system might not catch all of them correctly (see <a href="https://www.crossref.org/blog/dois-and-matching-regular-expressions/" target="_blank">this blog post by Crossref for more explanation</a>).</li>
+                <li>The second way to create a new network is with a custom list of IDs. Either click the + button at the top right and then 'Enter custom list of IDs instead', or scan a plain text file for DOIs, which allows you to create your own unique lists of Input Articles. For example, this could be a .ris / .bib file exported by your reference manager (e.g. <a href="https://www.zotero.org/" target="_blank">Zotero</a> or EndNote). In theory, you can scan any plain text file (PDFs and Microsoft Office files don't work). However, due to the multitude of characters allowed in DOIs, the system might not catch all of them correctly (see <a href="https://www.crossref.org/blog/dois-and-matching-regular-expressions/" target="_blank">this blog post by Crossref for more explanation</a>).</li>
               </ol>
               <p>
                 Up to 5 tabs can be open at the same time, representing a different local citation network each. Only one query can be processed at a time, which is why some buttons are disabled when a query is still going on. The APIs can return errors when they're overloaded, the reference list is too long or your search frequency too high.
@@ -1017,24 +1062,24 @@
           </b-collapse>
           <b-collapse class="card" id="top-references" :open="indexFAQ.includes('top-references')" @open="indexFAQ = 'top-references'" animation="none">
             <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">Where do the 'Top references' come from?</h4>
+              <h4 class="card-header-title">Where do the 'Top References' come from?</h4>
             </div>
             <div class="card-content content">
               <p>
-                'Top references' are the most cited references by the input articles that are still missing, thus they have high in-degrees. In order to create the local citation network, this web apps attempts to retrieve reference-lists from all input articles (usually some are missed, <a @click="indexFAQ = 'completeness'" href="#completeness">see completeness</a>) and then orders these references by the number of local incoming citations (in-degree, <a @click="indexFAQ = 'citation-network'" href="#citation-network">see network</a>). Some of these references might be among the input articles, depending on how connected they are. However, some of them usually aren't among the input articles and then become 'Top references'.
+                'Top References' are the most cited references by the Input Articles that are still missing, thus they have high in-degrees. In order to create the local citation network, this web apps attempts to retrieve reference-lists from all Input Articles (usually some are missed, <a @click="indexFAQ = 'completeness'" href="#completeness">see completeness</a>) and then orders these references by the number of local incoming citations (in-degree, <a @click="indexFAQ = 'citation-network'" href="#citation-network">see network</a>). Some of these references might be among the Input Articles, depending on how connected they are. However, some of them usually aren't among the Input Articles and then become 'Top References'.
               </p>
               <p>
-                Keep in mind that because of the nature of this approach, 'Top references' are generally older than the input articles. This can help identifying seminal papers of the field but not newer state-of-the-art research. In order to identify newer articles, see <a @click="indexFAQ = 'top-citations'" href="#top-citations">'Top citations'</a>.
+                Keep in mind that because of the nature of this approach, 'Top References' are generally older than the Input Articles. This can help identifying seminal papers of the field but not newer state-of-the-art research. In order to identify newer articles, see <a @click="indexFAQ = 'top-citations'" href="#top-citations">'Top Citations'</a>.
               </p>
             </div>
           </b-collapse>
           <b-collapse class="card" id="top-citations" :open="indexFAQ.includes('top-citations')" @open="indexFAQ = 'top-citations'" animation="none">
             <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">Where do the 'Top citations' come from?</h4>
+              <h4 class="card-header-title">Where do the 'Top Citations' come from?</h4>
             </div>
             <div class="card-content content">
               <p>
-                'Top citations' are citing the most input articles, thus they have high out-degrees. They are generally newer than the input articles. Local Citation Network currently supports this feature with the APIs of <a @click="indexFAQ = 'switch-api'" href="#switch-api">OpenAlex (OA), Semantic Scholar (S2) and OpenCitations (OC)</a>.
+                'Top Citations' are citing the most Input Articles, thus they have high out-degrees. They are generally newer than the Input Articles. Local Citation Network currently supports this feature with the APIs of <a @click="indexFAQ = 'switch-api'" href="#switch-api">OpenAlex (OA), Semantic Scholar (S2) and OpenCitations (OC)</a>.
               </p>
             </div>
           </b-collapse>
@@ -1044,7 +1089,7 @@
             </div>
             <div class="card-content content">
               <p>
-                Zoom by scrolling and pan by dragging. Each node (= vertex) represents an article. They are ordered by year from top (newer) to bottom (older), with each year colored differently. Alternatively, nodes can also be colored by the article's journal in 'network settings'. The size of the nodes depends on the sum of their 'in-degree', the number of citations the paper received from the input articles, and their 'out-degree', the number of input articles they cite. The local 'in-degree' is not always proportional to the global citation count. Input articles are circle-shaped (●), except for the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, which is diamond-shaped (◆). Up-pointing triangles (▲) represent <a @click="indexFAQ = 'top-references'" href="#top-references">'Top references'</a>, which are cited by the input articles. Down-pointing triangles (▼) are <a @click="indexFAQ = 'top-citations'" href="#top-citations">'Top citations'</a>, which are citing the input articles.
+                Zoom by scrolling and pan by dragging. Each node (= vertex) represents an article. They are ordered by year from top (newer) to bottom (older), with each year colored differently. Alternatively, nodes can also be colored by the article's journal in 'network settings'. The size of the nodes depends on the sum of their 'in-degree', the number of citations the paper received from the Input Articles, and their 'out-degree', the number of Input Articles they cite. The local 'in-degree' is not always proportional to the global citation count. Input Articles are circle-shaped (●), except for the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, which is diamond-shaped (◆). Up-pointing triangles (▲) represent <a @click="indexFAQ = 'top-references'" href="#top-references">'Top References'</a>, which are cited by the Input Articles. Down-pointing triangles (▼) are <a @click="indexFAQ = 'top-citations'" href="#top-citations">'Top Citations'</a>, which are citing the Input Articles.
               </p>
               <p>
                 Each edge (= link / arrow) represents a reference and citation at the same time: They are references (=outgoing citations) for their source nodes and (incoming) citations for their target nodes. Usually papers can only cite older papers, hence edges tend to point downwards (or sidewards for citations of the same year). Technically a citation network is a <a href="https://en.wikipedia.org/wiki/Directed_acyclic_graph" target="_blank">directed acyclic graph</a>.
@@ -1057,10 +1102,10 @@
             </div>
             <div class="card-content content">
               <p>
-                This 'local' co-authorship network shows the most common authors among the input articles. Depending on the discipline, the number of (co)authors among a set of multiple articles can quickly rise to the hundreds, which is why this author network only shows authors with a minimum number of input articles (not to be mistaken with their global number of publications, which is usually higher). The default minimum number of input articles is determined so that this network shows no more than 50 authors, but it can be changed with the dropdown at the bottom.
+                This 'local' co-authorship network shows the most common authors among the Input Articles. Depending on the discipline, the number of (co)authors among a set of multiple articles can quickly rise to the hundreds, which is why this author network only shows authors with a minimum number of Input Articles (not to be mistaken with their global number of publications, which is usually higher). The default minimum number of Input Articles is determined so that this network shows no more than 50 authors, but it can be changed with the dropdown at the bottom.
               </p>
               <p>
-                Each node (= vertex) represents an author. The size depends on their number of input & suggested articles and the color depends on the first or last article they first appear in. Authors of input articles are circle-shaped (●), except for authors of the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, who are diamond-shaped (◆). Click authors to filter articles-tables, ctrl+click to filter for more than one author.
+                Each node (= vertex) represents an author. The size depends on their number of input & suggested articles and the color depends on the first or last article they first appear in. Authors of Input Articles are circle-shaped (●), except for authors of the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, who are diamond-shaped (◆). Click authors to filter articles-tables, ctrl+click to filter for more than one author.
               </p>
               <p>
                 Each edge (= link) represents a collaboration between two authors among the source, input and suggested articles, the width indicating the number of collaborations. Click edges to filter input & suggested articles.
@@ -1133,18 +1178,18 @@
             </div>
             <div class="card-content content">
               <p>
-                The data is usually incomplete. Some DOIs cannot be found at all in some APIs and for those that are found, often some metadata like authors, abstracts or reference-lists are missing or sometimes incorrect. For the local citation network and 'Top references', the completeness of the reference-lists is most important.
+                The data is usually incomplete. Some DOIs cannot be found at all in some APIs and for those that are found, often some metadata like authors, abstracts or reference-lists are missing or sometimes incorrect. For the local citation network and 'Top References', the completeness of the reference-lists is most important.
               </p>
               <p>
-                The estimated completeness of the reference-lists can be seen above the search bar in the "Input articles" tab and is calculated in the following way: For OpenAlex and OpenCitations it is the fraction of input articles that have reference-lists themselves (multiplied by the fraction of specified DOIs found, in case of a custom input list).
+                The estimated completeness of the reference-lists can be seen above the search bar in the "Input Articles" tab and is calculated in the following way: For OpenAlex and OpenCitations it is the fraction of Input Articles that have reference-lists themselves (multiplied by the fraction of specified DOIs found, in case of a custom input list).
               </p>
               <p>
                 Semantic Scholar and Crossref allow for more subtle calculation, as they often also provide the total reference count, which is often larger than the reference-list of DOIs (older references often don't have DOIs and neither do some specific books, papers or conference abstracts). The estimated completeness is thus calculated as the product of three fractions:
               </p>
               <ol>
-                <li>Source reference completeness: (Number of input articles found in API) / (Total reference count of source or total number of lines in custom input list)</li>
-                <li>(Number of input articles (excluding source) that have reference-lists themselves) / (Number of input articles excluding source)</li>
-                <li>Average input articles' reference completeness among those input articles that do have reference-lists: (Length of reference-list) / (Total reference count)</li>
+                <li>Source reference completeness: (Number of Input Articles found in API) / (Total reference count of source or total number of lines in custom input list)</li>
+                <li>(Number of Input Articles (excluding source) that have reference-lists themselves) / (Number of Input Articles excluding source)</li>
+                <li>Average Input Articles' reference completeness among those Input Articles that do have reference-lists: (Length of reference-list) / (Total reference count)</li>
               </ol>
             </div>
           </b-collapse>
