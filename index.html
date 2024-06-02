@@ -265,11 +265,11 @@
                     :disabled="isLoading">
                     Add network for references
                   </b-button>
-                  <b-button v-if="(currentGraph.allReferences) ? (props.row.referencesCount || props.row.references.length) : citedByInputArticleId(currentGraph.incomingSuggestions, props.row.id).length" 
+                  <b-button v-if="currentGraph.incomingSuggestions?.length && ((currentGraph.allReferences) ? (props.row.referencesCount || props.row.references.length) : citedByInputArticleId(currentGraph.incomingSuggestions, props.row.id).length)" 
                     @click="showArticlesTab='topReferences'; filterColumn='citedByInputArticleId'; filterString=props.row.id">
                     Filter References ({{ (currentGraph.allReferences) ? (props.row.referencesCount || props.row.references.length) : citedByInputArticleId(currentGraph.incomingSuggestions, props.row.id).length }})
                   </b-button>
-                  <b-button v-if="(currentGraph.allCitations) ? props.row.citationsCount : citesInputArticleId(currentGraph.outgoingSuggestions, props.row.id).length"
+                  <b-button v-if="currentGraph.outgoingSuggestions?.length && ((currentGraph.allCitations) ? props.row.citationsCount : citesInputArticleId(currentGraph.outgoingSuggestions, props.row.id).length)"
                     @click="showArticlesTab='topCitations'; filterColumn='citesInputArticleId'; filterString=props.row.id">
                     Filter Citations ({{ (currentGraph.allCitations) ? props.row.citationsCount : citesInputArticleId(currentGraph.outgoingSuggestions, props.row.id).length }})
                   </b-button>
@@ -990,6 +990,9 @@
                   <option :value="Infinity">All</option>
                 </b-select>
               </b-field>
+            </b-field>
+            <b-field label="Semantic Scholar (S2) API Key:">
+              <b-input v-model="semanticScholarAPIKey"></b-input>
             </b-field>
           </div>
         </div>

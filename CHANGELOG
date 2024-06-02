@@ -1,3 +1,9 @@
+02.06.2024 v1.23
++ Support Semantic Scholar API Keys (may occassionally speed up API, request one here: https://www.semanticscholar.org/product/api#api-key).
+* Refactored code to make use of Object.freeze() for large arrays containing articles, increasing performance.
+* Refactored code to calculate "referenced" and "citing" objects on the fly instead of caching them in the graph object. This reduces size of localStorage ("autosave results locally") and network json files ("download full network"). It leads to slightly more computation when changing the network-tab. Also made it more efficient by only looking at articles' references lists (instead of also citations lists) and thus reduced some redundancies.
+! The above refactoring also fixed a bug that sometimes led to slightly wrong numbers of In-Degree and Out-Degree for References and Citations. This fix also applies retrospectively to saved networks after reloading.
+
 01.06.2024 v1.22
 + For Input Articles: Added "Filter References" and "Filter Citations" in article details.
 + For all articles: Added "Filter Input Articles cited by this" (corresponds to Out-Degree) and "Filter Input Articles citing this" (corresponds to In-Degree).
