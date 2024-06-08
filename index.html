@@ -150,7 +150,7 @@
         <template slot="start">
           <ul class="buttons">
             <b-navbar-item tag="li" v-for="item, index in graphs" :key="index" class="navbar-item">
-              <b-button :type="(index==currentTabIndex) ? 'is-primary' : ''" :title="item.tabTitle" @click="showArticlesTab='inputArticles'; currentTabIndex=index" rounded>
+              <b-button :type="(index==currentTabIndex) ? 'is-primary' : ''" :title="item.tabTitle" @click="setCurrentTabIndex(index)" rounded>
                 {{ item.tabLabel }} ({{ abbreviateAPI(item.API) }})
                 <a title="Close tab" class="delete" @click.stop="clickCloseTab(index)"></a> <!-- .stop prevents event propagation to parent @click event -->
               </b-button>
@@ -247,7 +247,13 @@
                 :icon-right="filterString ? 'close' : undefined"
                 icon-right-clickable
                 @icon-right-click="filterString=''"></b-input>
-              <span class="button is-static">{{ inputArticlesFiltered.length + " / " + currentGraph.input.length }}</span>
+              <span class="button is-static" style="border-radius: 0">{{ inputArticlesFiltered.length + " / " + currentGraph.input.length }}</span>
+              <b-select v-model="articlesPerPage">
+                <option value="10">10 per page</option>
+                <option value="20">20 per page</option>
+                <option value="50">50 per page</option>
+                <option value="100">100 per page</option>
+              </b-select>
             </b-field>
             <b-table ref="inputArticlesTable" :data="inputArticlesFiltered" :selected.sync="selectedInputArticle" :current-page.sync="inputArticlesTablePage"
               default-sort="inDegree" default-sort-direction="desc"
@@ -255,23 +261,23 @@
               @keyup.native.arrow-right="toggleArticle"
               @keydown.native.arrow-up.capture="tableArrowUpChangePage"
               @keydown.native.arrow-down.capture="tableArrowDownChangePage"
-              detailed :has-detailed-visible="row => (row.authors.length || inDegree(row.id) || outDegree(row.id) || row.abstract)"
+              detailed :has-detailed-visible="row => (row.authors.length || inDegree(row.id) || outDegree(row.id) || row.abstract || row.tldr)"
               hoverable striped narrowed focusable
-              :paginated="inputArticlesFiltered.length > 10" :per-page="articlesPerPage" pagination-position="top">
+              :paginated="inputArticlesFiltered.length > articlesPerPage" :per-page="articlesPerPage" pagination-position="both">
               <template slot="detail" slot-scope="props">
                 <p class="content">
-                  <b-button v-if="(props.row.referencesCount || props.row.references.length) && !props.row.isSource" 
+                  <b-button v-if="(props.row.referencesCount || props.row.references?.length) && !props.row.isSource" 
                     @click.stop="clickOpenReferences(props.row)"
                     :disabled="isLoading">
                     Add network for references
                   </b-button>
                   <b-button v-if="currentGraph.incomingSuggestions?.length && ((currentGraph.allReferences) ? (props.row.referencesCount || props.row.references.length) : citedByInputArticleId(currentGraph.incomingSuggestions, props.row.id).length)" 
                     @click="showArticlesTab='topReferences'; filterColumn='citedByInputArticleId'; filterString=props.row.id">
-                    Filter References ({{ (currentGraph.allReferences) ? (props.row.referencesCount || props.row.references.length) : citedByInputArticleId(currentGraph.incomingSuggestions, props.row.id).length }})
+                    Filter References ({{ citedByInputArticleId(currentGraph.incomingSuggestions, props.row.id).length }})
                   </b-button>
                   <b-button v-if="currentGraph.outgoingSuggestions?.length && ((currentGraph.allCitations) ? props.row.citationsCount : citesInputArticleId(currentGraph.outgoingSuggestions, props.row.id).length)"
                     @click="showArticlesTab='topCitations'; filterColumn='citesInputArticleId'; filterString=props.row.id">
-                    Filter Citations ({{ (currentGraph.allCitations) ? props.row.citationsCount : citesInputArticleId(currentGraph.outgoingSuggestions, props.row.id).length }})
+                    Filter Citations ({{ citesInputArticleId(currentGraph.outgoingSuggestions, props.row.id).length }})
                   </b-button>
                   <b-button v-if="outDegree(props.row.id)"
                     @click="showArticlesTab='inputArticles'; filterColumn='citedById'; filterString=props.row.id">
@@ -282,7 +288,7 @@
                     Filter Input Articles citing this ({{ inDegree(props.row.id) }})
                   </b-button>
                 </p>
-                <p class="content">
+                <p class="content" v-if="props.row.authors.length">
                   <b>Authors ({{ props.row.authors.length }}):</b>
                   <template v-for="(author, index) in props.row.authors">
                     <template v-if="index !== 0">; </template>
@@ -318,17 +324,6 @@
                 </template>
               </template>
 
-              <template slot="top-left" slot-scope="props">
-                <div style="width: 133px">
-                  <b-select v-model="articlesPerPage" expanded>
-                    <option value="10">10 per page</option>
-                    <option value="20">20 per page</option>
-                    <option value="50">50 articles</option>
-                    <option value="100">100 per page</option>
-                  </b-select>
-                </div>
-              </template>
-
               <b-table-column field="numberInSourceReferences" label="#" :meta="currentGraph.source.id ? 'Original reference number in source' : 'Number in custom list'" :visible="showNumberInSourceReferences" sortable>
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-right" type="is-dark">
@@ -343,8 +338,8 @@
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
                   {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : '' }}
-                  <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank">{{ formatTags(props.row.title) }}</a>
-                  <template v-else>{{ formatTags(props.row.title) }}</template>
+                  <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank">{{ formatTags(props.row.title) || props.row.doi || props.row.id }}</a>
+                  <template v-else>{{ formatTags(props.row.title) || props.row.doi || props.row.id }}</template>
                 </span>
               </b-table-column>
               <b-table-column field="authors" label="Author" v-slot="props">
@@ -462,7 +457,13 @@
                 :icon-right="filterString ? 'close' : undefined"
                 icon-right-clickable
                 @icon-right-click="filterString=''"></b-input>
-              <span class="button is-static">{{ incomingSuggestionsFiltered.length + " / " + currentGraph.incomingSuggestions?.length }}</span>
+              <span class="button is-static" style="border-radius: 0">{{ incomingSuggestionsFiltered.length + " / " + currentGraph.incomingSuggestions?.length }}</span>
+              <b-select v-model="articlesPerPage">
+                <option value="10">10 per page</option>
+                <option value="20">20 per page</option>
+                <option value="50">50 per page</option>
+                <option value="100">100 per page</option>
+              </b-select>
             </b-field>
             <b-table ref="topReferencesTable" :data="incomingSuggestionsFiltered" :selected.sync="selectedIncomingSuggestionsArticle" :current-page.sync="topReferencesTablePage"
               default-sort="inDegree" default-sort-direction="desc"
@@ -471,24 +472,27 @@
               @keydown.native.arrow-up.capture="tableArrowUpChangePage"
               @keydown.native.arrow-down.capture="tableArrowDownChangePage"
               detailed hoverable striped narrowed focusable
-              :paginated="incomingSuggestionsFiltered.length > 10" :per-page="articlesPerPage" pagination-position="top">
+              :paginated="incomingSuggestionsFiltered.length > articlesPerPage" :per-page="articlesPerPage" pagination-position="both">
               <template slot="detail" slot-scope="props">
                 <p class="content">
-                  <b-button v-if="(props.row.referencesCount || props.row.references.length) && !props.row.isSource" @click.stop="clickOpenReferences(props.row)"
+                  <b-button v-if="(props.row.referencesCount || props.row.references?.length) && !props.row.isSource"
+                    @click.stop="clickOpenReferences(props.row)"
                     :disabled="isLoading">
                     Add network for references
                   </b-button>
-                  <b-button v-if="outDegree(props.row.id)" @click="showArticlesTab='inputArticles'; filterColumn='citedById'; filterString=props.row.id">
+                  <b-button v-if="outDegree(props.row.id)"
+                    @click="showArticlesTab='inputArticles'; filterColumn='citedById'; filterString=props.row.id">
                     Filter Input Articles cited by this ({{ outDegree(props.row.id) }})
                   </b-button>
-                  <b-button v-if="inDegree(props.row.id)" @click="showArticlesTab='inputArticles'; filterColumn='citingId'; filterString=props.row.id">
+                  <b-button v-if="inDegree(props.row.id)"
+                    @click="showArticlesTab='inputArticles'; filterColumn='citingId'; filterString=props.row.id">
                     Filter Input Articles citing this ({{ inDegree(props.row.id) }})
                   </b-button>
                 </p>
-                <p class="content">
+                <p class="content" v-if="props.row.authors.length">
                   <b>Authors ({{ props.row.authors.length }}):</b>
                   <template v-for="(author, index) in props.row.authors">
-                    <template v-if="index !== 0">, </template>
+                    <template v-if="index !== 0">; </template>
                     <b-tooltip
                       multilined
                       type="is-light"
@@ -514,23 +518,13 @@
                   <p v-html="formatTags(props.row.abstract)" class="content"></p>
                 </template>
               </template>
-
-              <template slot="top-left" slot-scope="props">
-                <div style="width: 133px">
-                  <b-select v-model="articlesPerPage" expanded>
-                    <option value="10">10 per page</option>
-                    <option value="20">20 per page</option>
-                    <option value="50">50 articles</option>
-                    <option value="100">100 per page</option>
-                  </b-select>
-                </div>
-              </template>
               
               <b-table-column label="Title" v-slot="props">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
                   {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : (inputArticlesIds.includes(props.row.id) ? 'Input Article: ' : '') }}
-                  <a :href="articleLink(props.row)" target="_blank" v-html="formatTags(props.row.title)"></a>
+                  <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank">{{ formatTags(props.row.title) || props.row.doi || props.row.id }}</a>
+                  <template v-else>{{ formatTags(props.row.title) || props.row.doi || props.row.id }}</template>
                 </span>
               </b-table-column>
               <b-table-column field="authors" label="Author" v-slot="props">
@@ -646,7 +640,13 @@
                 :icon-right="filterString ? 'close' : undefined"
                 icon-right-clickable
                 @icon-right-click="filterString=''"></b-input>
-              <span class="button is-static">{{ outgoingSuggestionsFiltered.length + " / " + currentGraph.outgoingSuggestions?.length }}</span>
+              <span class="button is-static" style="border-radius: 0">{{ outgoingSuggestionsFiltered.length + " / " + currentGraph.outgoingSuggestions?.length }}</span>
+              <b-select v-model="articlesPerPage">
+                <option value="10">10 per page</option>
+                <option value="20">20 per page</option>
+                <option value="50">50 per page</option>
+                <option value="100">100 per page</option>
+              </b-select>
             </b-field>
             <b-table ref="topCitationsTable" :data="outgoingSuggestionsFiltered" :selected.sync="selectedOutgoingSuggestionsArticle" :current-page.sync="topCitationsTablePage"
               default-sort="outDegree" default-sort-direction="desc"
@@ -655,24 +655,27 @@
               @keydown.native.arrow-up.capture="tableArrowUpChangePage"
               @keydown.native.arrow-down.capture="tableArrowDownChangePage"
               detailed hoverable striped narrowed focusable
-              :paginated="outgoingSuggestionsFiltered.length > 10" :per-page="articlesPerPage" pagination-position="top">
+              :paginated="outgoingSuggestionsFiltered.length > articlesPerPage" :per-page="articlesPerPage" pagination-position="both">
               <template slot="detail" slot-scope="props">
                 <p class="content">
-                  <b-button v-if="(props.row.referencesCount || props.row.references.length) && !props.row.isSource" @click.stop="clickOpenReferences(props.row)"
+                  <b-button v-if="(props.row.referencesCount || props.row.references?.length) && !props.row.isSource"
+                    @click.stop="clickOpenReferences(props.row)"
                     :disabled="isLoading">
                     Add network for references
                   </b-button>
-                  <b-button v-if="outDegree(props.row.id)" @click="showArticlesTab='inputArticles'; filterColumn='citedById'; filterString=props.row.id">
+                  <b-button v-if="outDegree(props.row.id)"
+                    @click="showArticlesTab='inputArticles'; filterColumn='citedById'; filterString=props.row.id">
                     Filter Input Articles cited by this ({{ outDegree(props.row.id) }})
                   </b-button>
-                  <b-button v-if="inDegree(props.row.id)" @click="showArticlesTab='inputArticles'; filterColumn='citingId'; filterString=props.row.id">
+                  <b-button v-if="inDegree(props.row.id)"
+                    @click="showArticlesTab='inputArticles'; filterColumn='citingId'; filterString=props.row.id">
                     Filter Input Articles citing this ({{ inDegree(props.row.id) }})
                   </b-button>
                 </p>
-                <p class="content">
+                <p class="content" v-if="props.row.authors.length">
                   <b>Authors ({{ props.row.authors.length }}):</b>
                   <template v-for="(author, index) in props.row.authors">
-                    <template v-if="index !== 0">, </template>
+                    <template v-if="index !== 0">; </template>
                     <b-tooltip
                       multilined
                       type="is-light"
@@ -699,22 +702,12 @@
                 </template>
               </template>
 
-              <template slot="top-left" slot-scope="props">
-                <div style="width: 133px">
-                  <b-select v-model="articlesPerPage" expanded>
-                    <option value="10">10 per page</option>
-                    <option value="20">20 per page</option>
-                    <option value="50">50 articles</option>
-                    <option value="100">100 per page</option>
-                  </b-select>
-                </div>
-              </template>
-              
               <b-table-column label="Title" v-slot="props">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
                   {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : (inputArticlesIds.includes(props.row.id) ? 'Input Article: ' : (incomingSuggestionsIds.includes(props.row.id) ? 'Reference: ' : '')) }}
-                  <a :href="articleLink(props.row)" target="_blank" v-html="formatTags(props.row.title)"></a>
+                  <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank">{{ formatTags(props.row.title) || props.row.doi || props.row.id }}</a>
+                  <template v-else>{{ formatTags(props.row.title) || props.row.doi || props.row.id }}</template>
                 </span>
               </b-table-column>
               <b-table-column field="authors" label="Author" v-slot="props">
@@ -931,7 +924,7 @@
         </div>
       </b-modal>
 
-      <b-modal :active.sync="editListOfIds" :can-cancel="['x', 'outside']" has-modal-card @cancel="newSource=undefined; listOfIds=undefined; listName=undefined; bookmarkletURL=undefined">
+      <b-modal :active.sync="editListOfIds" :can-cancel="['x', 'outside']" has-modal-card @cancel="newSourceId=undefined; listOfIds=undefined; listName=undefined; bookmarkletURL=undefined">
         <div class="modal-card">
           <header class="modal-card-head">
             <content>
@@ -945,9 +938,9 @@
           </section>
           <footer class="modal-card-foot">
             <b-button @click="showOptionsAPI = !showOptionsAPI" style="width: 100%">API: {{ API }} ({{ abbreviateAPI(API) }})</b-button>
-            <b-button @click="clickButtonAdd" style="width: 100%">{{ newSource ? 'Source: ' + newSource.substr(0, 20) : 'No source' }}</b-button>
-            <b-button class="is-primary" @click="importList" :disabled="!(listOfIds || []).filter(Boolean).length" style="width: 100%">{{ newSource ? 'Import': 'Import with list name: '}}</b-button>
-            <b-input v-if="!newSource" v-model.lazy="listName" maxlength="100" :has-counter="false" style="width: 100%"></b-input>
+            <b-button @click="clickButtonAdd" style="width: 100%">{{ newSourceId ? 'Source: ' + newSourceId.substr(0, 20) : 'No source' }}</b-button>
+            <b-button class="is-primary" @click="importList" :disabled="!(listOfIds || []).filter(Boolean).length" style="width: 100%">{{ newSourceId ? 'Import': 'Import with list name: '}}</b-button>
+            <b-input v-if="!newSourceId" v-model.lazy="listName" maxlength="100" :has-counter="false" style="width: 100%"></b-input>
           </footer>
         </div>
       </b-modal>
@@ -961,7 +954,7 @@
           </header>
           <div class="card-content">
             <p class="content">
-              References can be retrieved through all <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">APIs</a>. Citations can be retrieved through OpenAlex (OA), Semantic Scholar (S2) and OpenCitations (OC). <a @click="indexFAQ = 'top-references'; showFAQ = true;" href="#top-references">Top References</a> are the most cited references by the Input Articles. <a @click="indexFAQ = 'top-citations'; showFAQ = true;" href="#top-citations">Top Citations</a> are citing the most Input Articles. Retrieving All References / Citations works best with OpenAlex (OA, truly All References / Citations thanks to cursor paging) & Semantic Scholar (S2, currently max. 1000 referenes / citations per paper).
+              References can be retrieved through all <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">APIs</a>. Citations can be retrieved through OpenAlex (OA), Semantic Scholar (S2) and OpenCitations (OC). <a @click="indexFAQ = 'top-references'; showFAQ = true;" href="#top-references">Top References</a> are the most cited references by the Input Articles. <a @click="indexFAQ = 'top-citations'; showFAQ = true;" href="#top-citations">Top Citations</a> are citing the most Input Articles. Retrieving All References / Citations works best with OpenAlex (OA) & Semantic Scholar (S2).
             </p>
             <b-field grouped>
               <b-field label="Select API">
@@ -974,7 +967,7 @@
               </b-field>
               <b-field label="Retrieve references">
                 <b-select v-model="retrieveReferences" @input="saveState(false)">
-                  <option :value="0">None</option>
+                  <!--<option :value="0">None</option>-->
                   <option :value="10">Top 10</option>
                   <option :value="20">Top 20</option>
                   <option :value="50">Top 50</option>
@@ -1056,7 +1049,7 @@
                 The bookmarklet is particularly useful when you want to use Local Citation Network as a 'second screen' when you are reading a paper, showing you its references in the correct order and allowing you to view their abstracts and to identify seminal articles as well as additional suggested articles. When using the bookmarklet, the reference list is scanned directly from the website, thus preserving the original order of references.
               </p>
               <p>
-                <a href="https://pubmed.ncbi.nlm.nih.gov/" target="_blank">PubMed</a> is also supported by the bookmarket, giving access to a vast number of biomedical papers. Before clicking the bookmarklet, scroll down on the paper page (e.g. <a href="https://pubmed.ncbi.nlm.nih.gov/16060722/#references" target="_blank">this one</a>) and click "Show all X references". Make sure to use the <a @click="indexFAQ = 'switch-api'" href="#switch-api">OpenAlex (OA) or Semantic Scholar (S2) APIs </a>, as they are supporting PubMed IDs (PMIDs).
+                <a href="https://pubmed.ncbi.nlm.nih.gov/" target="_blank">PubMed</a> is also supported by the bookmarklet, giving access to a vast number of biomedical papers. Before clicking the bookmarklet, scroll down on the paper page (e.g. <a href="https://pubmed.ncbi.nlm.nih.gov/16060722/#references" target="_blank">this one</a>) and click "Show all X references". Make sure to use the <a @click="indexFAQ = 'switch-api'" href="#switch-api">OpenAlex (OA) or Semantic Scholar (S2) APIs </a>, as they are supporting PubMed IDs (PMIDs).
               </p>
               <p>
                 Unfortunately, not all journals' websites are supported. If you know how to code, check out the <a href="https://github.com/LocalCitationNetwork/LocalCitationNetwork.github.io/blob/master/bookmarklet.js" target="_blank">code of the bookmarklet on GitHub</a> and extend it to support more journals! In this light it might be worth updating the bookmark in your browser from time to time to benefit from possible improvements.

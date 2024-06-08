@@ -1,3 +1,11 @@
+08.06.2024 v1.24
++ Now add placeholders in Input Articles table when id was set (e.g. in custom list of IDs or via bookmarklet) but not found via API or an error occurred.
++ Now truely retrieve All References / All Citations also with Semantic Scholar (S2) by implementing API paging, not just the first 1000 per paper.
+* Optimized code to use recursive deepFreeze() instead of Object.freeze(), before actually adding article arrays/objects to Vue data tree, vastly increasing performance (especially noticable when All References & All Citations tables contain (tens of) thousands of rows).
+* Refactored code to improve readability (splitting up the createNewNetwork function in createNewNetwork, retrievedInputArticles, retrievedIncomingSuggestions, retrievedOutgoingSuggestions).
+* Added a few first end-to-end tests with cypress (more are needed for better maintainability).
+* Updated examples to also include placeholders.
+
 02.06.2024 v1.23
 + Support Semantic Scholar API Keys (may occassionally speed up API, request one here: https://www.semanticscholar.org/product/api#api-key).
 * Refactored code to make use of Object.freeze() for large arrays containing articles, increasing performance.
@@ -7,7 +15,7 @@
 01.06.2024 v1.22
 + For Input Articles: Added "Filter References" and "Filter Citations" in article details.
 + For all articles: Added "Filter Input Articles cited by this" (corresponds to Out-Degree) and "Filter Input Articles citing this" (corresponds to In-Degree).
-+ Added "Too Long Didn't Read" (TLDR) summaries for Semantic Scholar (S2).
++ Added "Too Long Didn't Read" (TLDR) summaries for Semantic Scholar (S2) (https://www.semanticscholar.org/faq#tldr).
 * Use batch API for Semantic Scholar (S2), which allows much faster retrievals and much fewer API-overloads (error 429). (Unfortunately seems to have a bug, compare below "Known bugs")
 * In case "All references" or "All citations" are retrieved (OA & S2 only): don't de-duplicate them anymore so that numbers in the respective tabs are correct, also when filtering them.
 * Let users choose number of articles per page.
