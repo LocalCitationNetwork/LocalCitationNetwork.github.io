@@ -1,3 +1,7 @@
+09.06.2024 v1.25
+* Remove Semantic Scholar (S2) responses without id (sometimes affected All References / All Citations).
+! Fix formatting of '<' & '>' in titles.
+
 08.06.2024 v1.24
 + Now add placeholders in Input Articles table when id was set (e.g. in custom list of IDs or via bookmarklet) but not found via API or an error occurred.
 + Now truely retrieve All References / All Citations also with Semantic Scholar (S2) by implementing API paging, not just the first 1000 per paper.

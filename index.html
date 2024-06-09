@@ -309,9 +309,9 @@
                     </b-tooltip>
                   </template>
                 </p>
-                <p class="content" v-if="props.row.tldr">
-                  <b><a href="https://www.semanticscholar.org/faq#tldr" target="_blank">TLDR:</a></b> {{ formatTags(props.row.tldr) }}
-                </p>
+                <p v-if="props.row.tldr"
+                  v-html="'<b><a href=&quot;https://www.semanticscholar.org/faq#tldr&quot; target=&quot;_blank&quot; title=&quot;TLDR is an AI-generated summarization provided by Semantic Scholar.&quot;>TLDR: </a></b>' + formatTags(props.row.tldr)"
+                  class="content"></p>
                 <template v-if="props.row.abstract">
                   <h4 class="title is-6">Abstract</h4>
                   <p v-html="formatTags(props.row.abstract)" class="content"></p>
@@ -338,8 +338,8 @@
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
                   {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : '' }}
-                  <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank">{{ formatTags(props.row.title) || props.row.doi || props.row.id }}</a>
-                  <template v-else>{{ formatTags(props.row.title) || props.row.doi || props.row.id }}</template>
+                  <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank" v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></a>
+                  <span v-else v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></span>
                 </span>
               </b-table-column>
               <b-table-column field="authors" label="Author" v-slot="props">
@@ -510,9 +510,9 @@
                     </b-tooltip>
                   </template>
                 </p>
-                <p class="content" v-if="props.row.tldr">
-                  <b><a href="https://www.semanticscholar.org/faq#tldr" target="_blank">TLDR:</a></b> {{ formatTags(props.row.tldr) }}
-                </p>
+                <p v-if="props.row.tldr"
+                  v-html="'<b><a href=&quot;https://www.semanticscholar.org/faq#tldr&quot; target=&quot;_blank&quot; title=&quot;TLDR is an AI-generated summarization provided by Semantic Scholar.&quot;>TLDR: </a></b>' + formatTags(props.row.tldr)"
+                  class="content"></p>
                 <template v-if="props.row.abstract">
                   <h4 class="title is-6">Abstract</h4>
                   <p v-html="formatTags(props.row.abstract)" class="content"></p>
@@ -523,8 +523,8 @@
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
                   {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : (inputArticlesIds.includes(props.row.id) ? 'Input Article: ' : '') }}
-                  <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank">{{ formatTags(props.row.title) || props.row.doi || props.row.id }}</a>
-                  <template v-else>{{ formatTags(props.row.title) || props.row.doi || props.row.id }}</template>
+                  <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank" v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></a>
+                  <span v-else v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></span>
                 </span>
               </b-table-column>
               <b-table-column field="authors" label="Author" v-slot="props">
@@ -625,7 +625,7 @@
                 </template>
               </p>
               <p>
-                Citations are citing the Input Articles. Tey are sorted by out-degree, with the <a @click="indexFAQ = 'top-citations'; showFAQ = true;" href="#top-citations">Top Citations</a> listed at the top. They are derived through forward citation searching (forward in time). They tend to be newer than most Input Articles. {{ (currentGraph.allCitations) ? 'All Citations are not de-duplicated and may also contain Input Articles and References.' : 'Top Citations are de-duplicated against Input Articles and References.'}}
+                Citations are citing the Input Articles. They are sorted by out-degree, with the <a @click="indexFAQ = 'top-citations'; showFAQ = true;" href="#top-citations">Top Citations</a> listed at the top. They are derived through forward citation searching (forward in time). They tend to be newer than most Input Articles. {{ (currentGraph.allCitations) ? 'All Citations are not de-duplicated and may also contain Input Articles and References.' : 'Top Citations are de-duplicated against Input Articles and References.'}}
               </p>
             </div>
             <b-field>
@@ -693,9 +693,9 @@
                     </b-tooltip>
                   </template>
                 </p>
-                <p class="content" v-if="props.row.tldr">
-                  <b><a href="https://www.semanticscholar.org/faq#tldr" target="_blank">TLDR:</a></b> {{ formatTags(props.row.tldr) }}
-                </p>
+                <p v-if="props.row.tldr"
+                  v-html="'<b><a href=&quot;https://www.semanticscholar.org/faq#tldr&quot; target=&quot;_blank&quot; title=&quot;TLDR is an AI-generated summarization provided by Semantic Scholar.&quot;>TLDR: </a></b>' + formatTags(props.row.tldr)"
+                  class="content"></p>
                 <template v-if="props.row.abstract">
                   <h4 class="title is-6">Abstract</h4>
                   <p v-html="formatTags(props.row.abstract)" class="content"></p>
@@ -706,8 +706,8 @@
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
                   {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : (inputArticlesIds.includes(props.row.id) ? 'Input Article: ' : (incomingSuggestionsIds.includes(props.row.id) ? 'Reference: ' : '')) }}
-                  <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank">{{ formatTags(props.row.title) || props.row.doi || props.row.id }}</a>
-                  <template v-else>{{ formatTags(props.row.title) || props.row.doi || props.row.id }}</template>
+                  <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank" v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></a>
+                  <span v-else v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></span>
                 </span>
               </b-table-column>
               <b-table-column field="authors" label="Author" v-slot="props">

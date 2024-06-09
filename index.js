@@ -6,7 +6,7 @@
 
 'use strict'
 
-const localCitationNetworkVersion = 1.24
+const localCitationNetworkVersion = 1.25
 
 /*
 For now, old terminology is kept in-code because of back-compatibility with old saved graphs objects (localStorage & JSON)
@@ -93,11 +93,11 @@ async function semanticScholarWrapper (ids, responseFunction, phase, retrieveAll
     }
     // Add placeholders for missing items from batch response
     // ?. because empty batch API call (e.g. "Retrieve references: None") doesn't return array
-    responses = responses?.map((e, i) => (e === null) ? { title: 'Missing: ' + ids[i] + ' (id not found in S2)' } : e)
+    responses = responses?.map((e, i) => (e === null) ? { title: 'Missing: ' + ids[i] + ' (id not found in S2)', placeholderForId: ids[i] } : e)
   }
 
-  // Some S2 responses don't have S2 ids, remove them for now
-  // responses = responses.filter(response => response?.paperId)
+  // Some S2 responses don't have S2 ids, remove them for now (except placeholders)
+  responses = responses.filter(response => response.paperId || response.placeholderForId)
 
   vm.isLoadingTotal = 0
   responseFunction(responses)
@@ -118,7 +118,7 @@ function semanticScholarPaper (suffix, init = undefined) {
     const id = suffix.replace(/\?.*/, '')
     vm.errorMessage('Error while processing data through Semantic Scholar API for ' + id + ': ' + response.statusText + ' (' + response.status + ')')
     // Add placeholders for missing items with reason
-    return { title: 'Missing: ' + id + ' (' + response.statusText + ', ' + response.status + ')' }
+    return { title: 'Missing: ' + id + ' (' + response.statusText + ', ' + response.status + ')', placeholderForId: id }
   })
 }
 
@@ -236,7 +236,7 @@ function openAlexWorks (suffix) {
     const id = suffix.substr(1).replace(/\?.*/, '')
     vm.errorMessage('Error while processing data through OpenAlex API for ' + id + ': ' + response.statusText + ' (' + response.status + ')')
     // Add placeholders for missing items with reason
-    return { title: 'Missing: ' + id + ' (' + response.statusText + ', ' + response.status + ')' }
+    return { title: 'Missing: ' + id + ' (' + response.statusText + ', ' + response.status + ')', placeholderForId: id }
   })
 }
 
@@ -319,7 +319,7 @@ function crossrefWorks (id) {
     }
     vm.errorMessage('Error while processing data through Crossref API for ' + id + ': ' + response.statusText + ' (' + response.status + ')')
     // Add placeholders for missing items with reason
-    return { title: 'Missing: ' + id + ' (' + response.statusText + ', ' + response.status + ')' }
+    return { title: 'Missing: ' + id + ' (' + response.statusText + ', ' + response.status + ')', placeholderForId: id }
   })
 }
 
@@ -396,7 +396,7 @@ function openCitationsMetadata (id) {
     }
     vm.errorMessage('Error while processing data through OpenCitations API for ' + id + ': ' + response.statusText + ' (' + response.status + ')')
     // Add placeholders for missing items with reason (OC always returns an array, which is why (await openCitationsMetadata(ids[i]))[0] is selected above)
-    return [{ title: 'Missing: ' + id + ' (' + response.statusText + ', ' + response.status + ')' }]
+    return [{ title: 'Missing: ' + id + ' (' + response.statusText + ', ' + response.status + ')', placeholderForId: id }]
   })
 }
 
