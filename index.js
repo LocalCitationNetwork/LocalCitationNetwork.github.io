@@ -1091,8 +1091,9 @@ const vm = new Vue({
     },
     showArticlesTab: function () {
       if (
-        this.showArticlesTab === 'inputArticles' && ['citedByInputArticleId', 'citesInputArticleId'].includes(this.filterColumn) ||
-        this.showArticlesTab !== 'inputArticles' && ['citedById', 'citingId'].includes(this.filterColumn)
+        (this.showArticlesTab !== 'inputArticles' && ['citedById', 'citingId'].includes(this.filterColumn)) ||
+        (this.showArticlesTab !== 'topReferences' && this.filterColumn === 'citedByInputArticleId') ||
+        (this.showArticlesTab !== 'topCitations' && this.filterColumn === 'citesInputArticleId')
       ) {
         this.filterColumn = 'titleAbstract'
         this.filterString = ''
@@ -1159,7 +1160,7 @@ const vm = new Vue({
         this.isLoading = false
         return this.errorMessage(`Empty response from ${this.API} API, maybe source not found. Try other API.`)
       }
-      if (!source.references.length) {
+      if (!source.references?.length) {
         this.isLoading = false
         return this.errorMessage(`No references found for source in ${this.API} API, try other API.`)
       }
@@ -1554,7 +1555,7 @@ const vm = new Vue({
         return articlesKeep
       }, [])
       // Sort article arrays by years, number of references, number of global citations (fairly arbitrary but is never visible)
-      articles.sort((a, b) => a.year - b.year || a.references?.length - b.references?.length || a.referencesCount - b.referencesCount || a.referencesCount - b.referencesCount)
+      articles.sort((a, b) => a.year - b.year || a.references?.length - b.references?.length || a.referencesCount - b.referencesCount || a.citationsCount - b.citationsCount)
       return articles
     },
     errorMessage: function (message) {
@@ -1635,7 +1636,7 @@ const vm = new Vue({
       return articles.filter(article => ids?.includes(article.id))
     },
     citesInputArticleId: function (articles, inputArticleId) {
-      return articles.filter(article => article.references.includes(inputArticleId))
+      return articles.filter(article => article.references?.includes(inputArticleId))
     },
     authorString: function (authors) {
       return (authors?.length) ? authors.map(x => ((x.FN) ? (x.FN) + ' ' : '') + x.LN).join(', ') : ''
@@ -1774,7 +1775,7 @@ const vm = new Vue({
       csv += '"# Data retrieved through ' + this.currentGraph.API + ' (' + this.abbreviateAPI(this.currentGraph.API) + ') on ' + new Date(this.currentGraph.timestamp).toLocaleString() + '"\n'
       csv += '"id";"doi";' + ((this.showArticlesTab === 'inputArticles' && this.showNumberInSourceReferences) ? '"#";' : '') + '"type";"title";"authors";"journal";"year";"date";"volume";"issue";"firstPage";"lastPage";"abstract";"globalCitationsCount";"localInDegree";"localOutDegree";"referencesCount";"localIncomingCitations";"localOutgoingCitations";"references"\n'
       csv += articlesArray.map(row => {
-        let arr = [row.id, row.doi, (this.showArticlesTab === 'inputArticles' && this.showNumberInSourceReferences) ? row.numberInSourceReferences : false, row.type, row.title, this.authorString(row.authors), row.journal, row.year, row.date, row.volume, row.issue, row.firstPage, row.lastPage, row.abstract, row.citationsCount, this.inDegree(row.id), this.outDegree(row.id), row.references.length, this.referencedCiting.referenced[row.id], this.referencedCiting.citing[row.id], row.references]
+        let arr = [row.id, row.doi, (this.showArticlesTab === 'inputArticles' && this.showNumberInSourceReferences) ? row.numberInSourceReferences : false, row.type, row.title, this.authorString(row.authors), row.journal, row.year, row.date, row.volume, row.issue, row.firstPage, row.lastPage, row.abstract, row.citationsCount, this.inDegree(row.id), this.outDegree(row.id), row.referencesCount || row.references?.length, this.referencedCiting.referenced[row.id], this.referencedCiting.citing[row.id], row.references]
         arr = arr.filter(x => x !== false).map(x => prepareCell(x))
         return '"' + arr.join('";"') + '"'
       }).join('\n')

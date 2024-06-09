@@ -185,7 +185,7 @@
             <div class="content">
               <p>
                 <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
-                download Input Articles: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(currentGraph.input)">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(currentGraph.input)">RIS</a></b-tooltip> /
+                download<template v-if="filterString"> filtered</template> input articles: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(inputArticlesFiltered)">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(inputArticlesFiltered)">RIS</a></b-tooltip> /
                 <!-- Make sure network is fully loaded (otherwise incomingSuggestions / outgoingSuggestions tabs would show eternal spinning wheels) -->
                 <template v-if="currentGraph.incomingSuggestions && currentGraph.outgoingSuggestions">
                   download full network:
@@ -271,7 +271,7 @@
                     :disabled="isLoading">
                     Add network for references
                   </b-button>
-                  <b-button v-if="currentGraph.incomingSuggestions?.length && ((currentGraph.allReferences) ? (props.row.referencesCount || props.row.references.length) : citedByInputArticleId(currentGraph.incomingSuggestions, props.row.id).length)" 
+                  <b-button v-if="currentGraph.incomingSuggestions?.length && ((currentGraph.allReferences) ? (props.row.referencesCount || props.row.references?.length) : citedByInputArticleId(currentGraph.incomingSuggestions, props.row.id).length)" 
                     @click="showArticlesTab='topReferences'; filterColumn='citedByInputArticleId'; filterString=props.row.id">
                     Filter References ({{ citedByInputArticleId(currentGraph.incomingSuggestions, props.row.id).length }})
                   </b-button>
@@ -431,7 +431,7 @@
             <div class="content" v-if="currentGraph.incomingSuggestions?.length">
               <p>
                 <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
-                download references: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(currentGraph.incomingSuggestions)">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(currentGraph.incomingSuggestions)">RIS</a></b-tooltip> /
+                download<template v-if="filterString"> filtered</template> references: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(incomingSuggestionsFiltered)">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(incomingSuggestionsFiltered)">RIS</a></b-tooltip> /
                 <!-- Make sure network is fully loaded (otherwise incomingSuggestions / outgoingSuggestions tabs would show eternal spinning wheels) -->
                 <template v-if="currentGraph.incomingSuggestions && currentGraph.outgoingSuggestions">
                   download full network:
@@ -614,7 +614,7 @@
             <div class="content" v-if="currentGraph.outgoingSuggestions?.length">
               <p>
                 <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
-                download citations: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(currentGraph.outgoingSuggestions)">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(currentGraph.outgoingSuggestions)">RIS</a></b-tooltip> /
+                download<template v-if="filterString"> filtered</template> citations: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(outgoingSuggestionsFiltered)">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(outgoingSuggestionsFiltered)">RIS</a></b-tooltip> /
                 <!-- Make sure network is fully loaded (otherwise incomingSuggestions / outgoingSuggestions tabs would show eternal spinning wheels) -->
                 <template v-if="currentGraph.incomingSuggestions && currentGraph.outgoingSuggestions">
                   download full network:
