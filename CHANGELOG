@@ -1,3 +1,12 @@
+06.10.2024 v1.26
++ Renamed "Input Articles" to "Seed Articles", "References" to "Cited", and "Citations" to "Citing" in accordance with "Guidance on terminology, application, and reporting of citation searching: the TARCiS statement" (Hirt 2024, https://doi.org/10.1136/bmj-2023-078384).
++ All Cited and All Citing are now de-duplicated against Seed Articles and All Citing also against All Cited by default (there is an option to turn this off).
++ Added CSV and RIS downloads for full network (i.e., all tabs).
++ RIS files now contain notes including numbers of Citations, References, Cited, Citing.
++ Saving vis.js network custom settings now using "download full network" and by turning Autosave on ("Save" in the top right). This means networks are more customizable now.
++ Some preparations for Co*Citation Network (compare https://doi.org/10.17605/OSF.IO/NPM2E)
+- Removed Citation network option "Node size", now always default: Sum of In- & Out-Degree ("Rank").
+
 09.06.2024 v1.25
 * Remove Semantic Scholar (S2) responses without id (sometimes affected All References / All Citations).
 ! Fix formatting of '<' & '>' in titles.
@@ -20,14 +29,14 @@
 + For Input Articles: Added "Filter References" and "Filter Citations" in article details.
 + For all articles: Added "Filter Input Articles cited by this" (corresponds to Out-Degree) and "Filter Input Articles citing this" (corresponds to In-Degree).
 + Added "Too Long Didn't Read" (TLDR) summaries for Semantic Scholar (S2) (https://www.semanticscholar.org/faq#tldr).
-* Use batch API for Semantic Scholar (S2), which allows much faster retrievals and much fewer API-overloads (error 429). (Unfortunately seems to have a bug, compare below "Known bugs")
+* Use batch API for Semantic Scholar (S2), which allows much faster retrievals and much fewer API-overloads (error 429). (Unfortunately seems to have an issue, compare below "Known issues")
 * In case "All references" or "All citations" are retrieved (OA & S2 only): don't de-duplicate them anymore so that numbers in the respective tabs are correct, also when filtering them.
 * Let users choose number of articles per page.
 * Deactivated S2 reference contexts for now (simultaneous API call often led to API-overload (error 429)).
 * Bumped Buefy, Vue and vis.js Network to newest versions. Use "render-on-mounted" for modals, introduced in new Buefy version, and removed previously necessary hack.
 ! Fixed "Show source article node" in Citation network settings.
 
-Known bugs:
+Known issues:
 - Top Citations are wrong with Semantic Scholar (S2), they are pretty random citations and not the top ones. This seems to be a bug on their side (which now affects Local Citation Network because of using the batch API endpoint) which I have reported: https://github.com/allenai/s2-folks/issues/199
 
 28.08.2023 v1.21

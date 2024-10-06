@@ -14,25 +14,25 @@ describe('Load examples from scratch', () => {
     })
 
     cy.get('#app').should(($app) => {
-      expect($app[0].__vue__.currentGraph.input.length).to.equal(58);
+      expect($app[0].__vue__.currentGraph.seedArticles.length).to.equal(58);
     })
 
-    cy.waitUntil(() => cy.window().then(win => win.app.__vue__.currentGraph.incomingSuggestions !== undefined), {
+    cy.waitUntil(() => cy.window().then(win => win.app.__vue__.currentGraph.citedArticles !== undefined), {
       timeout: 30000,
       interval: 5000
     })
 
     cy.get('#app').should(($app) => {
-      expect($app[0].__vue__.currentGraph.incomingSuggestions.length).to.equal(10);
+      expect($app[0].__vue__.currentGraph.citedArticles.length).to.equal(10);
     })
 
-    cy.waitUntil(() => cy.window().then(win => win.app.__vue__.currentGraph.outgoingSuggestions !== undefined), {
+    cy.waitUntil(() => cy.window().then(win => win.app.__vue__.currentGraph.citingArticles !== undefined), {
       timeout: 30000,
       interval: 5000
     })
 
     cy.get('#app').should(($app) => {
-      expect($app[0].__vue__.currentGraph.outgoingSuggestions.length).to.equal(10);
+      expect($app[0].__vue__.currentGraph.citingArticles.length).to.equal(10);
     })
   })
 
@@ -51,25 +51,25 @@ describe('Load examples from scratch', () => {
     })
 
     cy.get('#app').should(($app) => {
-      expect($app[0].__vue__.currentGraph.input.length).to.equal(38);
+      expect($app[0].__vue__.currentGraph.seedArticles.length).to.equal(38);
     })
 
-    cy.waitUntil(() => cy.window().then(win => win.app.__vue__.currentGraph.incomingSuggestions !== undefined), {
+    cy.waitUntil(() => cy.window().then(win => win.app.__vue__.currentGraph.citedArticles !== undefined), {
       timeout: 30000,
       interval: 5000
     })
 
     cy.get('#app').should(($app) => {
-      expect($app[0].__vue__.currentGraph.incomingSuggestions.length).to.equal(10);
+      expect($app[0].__vue__.currentGraph.citedArticles.length).to.equal(10);
     })
 
-    cy.waitUntil(() => cy.window().then(win => win.app.__vue__.currentGraph.outgoingSuggestions !== undefined), {
+    cy.waitUntil(() => cy.window().then(win => win.app.__vue__.currentGraph.citingArticles !== undefined), {
       timeout: 30000,
       interval: 5000
     })
 
     cy.get('#app').should(($app) => {
-      expect($app[0].__vue__.currentGraph.outgoingSuggestions.length).to.equal(10);
+      expect($app[0].__vue__.currentGraph.citingArticles.length).to.equal(10);
     })
   })
 
@@ -88,25 +88,25 @@ describe('Load examples from scratch', () => {
     })
 
     cy.get('#app').should(($app) => {
-      expect($app[0].__vue__.currentGraph.input.length).to.equal(11);
+      expect($app[0].__vue__.currentGraph.seedArticles.length).to.equal(11);
     })
 
-    cy.waitUntil(() => cy.window().then(win => win.app.__vue__.currentGraph.incomingSuggestions !== undefined), {
+    cy.waitUntil(() => cy.window().then(win => win.app.__vue__.currentGraph.citedArticles !== undefined), {
       timeout: 30000,
       interval: 5000
     })
 
     cy.get('#app').should(($app) => {
-      expect($app[0].__vue__.currentGraph.incomingSuggestions.length).to.equal(10);
+      expect($app[0].__vue__.currentGraph.citedArticles.length).to.equal(10);
     })
 
-    cy.waitUntil(() => cy.window().then(win => win.app.__vue__.currentGraph.outgoingSuggestions !== undefined), {
+    cy.waitUntil(() => cy.window().then(win => win.app.__vue__.currentGraph.citingArticles !== undefined), {
       timeout: 30000,
       interval: 5000
     })
 
     cy.get('#app').should(($app) => {
-      expect($app[0].__vue__.currentGraph.outgoingSuggestions.length).to.equal(10);
+      expect($app[0].__vue__.currentGraph.citingArticles.length).to.equal(10);
     })
   })
 })

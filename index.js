@@ -2,17 +2,11 @@
 /* by Tim Woelfle */
 /* https://LocalCitationNetwork.github.io */
 
-/* global fetch, localStorage, vis, Vue, Buefy */
+/* global fetch, localStorage, Blob, vis, Vue, Buefy */
 
 'use strict'
 
-const localCitationNetworkVersion = 1.25
-
-/*
-For now, old terminology is kept in-code because of back-compatibility with old saved graphs objects (localStorage & JSON)
-"incomingSuggestions" are now "topReferences"
-"outgoingSuggestions" are now "topCitations"
-*/
+const localCitationNetworkVersion = 1.26
 
 const arrSum = arr => arr.reduce((a, b) => a + b, 0)
 const arrAvg = arr => arrSum(arr) / arr.length
@@ -32,10 +26,37 @@ function deepFreeze (object) {
   return Object.freeze(object)
 }
 
+function deepMerge (target, source) {
+  // Create deep copies of target and source
+  const targetCopy = JSON.parse(JSON.stringify(target))
+  const sourceCopy = JSON.parse(JSON.stringify(source))
+
+  function merge (target, source) {
+    for (const key in source) {
+      if (source.hasOwnProperty(key)) {
+        if (source[key] instanceof Object && !Array.isArray(source[key])) {
+          if (!target[key]) Object.assign(target, { [key]: {} })
+          merge(target[key], source[key])
+        } else {
+          Object.assign(target, { [key]: source[key] })
+        }
+      }
+    }
+    return target
+  }
+
+  return merge(targetCopy, sourceCopy)
+}
+
 /* Semantic Scholar API */
 // https://api.semanticscholar.org/api-docs/graph#tag/paper
 
-async function semanticScholarWrapper (ids, responseFunction, phase, retrieveAllReferences = false, retrieveAllCitations = false, getReferenceContexts = false) {
+async function semanticScholarWrapper (ids, responseFunction, phase, retrieveCitedArticles = 0, retrieveCitingArticles = 0, getReferenceContexts = false) {
+  const retrieveAllCited = retrieveCitedArticles === Infinity
+  const retrieveAllCiting = retrieveCitingArticles === Infinity
+
+  const retrievetopCiting = retrieveCitingArticles && !retrieveAllCiting
+
   let responses = []
 
   ids = ids.map(id => {
@@ -47,7 +68,7 @@ async function semanticScholarWrapper (ids, responseFunction, phase, retrieveAll
   let selectFields = 'title,venue,year,externalIds,abstract,referenceCount,citationCount,publicationTypes,publicationDate,journal'
 
   // Use "references" / "citations" API endpoints instead of a a single query for each reference / citation for "Retrieve references / citations: All" (faster)
-  if ((phase === 'references' && retrieveAllReferences) || (phase === 'citations' && retrieveAllCitations)) {
+  if ((phase === 'references' && retrieveAllCited) || (phase === 'citations' && retrieveAllCiting)) {
     let offset, response
 
     // Cannot get author affiliations and external IDs (e.g. ORCID) on references / citations endpoints
@@ -77,14 +98,36 @@ async function semanticScholarWrapper (ids, responseFunction, phase, retrieveAll
         responses = responses.concat(response)
       }
     }
-  // Phase 'source' / 'input' / 'references' && !retrieveAllReferences (i.e. Top references only) / 'citations' && !retrieveAllCitations (i.e. Top Citations only)
+    // For phase 'input' and Top Citations (i.e. retrieveCitingArticles > 0 but not retrieveAllCiting) load seed articles one by one in order to retrieve proper citations fields to calculate top citations ids
+    // With batch endpoint (below), there is a maximum of 9999 citations in total, which leads to incorrect Top Citations (compare https://github.com/allenai/s2-folks/issues/199)
+    // However, single API calls are currently always blocked by 429 responses, even with 15s waits, which is why this part is commented out
+  /* } else if (phase === 'input' && retrievetopCiting) {
+    let response
+
+    // These fields cannot be retrieved on references / citations endpoints
+    selectFields += ',authors.externalIds,authors.name,authors.affiliations,references.paperId,tldr,citations.paperId'
+
+    vm.isLoadingTotal = ids.length
+    for (const i of Array(ids.length).keys()) {
+      await new Promise(resolve => setTimeout(resolve, 15000)) // Wait a bit to be nice to server
+      response = undefined
+      vm.isLoadingIndex = i
+      if (ids[i]) {
+        // Careful: Citation results are incomplete when a paper is cited by >1000 (current upper-limit of S2), use "API options => Retrieve citations => All" for completeness
+        response = await semanticScholarPaper(ids[i] + '?fields=' + selectFields)
+      }
+      responses = responses.concat(response)
+    }
+    vm.isLoadingTotal = 0 */
+  // Phase 'source' / 'input' && retrieveAllCiting / 'references' && !retrieveAllCited (i.e. Top references only) / 'citations' && !retrieveAllCiting (i.e. Top Citations only)
+  // Use batch endpoint (https://api.semanticscholar.org/api-docs/graph#tag/Paper-Data/operation/post_graph_get_papers)
   } else {
     // These fields cannot be retrieved on references / citations endpoints
     selectFields += ',authors.externalIds,authors.name,authors.affiliations,references.paperId,tldr'
-    // Get citations ids for input articles (if not all citations are retrieved anyway)
-    if (['source', 'input'].includes(phase) && !retrieveAllCitations) selectFields += ',citations.paperId'
+    // Get citations ids for seed articles for Top Citations
+    if (['source', 'input'].includes(phase) && retrievetopCiting) selectFields += ',citations.paperId'
 
-    // Batch endpoint allows max. 500 ids at the same time
+    // Batch endpoint allows max. 500 ids and 9999 citations at the same time
     responses = await semanticScholarPaper('batch?fields=' + selectFields, { method: 'POST', headers: { 'x-api-key': vm.semanticScholarAPIKey }, body: JSON.stringify({ ids: ids.filter(Boolean) }) })
     // Get referenceContexts for source
     if (phase === 'source' && getReferenceContexts) {
@@ -163,7 +206,10 @@ function semanticScholarResponseToArticleArray (data) {
 /* OpenAlex API */
 // https://docs.openalex.org/about-the-data/work#the-work-object
 
-async function openAlexWrapper (ids, responseFunction, phase, retrieveAllReferences = false, retrieveAllCitations = false) {
+async function openAlexWrapper (ids, responseFunction, phase, retrieveCitedArticles = 0, retrieveCitingArticles = 0) {
+  const retrieveAllCited = retrieveCitedArticles === Infinity
+  const retrieveAllCiting = retrieveCitingArticles === Infinity
+
   let responses = []
   ids = ids.map(id => {
     if (!id) return undefined
@@ -181,7 +227,7 @@ async function openAlexWrapper (ids, responseFunction, phase, retrieveAllReferen
   let id, cursor, response
 
   // Use "filter" API endpoint instead of a a single query for each reference / citation for "Retrieve references / citations: All" (faster)
-  if ((phase === 'references' && retrieveAllReferences) || (phase === 'citations' && retrieveAllCitations)) {
+  if ((phase === 'references' && retrieveAllCited) || (phase === 'citations' && retrieveAllCiting)) {
     // OpenAlex API allows OR combination of up to 50 IDs: https://docs.openalex.org/how-to-use-the-api/get-lists-of-entities/filter-entity-lists
     const max = Math.ceil(ids.filter(Boolean).length / 50)
     let idsString
@@ -199,7 +245,7 @@ async function openAlexWrapper (ids, responseFunction, phase, retrieveAllReferen
         if (response.results?.length) responses = responses.concat(response.results)
       }
     }
-  // Phase 'source' / 'input' / 'references' && !retrieveAllReferences (i.e. Top references only) / 'citations' && !retrieveAllCitations (i.e. Top Citations only)
+  // Phase 'source' / 'input' / 'references' && !retrieveAllCited (i.e. Top references only) / 'citations' && !retrieveAllCiting (i.e. Top Citations only)
   } else {
     vm.isLoadingTotal = ids.length
     for (const i of Array(ids.length).keys()) {
@@ -208,8 +254,8 @@ async function openAlexWrapper (ids, responseFunction, phase, retrieveAllReferen
       vm.isLoadingIndex = i
       if (id) {
         response = await openAlexWorks('/' + id.replace('openalex:', '') + '?select=' + selectFields)
-        // Get citations ids for input articles (if not all citations are retrieved anyway)
-        if (['source', 'input'].includes(phase) && response.id && !retrieveAllCitations) {
+        // Get citations ids for seed articles (if not all citations are retrieved anyway)
+        if (['source', 'input'].includes(phase) && response.id && !retrieveAllCiting) {
           // Careful: Citation results are incomplete when a paper is cited by >200 (current per-page upper-limit of OA), use "API options => Retrieve citations => All" for completeness
           const citations = await openAlexWorks('?select=id&per-page=200&sort=referenced_works_count:desc&filter=cites:' + response.id.replace('https://openalex.org/', ''))
           if (citations) { response.citations = citations }
@@ -287,6 +333,58 @@ function revertAbstractFromInvertedIndex (abstract_inverted_index) {
   return abstract.join(' ').replaceAll('  ', ' ').trim()
 }
 
+/* Future Co*Citation Network API */
+
+function coCitationNetworkResponseToArticleArray (data) {
+  return Object.keys(data).map(articleId => {
+    /* const input = data[articleId].linked_seeds || {}
+    const linkedSeeds = Object.keys(input).reduce((acc, key) => {
+        input[key].forEach(type => (acc[type] = (acc[type] || [])).push(key));
+        return acc;
+    }, { "cited_direct": [], "citing_direct": [], "cocited_indirect": [], "cociting_indirect": [] }) */
+    const linkedSeeds = data[articleId].linked_seeds
+
+    const article = data[articleId].meta
+    const doi = (article.doi) ? article.doi.replace('https://doi.org/', '').toUpperCase() : undefined
+
+    const journal = article.biblio?.title
+
+    return {
+      id: articleId,
+      numberInSourceReferences: Object.keys(data).indexOf(articleId) + 1,
+      doi: doi,
+      type: article.type,
+      title: article.title || '',
+      authors: Object.keys((article.authors || {})).map(authorId => {
+        const author = article.authors[authorId]
+        const display_name = author.display_name || ''
+        const cutPoint = (display_name.lastIndexOf(',') !== -1) ? display_name.lastIndexOf(',') : display_name.lastIndexOf(' ')
+        return {
+          id: author.id?.replace('https://openalex.org/', ''),
+          orcid: author.orcid?.replace('https://orcid.org/', ''),
+          LN: display_name.substr(cutPoint + 1),
+          FN: display_name.substr(0, cutPoint)
+        }
+      }),
+      year: article.publication_year,
+      date: article.publication_date,
+      journal: journal,
+      volume: article.biblio?.volume,
+      issue: article.biblio?.issue,
+      firstPage: article.biblio?.first_page,
+      lastPage: article.biblio?.last_page,
+      references: linkedSeeds.citing_direct,
+      referencesCount: article.referenced_works_count,
+      citations: linkedSeeds.cited_direct,
+      citationsCount: article.cited_by_count,
+      coCited: linkedSeeds.cocited_indirect,
+      coCiting: linkedSeeds.cociting_indirect,
+      abstract: (article.abstract_inverted_index && (article.abstract_inverted_index !== 'null')) ? revertAbstractFromInvertedIndex(JSON.parse(article.abstract_inverted_index)) : undefined,
+      isRetracted: article.is_retracted
+    }
+  })
+}
+
 /* Crossref API */
 // https://github.com/CrossRef/rest-api-doc#api-overview
 
@@ -309,7 +407,7 @@ function crossrefWorks (id) {
     return response.json()
   }).then(data => {
     if (typeof data !== 'object' || !data.message || !data.message.items || !data.message.items[0]) throw ({ statusText: 'Empty response', status: 200 })
-    return (data.message.items[0])
+    return data.message.items[0]
   }).catch(async function (response) {
     if (response.status === 429 || typeof response.statusText !== 'string') {
       if (response.status === 429) vm.errorMessage('Crossref reports too rapid requests. Waiting 2 minutes...')
@@ -436,7 +534,7 @@ function htmlTitle (html) {
   return container
 }
 
-function initCitationNetwork (app, minDegreeIncomingSuggestions = 1, minDegreeOutgoingSuggestions = 1) {
+function initCitationNetwork (app, minDegreeCitedArticles = 1, minDegreeCitingArticles = 1) {
   // This line is necessary because of v-if="currentTabIndex !== undefined" in the main columns div, which apparently is evaluated after watch:currentTabIndex is called
   if (!document.getElementById('citationNetwork')) return setTimeout(function () { app.init() }, 1)
 
@@ -448,49 +546,74 @@ function initCitationNetwork (app, minDegreeIncomingSuggestions = 1, minDegreeOu
   // Filter articles according to settings
   // Articles must have year for hierarchical layout
   const sourceId = app.currentGraph.source.id
-  const inputArticles = app.currentGraph.input
+  const seedArticles = app.seedArticles
     .filter(article => article.year)
     .filter(article => (app.citationNetworkShowSource ? true : !article.isSource))
-  const incomingSuggestions = (app.currentGraph.incomingSuggestions ?? [])
-    // De-duplicate against inputArticles (only relevant when All References are retrieved)
-    .filter(article => !app.inputArticlesIds.includes(article.id))
+  const citedArticles = app.citedArticlesDeDuplicated
     .filter(article => article.year)
-    .filter(article => app.inDegree(article.id) + app.outDegree(article.id) >= minDegreeIncomingSuggestions)
-    .toSorted((a, b) => vm.sortInDegreeWrapper(a, b, false))
-    .slice(0, app.maxIncomingSuggestions)
-  const outgoingSuggestions = (app.currentGraph.outgoingSuggestions ?? [])
-    // De-duplicate against inputArticles and incomingSuggestions (only relevant when All References are retrieved)
-    .filter(article => !app.inputArticlesIds.includes(article.id) && !app.incomingSuggestionsIds.includes(article.id))
+    .filter(article => app.citedCount(article.id) + app.citingCount(article.id) >= minDegreeCitedArticles)
+    .toSorted((a, b) => vm.sortCitedWrapper(a, b, false))
+    .slice(0, app.maxCitedArticles)
+  const citingArticles = app.citingArticlesDeDuplicated
     .filter(article => article.year)
-    .filter(article => app.inDegree(article.id) + app.outDegree(article.id) >= minDegreeOutgoingSuggestions)
-    .toSorted((a, b) => vm.sortOutDegreeWrapper(a, b, false))
-    .slice(0, app.maxOutgoingSuggestions)
+    .filter(article => app.citedCount(article.id) + app.citingCount(article.id) >= minDegreeCitingArticles)
+    .toSorted((a, b) => vm.sortCitingWrapper(a, b, false))
+    .slice(0, app.maxCitingArticles)
+  // TODO At the moment I'm reusing maxCitedArticles and maxCitingArticles numbers from settings to determine max. numbers of co-cited and co-citing articles; find better solution
+  const coCitedArticles = app.coCitedArticlesDeDuplicated
+    .filter(article => article.year)
+    .toSorted((a, b) => vm.sortCoCitedWrapper(a, b, false))
+    .slice(0, app.maxCitedArticles)
+  const coCitingArticles = app.coCitingArticlesDeDuplicated
+    .filter(article => article.year)
+    .toSorted((a, b) => vm.sortCoCitingWrapper(a, b, false))
+    .slice(0, app.maxCitingArticles)
 
-  // Create an array with edges
   // Only keep connected articles (no singletons)
   let articles = new Set()
-  // Edges from inputArticles
-  let edges = inputArticles.concat(incomingSuggestions).concat(outgoingSuggestions).map(article => app.referencedCiting.referenced[article.id]?.map(fromId => {
-    // Some input articles have been removed above (e.g. those without year, so double check here)
-    if (inputArticles.map(x => x.id).includes(fromId)) {
+
+  // Create an array with edges
+  // Edges from seedArticles
+  let edges = seedArticles.concat(citedArticles).concat(citingArticles).map(article => app.referencedCiting.referenced[article.id]?.map(fromId => {
+    // Some seed articles have been removed above (e.g. those without year, so double check here)
+    if (seedArticles.map(x => x.id).includes(fromId)) {
       if (app.citationNetworkShowSource || fromId != sourceId) {
         articles.add(article)
-        articles.add(inputArticles[inputArticles.map(x => x.id).indexOf(fromId)])
+        articles.add(seedArticles[seedArticles.map(x => x.id).indexOf(fromId)])
         return { from: fromId, to: article.id }
       }
     }
   }))
-  // Edges from incomingSuggestions and outgoingSuggestions to inputArticles
-  edges = edges.concat(incomingSuggestions.concat(outgoingSuggestions).map(article => app.referencedCiting.citing[article.id]?.map(toId => {
-    // Some input articles have been removed above (e.g. those without year, so double check here)
-    if (inputArticles.map(x => x.id).includes(toId)) {
+  // Edges from citedArticles and citingArticles to seedArticles
+  edges = edges.concat(citedArticles.concat(citingArticles).map(article => app.referencedCiting.citing[article.id]?.map(toId => {
+    // Some seed articles have been removed above (e.g. those without year, so double check here)
+    if (seedArticles.map(x => x.id).includes(toId)) {
       if (app.citationNetworkShowSource || toId != sourceId) {
         articles.add(article)
-        articles.add(inputArticles[inputArticles.map(x => x.id).indexOf(toId)])
+        articles.add(seedArticles[seedArticles.map(x => x.id).indexOf(toId)])
         return { from: article.id, to: toId }
       }
     }
   })))
+  // Dashed edges for coCited (middle double-arrowhead)
+  edges = edges.concat(seedArticles.concat(citedArticles).concat(citingArticles).concat(coCitedArticles).concat(coCitingArticles).map(article => article.coCited?.map(fromId => {
+    // Some seed articles have been removed above (e.g. those without year, so double check here)
+    if (seedArticles.map(x => x.id).includes(fromId)) {
+      articles.add(article)
+      articles.add(seedArticles[seedArticles.map(x => x.id).indexOf(fromId)])
+      return { from: fromId, to: article.id, arrows: { to: { enabled: false }, middle: { enabled: true, type: 'diamond' } }, dashes: true }
+    }
+  })))
+  // Dashed edges between seedArticles & coCitingArticles (middle double-arrowhead)
+  edges = edges.concat(seedArticles.concat(citedArticles).concat(citingArticles).concat(coCitedArticles).concat(coCitingArticles).map(article => article.coCiting?.map(toId => {
+    // Some seed articles have been removed above (e.g. those without year, so double check here)
+    if (seedArticles.map(x => x.id).includes(toId)) {
+      articles.add(article)
+      articles.add(seedArticles[seedArticles.map(x => x.id).indexOf(toId)])
+      return { from: article.id, to: toId, arrows: { to: { enabled: false }, middle: { enabled: true, type: 'diamond' } }, dashes: true }
+    }
+  })))
+
   edges = edges.flat().filter(Boolean)
 
   articles = Array.from(articles)
@@ -507,8 +630,8 @@ function initCitationNetwork (app, minDegreeIncomingSuggestions = 1, minDegreeOu
     title: htmlTitle(app.authorStringShort(article.authors) + '. <a><em>' + article.title + '</em></a>. ' + article.journal + '. ' + article.year + '.<br>(Double click opens article: <a>' + String(app.articleLink(article)).substr(0, 28) + '...</a>)'),
     level: years.indexOf(article.year),
     group: article[app.citationNetworkNodeColor],
-    value: arrSum([['in', 'both'].includes(app.citationNetworkNodeSize) ? app.inDegree(article.id) : 0, ['out', 'both'].includes(app.citationNetworkNodeSize) ? app.outDegree(article.id) : 0]),
-    shape: (sourceId === article.id) ? 'diamond' : (app.inputArticlesIds.includes(article.id) ? 'dot' : (app.incomingSuggestionsIds.includes(article.id) ? 'triangle' : 'triangleDown')),
+    value: app.rankNumber(article.id),
+    shape: (sourceId === article.id) ? 'diamond' : (app.seedArticlesIds.includes(article.id) ? 'dot' : (app.citedArticlesIds.includes(article.id) ? 'triangle' : (app.citingArticlesIds.includes(article.id) ? 'triangleDown' : 'hexagon'))), // TODO maybe differentiate shape between co-cited and co-citing?
     label: article.authors[0]?.LN + '\n' + article.year
   }))
 
@@ -547,6 +670,10 @@ function initCitationNetwork (app, minDegreeIncomingSuggestions = 1, minDegreeOu
         to: {
           enabled: true,
           scaleFactor: 0.4
+        },
+        middle: {
+          enabled: false,
+          scaleFactor: 0.4
         }
       },
       width: 0.8,
@@ -570,15 +697,18 @@ function initCitationNetwork (app, minDegreeIncomingSuggestions = 1, minDegreeOu
     },
     configure: {
       enabled: true,
-      container: document.getElementById('citationNetworkConfigure')
+      filter: 'layout,physics,nodes,edges',
+      container: document.getElementById('citationNetworkConfigure'),
+      showButton: false
     }
   }
 
   citationNetwork = new vis.Network(document.getElementById('citationNetwork'), { nodes: nodes, edges: edges }, options)
+  citationNetwork.setOptions(vm.currentGraph.customConfigCitationNetwork)
   citationNetwork.on('click', networkOnClick)
   citationNetwork.on('doubleClick', networkOnDoubleClick)
 
-  citationNetwork.stabilize(citationNetwork.body.nodeIndices.length)
+  citationNetwork.stabilize(citationNetwork.body.nodeIndices.length * 100)
   citationNetwork.on('stabilizationIterationsDone', function (params) {
     app.citationNetworkIsLoading = false
     citationNetwork.setOptions({ physics: false })
@@ -599,23 +729,40 @@ function initCitationNetwork (app, minDegreeIncomingSuggestions = 1, minDegreeOu
     ctx.restore()
   })
 
+  citationNetwork.on('configChange', function (config) {
+    // Merge new config changes with previous config changes
+    vm.currentGraph.customConfigCitationNetwork = deepMerge(vm.currentGraph.customConfigCitationNetwork ?? {}, config)
+  })
+
   function networkOnClick (params) {
     let selectedNodeId
 
     // Select corresponding row in table
     if (params.nodes.length > 0) {
       selectedNodeId = params.nodes[0]
-      // Input article node was clicked (circle)
-      if (app.inputArticlesIds.includes(selectedNodeId)) {
-        app.showArticlesTab = 'inputArticles'
-        app.selected = app.currentGraph.input[app.inputArticlesIds.indexOf(selectedNodeId)]
-      // Suggested article node was clicked (triangle)
-      } else if (app.incomingSuggestionsIds.includes(selectedNodeId)) {
-        app.showArticlesTab = 'topReferences'
-        app.selected = app.currentGraph.incomingSuggestions[app.incomingSuggestionsIds.indexOf(selectedNodeId)]
+      // Seed article node was clicked (circle)
+      if (app.seedArticlesIds.includes(selectedNodeId)) {
+        app.showArticlesTab = 'seedArticlesTab'
+        app.selected = app.seedArticles[app.seedArticlesIds.indexOf(selectedNodeId)]
+      // Cited article node was clicked (up-pointing triangle)
+      } else if (app.citedArticlesIds.includes(selectedNodeId)) {
+        app.showArticlesTab = 'citedArticlesTab'
+        app.selected = app.citedArticles[app.citedArticlesIds.indexOf(selectedNodeId)]
+      // Citing article node was clicked (down-pointing triangle)
+      } else if (app.citingArticlesIds.includes(selectedNodeId)) {
+        app.showArticlesTab = 'citingArticlesTab'
+        app.selected = app.citingArticles[app.citingArticlesIds.indexOf(selectedNodeId)]
+      // Co-Cited article node was clicked (diamond)
+      } else if (app.coCitedArticlesIds.includes(selectedNodeId)) {
+        app.showArticlesTab = 'coCitedArticlesTab'
+        app.selected = app.coCitedArticles[app.coCitedArticlesIds.indexOf(selectedNodeId)]
+      // Co-Citing article node was clicked (diamond)
+      } else if (app.coCitingArticlesIds.includes(selectedNodeId)) {
+        app.showArticlesTab = 'coCitingArticlesTab'
+        app.selected = app.coCitingArticles[app.coCitingArticlesIds.indexOf(selectedNodeId)]
+      // This should not occur
       } else {
-        app.showArticlesTab = 'topCitations'
-        app.selected = app.currentGraph.outgoingSuggestions[app.outgoingSuggestionsIds.indexOf(selectedNodeId)]
+        this.errorMessage('Error: Undefined node was clicked')
       }
     // Don't select edges
     } else {
@@ -646,7 +793,7 @@ function initAuthorNetwork (app, minPublications = undefined) {
   app.authorNetworkIsLoading = true
 
   // Deep copy articles because otherwise sorting (and setting "x.id = ..." later) would overwrite currentGraph's articles
-  const articles = JSON.parse(JSON.stringify(app.currentGraph.input))
+  const articles = JSON.parse(JSON.stringify(app.seedArticles))
   articles.sort((articleA, articleB) => (app.authorNetworkNodeColor === 'firstArticle') ? articleA.year - articleB.year : articleB.year - articleA.year)
 
   // Used to be "x.id = x.id || x.name" but caused too many duplicates (at least on OA), double check in the future if this has been fixed
@@ -665,7 +812,7 @@ function initAuthorNetwork (app, minPublications = undefined) {
 
   if (!minPublications) {
     // Default minPublications: Increase iteratively until <= 50 authors are shown
-    minPublications = 2
+    minPublications = 1
     authorIdsWithMinPubs = Object.keys(publicationsCount).filter(authorId => publicationsCount[authorId] >= minPublications)
     while (authorIdsWithMinPubs.length > 50) {
       minPublications++
@@ -701,11 +848,11 @@ function initAuthorNetwork (app, minPublications = undefined) {
   const nodes = authorIdsWithMinPubs.map(authorId => {
     const author = allAuthors[authorId]
     const isSourceAuthor = app.authorString(app.currentGraph.source.authors).includes(author.name)
-    const inputArticlesAuthoredCount = app.currentGraph.input.filter(article => app.authorString(article.authors).includes(author.name)).length
+    const seedArticlesAuthoredCount = app.seedArticles.filter(article => app.authorString(article.authors).includes(author.name)).length
     const authorIdGroupIndex = authorIdGroups.map(group => group.includes(author.id)).indexOf(true)
     return {
       id: author.id,
-      title: htmlTitle(author.name + ': author of ' + inputArticlesAuthoredCount + ' input articles' + (isSourceAuthor ? ' (including source)' : '') + '.<br>' + (author.affil ? 'Affiliation(s): ' + author.affil + '<br>' : '') + ' Color by ' + ((app.authorNetworkNodeColor === 'firstArticle') ? 'first' : 'last') + ' article: ' + articles[authorIdGroupIndex].title + ' <br>(Double click opens author: <a>' + app.authorLink(author).substr(0, 28) + '...</a>)'),
+      title: htmlTitle(author.name + ': author of ' + seedArticlesAuthoredCount + ' seed articles' + (isSourceAuthor ? ' (including source)' : '') + '.<br>' + (author.affil ? 'Affiliation(s): ' + author.affil + '<br>' : '') + ' Color by ' + ((app.authorNetworkNodeColor === 'firstArticle') ? 'first' : 'last') + ' article: ' + articles[authorIdGroupIndex].title + ' <br>(Double click opens author: <a>' + app.authorLink(author).substr(0, 28) + '...</a>)'),
       group: authorIdGroupIndex,
       label: ((app.authorNetworkFirstNames) ? (author.FN + ' ') : '') + author.LN,
       value: publicationsCount[author.id],
@@ -757,10 +904,13 @@ function initAuthorNetwork (app, minPublications = undefined) {
     },
     configure: {
       enabled: true,
-      container: document.getElementById('authorNetworkConfigure')
+      filter: 'layout,physics,nodes,edges',
+      container: document.getElementById('authorNetworkConfigure'),
+      showButton: false
     }
   }
   authorNetwork = new vis.Network(document.getElementById('authorNetwork'), { nodes: nodes, edges: edges }, options)
+  authorNetwork.setOptions(vm.currentGraph.customConfigAuthorNetwork)
   authorNetwork.on('click', networkOnClick)
   authorNetwork.on('doubleClick', networkOnDoubleClick)
 
@@ -782,6 +932,11 @@ function initAuthorNetwork (app, minPublications = undefined) {
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
     // restore old transform
     ctx.restore()
+  })
+
+  authorNetwork.on('configChange', function (config) {
+    // Merge new config changes with previous config changes
+    vm.currentGraph.customConfigAuthorNetwork = deepMerge(vm.currentGraph.customConfigAuthorNetwork ?? {}, config)
   })
 
   function networkOnClick (params) {
@@ -830,8 +985,8 @@ const vm = new Vue({
     // Settings
     API: 'OpenAlex', // Options: 'OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref'
     semanticScholarAPIKey: '',
-    retrieveReferences: 10,
-    retrieveCitations: 10,
+    retrieveCitedArticles: 10,
+    retrieveCitingArticles: 10,
     maxTabs: 5,
     autosaveResults: false,
 
@@ -848,15 +1003,19 @@ const vm = new Vue({
     fullscreenNetwork: false,
     filterColumn: 'titleAbstract',
     filterString: undefined,
-    selectedInputArticle: undefined,
-    selectedIncomingSuggestionsArticle: undefined,
-    selectedOutgoingSuggestionsArticle: undefined,
+    selectedSeedArticle: undefined,
+    selectedCitedArticle: undefined,
+    selectedCitingArticle: undefined,
+    selectedCoCitedArticle: undefined,
+    selectedCoCitingArticle: undefined,
     articlesPerPage: 20,
-    inputArticlesTablePage: 1,
-    topReferencesTablePage: 1,
-    topCitationsTablePage: 1,
+    seedArticlesTabTablePage: 1,
+    citedArticlesTabTablePage: 1,
+    citingArticlesTabTablePage: 1,
+    coCitedArticlesTabTablePage: 1,
+    coCitingArticlesTabTablePage: 1,
     currentTabIndex: undefined,
-    showArticlesTab: 'inputArticles',
+    showArticlesTab: 'seedArticlesTab',
     showAuthorNetwork: 0,
     isLoading: false,
     isLoadingIndex: 0,
@@ -879,29 +1038,72 @@ const vm = new Vue({
       if (this.currentTabIndex === undefined) return {}
       return this.graphs[this.currentTabIndex]
     },
-    inputArticlesIds: function () {
-      return this.currentGraph.input.map(article => article.id)
+    seedArticles: function () {
+      return this.currentGraph.seedArticles
     },
-    incomingSuggestionsIds: function () {
-      return this.currentGraph.incomingSuggestions.map(article => article.id)
+    citedArticles: function () {
+      if (!this.currentGraph.doNotDeDuplicate) return this.citedArticlesDeDuplicated
+      else return this.currentGraph.citedArticles ?? []
     },
-    outgoingSuggestionsIds: function () {
-      return this.currentGraph.outgoingSuggestions.map(article => article.id)
+    citingArticles: function () {
+      if (!this.currentGraph.doNotDeDuplicate) return this.citingArticlesDeDuplicated
+      else return this.currentGraph.citingArticles ?? []
     },
-    inputArticlesFiltered: function () {
-      return this.filterArticles(this.currentGraph.input, true)
+    coCitedArticles: function () {
+      if (!this.currentGraph.doNotDeDuplicate) return this.coCitedArticlesDeDuplicated
+      else return this.currentGraph.coCitedArticles ?? []
     },
-    incomingSuggestionsFiltered: function () {
-      return this.filterArticles(this.currentGraph.incomingSuggestions ?? [])
+    coCitingArticles: function () {
+      if (!this.currentGraph.doNotDeDuplicate) return this.coCitingArticlesDeDuplicated
+      return this.currentGraph.coCitingArticles ?? []
     },
-    outgoingSuggestionsFiltered: function () {
-      return this.filterArticles(this.currentGraph.outgoingSuggestions ?? [])
+    citedArticlesDeDuplicated: function () {
+      return (this.currentGraph.citedArticles ?? []).filter(x => !this.seedArticlesIds.includes(x.id))
+    },
+    citingArticlesDeDuplicated: function () {
+      return (this.currentGraph.citingArticles ?? []).filter(x => !(this.seedArticlesIds.includes(x.id) || this.citedArticlesIds.includes(x.id)))
+    },
+    coCitedArticlesDeDuplicated: function () {
+      return (this.currentGraph.coCitedArticles ?? []).filter(x => !(this.seedArticlesIds.includes(x.id) || this.citedArticlesIds.includes(x.id) || this.citingArticlesIds.includes(x.id)))
+    },
+    coCitingArticlesDeDuplicated: function () {
+      return (this.currentGraph.coCitingArticles ?? []).filter(x => !(this.seedArticlesIds.includes(x.id) || this.citedArticlesIds.includes(x.id) || this.citingArticlesIds.includes(x.id) || this.coCitedArticlesIds.includes(x.id)))
+    },
+    seedArticlesIds: function () {
+      return this.seedArticles.map(article => article.id)
+    },
+    citedArticlesIds: function () {
+      return this.citedArticles.map(article => article.id)
+    },
+    citingArticlesIds: function () {
+      return this.citingArticles.map(article => article.id)
+    },
+    coCitedArticlesIds: function () {
+      return (this.coCitedArticles ?? []).map(article => article.id)
+    },
+    coCitingArticlesIds: function () {
+      return (this.coCitingArticles ?? []).map(article => article.id)
+    },
+    seedArticlesFiltered: function () {
+      return this.filterArticles(this.seedArticles)
+    },
+    citedArticlesFiltered: function () {
+      return this.filterArticles(this.citedArticles)
+    },
+    citingArticlesFiltered: function () {
+      return this.filterArticles(this.citingArticles)
+    },
+    coCitedArticlesFiltered: function () {
+      return this.filterArticles(this.coCitedArticles)
+    },
+    coCitingArticlesFiltered: function () {
+      return this.filterArticles(this.coCitingArticles)
     },
     referencedCiting: function () {
-      const articles = this.currentGraph.input.concat(this.currentGraph.incomingSuggestions || []).concat(this.currentGraph.outgoingSuggestions || [])
-      const referencedCiting = this.computeInputArticlesRelationships(articles, this.inputArticlesIds)
-      let referenced = referencedCiting.inputArticlesA
-      const citing = referencedCiting.inputArticlesB
+      const articles = this.seedArticles.concat(this.citedArticles || []).concat(this.citingArticles || [])
+      const referencedCiting = this.computeSeedArticlesRelationships(articles, this.seedArticlesIds)
+      let referenced = referencedCiting.seedArticlesA
+      const citing = referencedCiting.seedArticlesB
       // Reduce referenced Object to items with key in articles.id
       referenced = articles.map(x => x.id).filter(x => Object.keys(referenced).includes(x)).reduce((reducedReferenced, id) => { reducedReferenced[id] = referenced[id]; return reducedReferenced }, {})
       return { referenced, citing }
@@ -909,24 +1111,34 @@ const vm = new Vue({
     selected: {
       get: function () {
         switch (this.showArticlesTab) {
-          case 'inputArticles': return this.selectedInputArticle
-          case 'topReferences': return this.selectedIncomingSuggestionsArticle
-          case 'topCitations': return this.selectedOutgoingSuggestionsArticle
+          case 'seedArticlesTab': return this.selectedSeedArticle
+          case 'citedArticlesTab': return this.selectedCitedArticle
+          case 'citingArticlesTab': return this.selectedCitingArticle
+          case 'coCitedArticlesTab': return this.selectedCoCitedArticle
+          case 'coCitingArticlesTab': return this.selectedCoCitingArticle
         }
       },
       set: function (x) {
         switch (this.showArticlesTab) {
-          case 'inputArticles':
-            this.selectedInputArticle = x
-            if (x) this.inputArticlesTablePage = Math.ceil((this.$refs.inputArticlesTable.newData.indexOf(x) + 1) / vm.articlesPerPage)
+          case 'seedArticlesTab':
+            this.selectedSeedArticle = x
+            if (x) this.seedArticlesTabTablePage = Math.ceil((this.$refs.seedArticlesTabTable.newData.indexOf(x) + 1) / vm.articlesPerPage)
             break
-          case 'topReferences':
-            this.selectedIncomingSuggestionsArticle = x
-            if (x) this.topReferencesTablePage = Math.ceil((this.$refs.topReferencesTable.newData.indexOf(x) + 1) / vm.articlesPerPage)
+          case 'citedArticlesTab':
+            this.selectedCitedArticle = x
+            if (x) this.citedArticlesTabTablePage = Math.ceil((this.$refs.citedArticlesTabTable.newData.indexOf(x) + 1) / vm.articlesPerPage)
             break
-          case 'topCitations':
-            this.selectedOutgoingSuggestionsArticle = x
-            if (x) this.topCitationsTablePage = Math.ceil((this.$refs.topCitationsTable.newData.indexOf(x) + 1) / vm.articlesPerPage)
+          case 'citingArticlesTab':
+            this.selectedCitingArticle = x
+            if (x) this.citingArticlesTabTablePage = Math.ceil((this.$refs.citingArticlesTabTable.newData.indexOf(x) + 1) / vm.articlesPerPage)
+            break
+          case 'coCitedArticlesTab':
+            this.selectedCoCitedArticle = x
+            if (x) this.coCitedArticlesTabTablePage = Math.ceil((this.$refs.coCitedArticlesTabTable.newData.indexOf(x) + 1) / vm.articlesPerPage)
+            break
+          case 'coCitingArticlesTab':
+            this.selectedCoCitingArticle = x
+            if (x) this.coCitingArticlesTabTablePage = Math.ceil((this.$refs.coCitingArticlesTabTable.newData.indexOf(x) + 1) / vm.articlesPerPage)
             break
         }
         if (x && document.getElementById(x.id)) document.getElementById(x.id).scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -951,36 +1163,35 @@ const vm = new Vue({
       return this.currentGraph.API === 'Crossref' || (this.currentGraph.source.customListOfReferences !== undefined) || !this.currentGraph.source.id
     },
     // The following are settings and their default values
-    maxIncomingSuggestions: {
-      get: function () { return this.currentGraph.maxIncomingSuggestions ?? Math.min(10, this.currentGraph.incomingSuggestions?.length) },
-      set: function (x) { if (x >= 0 && x <= this.currentGraph.incomingSuggestions?.length) this.$set(this.currentGraph, 'maxIncomingSuggestions', Number(x)) }
+    maxCitedArticles: {
+      get: function () { return this.currentGraph.maxCitedArticles ?? Math.min(10, this.citedArticles?.length) },
+      set: function (x) { if (x >= 0 && x <= this.citedArticles?.length) this.$set(this.currentGraph, 'maxCitedArticles', Number(x)) }
     },
-    maxOutgoingSuggestions: {
-      get: function () { return this.currentGraph.maxOutgoingSuggestions ?? Math.min(10, this.currentGraph.outgoingSuggestions?.length) },
-      set: function (x) { if (x >= 0 && x <= this.currentGraph.outgoingSuggestions?.length) this.$set(this.currentGraph, 'maxOutgoingSuggestions', Number(x)) }
+    maxCitingArticles: {
+      get: function () { return this.currentGraph.maxCitingArticles ?? Math.min(10, this.citingArticles?.length) },
+      set: function (x) { if (x >= 0 && x <= this.citingArticles?.length) this.$set(this.currentGraph, 'maxCitingArticles', Number(x)) }
     },
-    minDegreeIncomingSuggestions: {
-      get: function () { return this.currentGraph.minDegreeIncomingSuggestions ?? 1 },
-      set: function (x) { this.$set(this.currentGraph, 'minDegreeIncomingSuggestions', Number(x)) }
+    minDegreeCitedArticles: {
+      get: function () { return this.currentGraph.minDegreeCitedArticles ?? 1 },
+      set: function (x) { this.$set(this.currentGraph, 'minDegreeCitedArticles', Number(x)) }
     },
-    minDegreeOutgoingSuggestions: {
-      get: function () { return this.currentGraph.minDegreeOutgoingSuggestions ?? 1 },
-      set: function (x) { this.$set(this.currentGraph, 'minDegreeOutgoingSuggestions', Number(x)) }
+    minDegreeCitingArticles: {
+      get: function () { return this.currentGraph.minDegreeCitingArticles ?? 1 },
+      set: function (x) { this.$set(this.currentGraph, 'minDegreeCitingArticles', Number(x)) }
     },
     citationNetworkNodeColor: {
       // Options: 'year', 'journal'
       get: function () { return this.currentGraph.citationNetworkNodeColor ?? 'year' },
       set: function (x) { this.$set(this.currentGraph, 'citationNetworkNodeColor', x) }
     },
-    citationNetworkNodeSize: {
-      // Options: 'both', 'in', 'out
-      get: function () { return this.currentGraph.citationNetworkNodeSize ?? 'both' },
-      set: function (x) { this.$set(this.currentGraph, 'citationNetworkNodeSize', x) }
-    },
     citationNetworkShowSource: {
       get: function () { return this.currentGraph.citationNetworkShowSource ?? true },
       set: function (x) { this.$set(this.currentGraph, 'citationNetworkShowSource', x) }
     },
+    /* citationNetworkMinRank: {
+      get: function () { return this.currentGraph.citationNetworkMinRank },
+      set: function (x) { this.$set(this.currentGraph, 'citationNetworkMinRank', x) }
+    }, */
     authorNetworkNodeColor: {
       // Options: 'firstArticle', 'lastArticle'
       get: function () { return this.currentGraph.authorNetworkNodeColor ?? 'firstArticle' },
@@ -998,18 +1209,18 @@ const vm = new Vue({
     completenessOriginalReferencesCount: function () {
       return (this.currentGraph.source.customListOfReferences || this.currentGraph.source.references).length
     },
-    completenessInputArticlesWithoutSource: function () {
-      // Removes placeholders for missing articles (without id) and source article from Input Articles list
-      return this.currentGraph.input.filter(article => article.id && !article.isSource)
+    completenessSeedArticlesWithoutSource: function () {
+      // Removes placeholders for missing articles (without id) and source article from Seed Articles list
+      return this.seedArticles.filter(article => article.id && !article.isSource)
     },
     completenessOriginalReferencesFraction: function () {
-      return this.completenessInputArticlesWithoutSource.length / this.completenessOriginalReferencesCount
+      return this.completenessSeedArticlesWithoutSource.length / this.completenessOriginalReferencesCount
     },
     completenessInputHasReferences: function () {
-      return arrSum(this.completenessInputArticlesWithoutSource.map(x => (x.references?.length ?? 0) !== 0))
+      return arrSum(this.completenessSeedArticlesWithoutSource.map(x => (x.references?.length ?? 0) !== 0))
     },
     completenessInputReferencesFraction: function () {
-      return arrAvg(this.completenessInputArticlesWithoutSource.filter(x => (x.references?.length ?? 0) !== 0).map(x => x.references.filter(Boolean).length / x.references.length))
+      return arrAvg(this.completenessSeedArticlesWithoutSource.filter(x => (x.references?.length ?? 0) !== 0).map(x => x.references.filter(Boolean).length / x.references.length))
     },
     completenessLabel: function () {
       let label = ''
@@ -1018,16 +1229,16 @@ const vm = new Vue({
         if (this.currentGraph.source.id) {
           label += 'Source and '
         }
-        label += `${this.completenessInputArticlesWithoutSource.length} of originally ${this.completenessOriginalReferencesCount} (${Math.round(this.completenessOriginalReferencesFraction * 100)}%) references were found in ${this.currentGraph.API}, ${this.completenessInputHasReferences} of which have reference-lists themselves (${Math.round(this.completenessInputHasReferences / this.completenessInputArticlesWithoutSource.length * 100)}%).`
+        label += `${this.completenessSeedArticlesWithoutSource.length} of originally ${this.completenessOriginalReferencesCount} (${Math.round(this.completenessOriginalReferencesFraction * 100)}%) references were found in ${this.currentGraph.API}, ${this.completenessInputHasReferences} of which have reference-lists themselves (${Math.round(this.completenessInputHasReferences / this.completenessSeedArticlesWithoutSource.length * 100)}%).`
       } else {
-        label = `${this.completenessInputHasReferences} of ${this.completenessInputArticlesWithoutSource.length} input articles ${this.currentGraph.source.id ? '(excluding source) ' : ''}have reference-lists themselves in ${this.currentGraph.API} (${Math.round(this.completenessInputHasReferences / this.completenessInputArticlesWithoutSource.length * 100)}%).`
+        label = `${this.completenessInputHasReferences} of ${this.completenessSeedArticlesWithoutSource.length} seed articles ${this.currentGraph.source.id ? '(excluding source) ' : ''}have reference-lists themselves in ${this.currentGraph.API} (${Math.round(this.completenessInputHasReferences / this.completenessSeedArticlesWithoutSource.length * 100)}%).`
       }
 
       if (['Semantic Scholar', 'Crossref'].includes(this.currentGraph.API)) label += ` Their respective average reference completeness is ${Math.round(this.completenessInputReferencesFraction * 100)}%.`
       return label
     },
     completenessPercent: function () {
-      return Math.round(this.completenessOriginalReferencesFraction * (this.completenessInputHasReferences / this.completenessInputArticlesWithoutSource.length) * this.completenessInputReferencesFraction * 100)
+      return Math.round(this.completenessOriginalReferencesFraction * (this.completenessInputHasReferences / this.completenessSeedArticlesWithoutSource.length) * this.completenessInputReferencesFraction * 100)
     }
   },
   watch: {
@@ -1063,7 +1274,75 @@ const vm = new Vue({
           if (Array.isArray(graphs) && graphs.every(graph => graph.localCitationNetworkVersion)) {
             this.addGraphs(graphs)
             this.file = undefined
-            return (true)
+            return true
+          }
+          // Also handle Co*Citation Network JSON files
+          if ((typeof graphs === 'object') && Object.keys(graphs).includes('snapshot_date') && Object.keys(graphs).includes('seeds') && Object.keys(graphs).includes('works')) {
+            try {
+              // Sanity checks
+              Object.keys(graphs.works).forEach(id => {
+                const x = graphs.works[id]
+                if (!Object.keys(x.linked_seeds).includes('cited_direct')) throw new Error(id + ' cited_direct missing')
+                if (!Object.keys(x.linked_seeds).includes('citing_direct')) throw new Error(id + ' citing_direct missing')
+                if (!Object.keys(x.linked_seeds).includes('cocited_indirect')) throw new Error(id + ' cocited_indirect missing')
+                if (!Object.keys(x.linked_seeds).includes('cociting_indirect')) throw new Error(id + ' cociting_indirect missing')
+                x.linked_seeds.cited_direct.map(y => { if (!graphs.seeds.includes(y)) throw new Error(id + ' cited_direct ' + y + ' not in seeds') })
+                x.linked_seeds.citing_direct.map(y => { if (!graphs.seeds.includes(y)) throw new Error(id + ' citing_direct ' + y + ' not in seeds') })
+                x.linked_seeds.cocited_indirect.map(y => { if (!graphs.seeds.includes(y)) throw new Error(id + ' cocited_indirect ' + y + ' not in seeds') })
+                x.linked_seeds.cociting_indirect.map(y => { if (!graphs.seeds.includes(y)) throw new Error(id + ' cociting_indirect ' + y + ' not in seeds') })
+                const sum = ((x.linked_seeds.cited_direct?.length ?? 0) + (x.linked_seeds.citing_direct?.length ?? 0) + (x.linked_seeds.cocited_indirect?.length ?? 0) + (x.linked_seeds.cociting_indirect?.length ?? 0))
+                if (x.rank != sum) throw new Error(id + ' wrong rank ' + x.rank + ' (should be ' + sum + ')')
+              })
+              graphs.seeds.concat(graphs.udcs).concat(graphs.rics).forEach(id => {
+                if (!Object.keys(graphs.works).includes(id)) throw new Error(id + ' not in works')
+              })
+
+              const seedArticles = coCitationNetworkResponseToArticleArray(graphs.seeds.reduce((o, key) => ({ ...o, [key]: graphs.works[key] }), {}))
+              const udcs = coCitationNetworkResponseToArticleArray(graphs.udcs.reduce((o, key) => ({ ...o, [key]: graphs.works[key] }), {}))
+              const rics = coCitationNetworkResponseToArticleArray(graphs.rics.reduce((o, key) => ({ ...o, [key]: graphs.works[key] }), {}))
+              // Add references to seed articles
+              const seedArticlesIds = seedArticles.map(x => x.id)
+              udcs.filter(article => article.citations.length).forEach(article => {
+                article.citations.forEach(citationId => {
+                  seedArticles[seedArticlesIds.indexOf(citationId)].references.push(article.id)
+                })
+              })
+
+              this.addGraphs([{
+                graphs: graphs,
+                source: { references: graphs.seeds },
+                seedArticles: seedArticles,
+                citedArticles: udcs.filter(article => article.citations.length),
+                citingArticles: udcs.filter(article => article.references.length),
+                tabLabel: this.file.name.replace('.json', '') + ' UDCS',
+                tabTitle: this.file.name.replace('.json', '') + ' UDCS',
+                allCited: true,
+                allCiting: true,
+                API: 'Co*Citation Network via OpenAlex',
+                timestamp: new Date(graphs.snapshot_date.substr(9).split('-').reverse().join('-')).getTime(),
+                localCitationNetworkVersion: localCitationNetworkVersion
+              }])
+
+              this.addGraphs([{
+                graphs: graphs,
+                source: { references: graphs.seeds },
+                seedArticles: seedArticles,
+                citedArticles: rics.filter(article => article.citations.length),
+                citingArticles: rics.filter(article => article.references.length),
+                coCitedArticles: rics.filter(article => article.coCited.length),
+                coCitingArticles: rics.filter(article => article.coCiting.length),
+                tabLabel: this.file.name.replace('.json', '') + ' RICS',
+                tabTitle: this.file.name.replace('.json', '') + ' RICS',
+                API: 'Co*Citation Network via OpenAlex',
+                ricsRankCutoff: graphs.rics_rank_cutoff,
+                timestamp: new Date(graphs.snapshot_date.substr(9).split('-').reverse().join('-')).getTime(),
+                localCitationNetworkVersion: localCitationNetworkVersion
+              }])
+            } catch (e) {
+              this.errorMessage('Could not load exploratory Co*Citation Network file: ' + e)
+            }
+            this.file = undefined
+            return true
           }
         }
         // ... or a plain text file to be searched for DOIs
@@ -1091,9 +1370,9 @@ const vm = new Vue({
     },
     showArticlesTab: function () {
       if (
-        (this.showArticlesTab !== 'inputArticles' && ['citedById', 'citingId'].includes(this.filterColumn)) ||
-        (this.showArticlesTab !== 'topReferences' && this.filterColumn === 'citedByInputArticleId') ||
-        (this.showArticlesTab !== 'topCitations' && this.filterColumn === 'citesInputArticleId')
+        (this.showArticlesTab !== 'seedArticlesTab' && ['citedById', 'citingId'].includes(this.filterColumn)) ||
+        (this.showArticlesTab !== 'citedArticlesTab' && this.filterColumn === 'citedBySeedArticleId') ||
+        (this.showArticlesTab !== 'citingArticlesTab' && this.filterColumn === 'citesSeedArticleId')
       ) {
         this.filterColumn = 'titleAbstract'
         this.filterString = ''
@@ -1104,38 +1383,40 @@ const vm = new Vue({
     // Initialize graph when new tab is opened / tab is changed
     setCurrentTabIndex: function (index) {
       // Reset UI elements when tab is changed
-      this.showArticlesTab = 'inputArticles'
+      this.showArticlesTab = 'seedArticlesTab'
       this.filterString = undefined
       this.selected = undefined
 
       // Reset table paging
-      this.inputArticlesTablePage = 1
-      this.topReferencesTablePage = 1
-      this.topCitationsTablePage = 1
+      this.seedArticlesTabTablePage = 1
+      this.citedArticlesTabTablePage = 1
+      this.citingArticlesTabTablePage = 1
+      this.coCitedArticlesTabTablePage = 1
+      this.coCitingArticlesTabTablePage = 1
 
       this.currentTabIndex = index
       if (index !== undefined) this.init()
     },
-    computeInputArticlesRelationships: function (aArticles, inputArticlesIds, variable = 'references') {
+    computeSeedArticlesRelationships: function (aArticles, seedArticlesIds, variable = 'references') {
       // Replaces former populateReferencedCiting
       // Removes duplicates (e.g. https://api.crossref.org/works/10.7717/PEERJ.3544 has 5 references to DOI 10.1080/00031305.2016.1154108).
       // @param articles: Array of articles-Objects each containing id and variable
       // @param variable: Either 'references' or 'citations': Arrays of article-ids
-      const inputArticlesA = {}; const inputArticlesB = {}
+      const seedArticlesA = {}; const seedArticlesB = {}
       aArticles.forEach(aArticle => {
         const aId = aArticle.id
         aArticle[variable]?.filter(Boolean).forEach(bId => {
-          if (inputArticlesIds.includes(aId)) {
-            if (!inputArticlesA[bId]) inputArticlesA[bId] = []
-            if (!inputArticlesA[bId].includes(aId)) inputArticlesA[bId].push(aId)
+          if (seedArticlesIds.includes(aId)) {
+            if (!seedArticlesA[bId]) seedArticlesA[bId] = []
+            if (!seedArticlesA[bId].includes(aId)) seedArticlesA[bId].push(aId)
           }
-          if (inputArticlesIds.includes(bId)) {
-            if (!inputArticlesB[aId]) inputArticlesB[aId] = []
-            if (!inputArticlesB[aId].includes(bId)) inputArticlesB[aId].push(bId)
+          if (seedArticlesIds.includes(bId)) {
+            if (!seedArticlesB[aId]) seedArticlesB[aId] = []
+            if (!seedArticlesB[aId].includes(bId)) seedArticlesB[aId].push(bId)
           }
         })
       })
-      return { inputArticlesA, inputArticlesB }
+      return { seedArticlesA, seedArticlesB }
     },
     setNewSource: function (id, customListOfReferences = undefined) {
       this.isLoading = true
@@ -1177,47 +1458,47 @@ const vm = new Vue({
         queue: false
       })
 
-      // Get Input articles
-      this.callAPI(source.references, data => this.retrievedInputArticles(data, source, this.API, this.retrieveReferences, this.retrieveCitations), this.API, 'input', this.retrieveReferences === Infinity, this.retrieveCitations === Infinity)
+      // Get seed articles
+      this.callAPI(source.references, data => this.retrievedSeedArticles(data, source, this.API, this.retrieveCitedArticles, this.retrieveCitingArticles), this.API, 'input', this.retrieveCitedArticles, this.retrieveCitingArticles)
     },
-    retrievedInputArticles: function (data, source, API, retrieveReferences, retrieveCitations) {
-      let inputArticles = this.responseToArray(data, API)
+    retrievedSeedArticles: function (data, source, API, retrieveCitedArticles, retrieveCitingArticles) {
+      let seedArticles = this.responseToArray(data, API)
 
-      // If source has customListOfReferences its references must be updated to match id format of API (otherwise inDegree and outDegree and network don't work correctly)
+      // If source has customListOfReferences its references must be updated to match id format of API (otherwise citedCount and citingCount and network don't work correctly)
       // Original list was kept in source.customListOfReferences
       if (source.customListOfReferences) {
-        source.references = inputArticles.map(article => article.id)
+        source.references = seedArticles.map(article => article.id)
       }
 
-      // Don't put source in inputArticles when a list without source was loaded
-      const inputArticlesIdsWithoutSource = inputArticles.map(article => article.id)
-      if (source.id) inputArticles = inputArticles.concat(source)
-      const inputArticlesIds = inputArticles.map(article => article.id)
+      // Don't put source in seedArticles when a list without source was loaded
+      const seedArticlesIdsWithoutSource = seedArticles.map(article => article.id)
+      if (source.id) seedArticles = seedArticles.concat(source)
+      const seedArticlesIds = seedArticles.map(article => article.id)
 
       // Temporary scope variables needed (without having been reduced like in computed.referencedCiting!) for getting id lists for Top References / Top Citations
       let referenced, citing
-      if (!(retrieveReferences === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API))) {
-        referenced = this.computeInputArticlesRelationships(inputArticles, inputArticlesIds).inputArticlesA
+      if (!(retrieveCitedArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API))) {
+        referenced = this.computeSeedArticlesRelationships(seedArticles, seedArticlesIds).seedArticlesA
       }
-      if (!(retrieveCitations === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API))) {
-        citing = this.computeInputArticlesRelationships(inputArticles, inputArticlesIds, 'citations').inputArticlesA
+      if (!(retrieveCitingArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API))) {
+        citing = this.computeSeedArticlesRelationships(seedArticles, seedArticlesIds, 'citations').seedArticlesA
       }
 
       // Delete citations arrays in articles to save space, they were only needed for calculating citing (above) for "Top citations"
-      inputArticles = inputArticles.map(article => { delete article.citations; return article })
+      seedArticles = seedArticles.map(article => { delete article.citations; return article })
 
       // Add new tab
       const newGraph = {
         source: source,
-        input: inputArticles,
-        incomingSuggestions: (retrieveReferences) ? undefined : [], // undefined leads to loading indicator, empty array means no references
-        outgoingSuggestions: (retrieveCitations && API !== 'Crossref') ? undefined : [], // undefined leads to loading indicator, empty array means no citations
+        seedArticles: seedArticles,
+        citedArticles: (retrieveCitedArticles) ? undefined : [], // undefined leads to loading indicator, empty array means no references
+        citingArticles: (retrieveCitingArticles && API !== 'Crossref') ? undefined : [], // undefined leads to loading indicator, empty array means no citations
         tabLabel: source.id ? ((source.authors[0] && source.authors[0].LN) + ' ' + source.year) : this.listName,
         tabTitle: source.id ? source.title : this.listName,
         bookmarkletURL: this.bookmarkletURL,
         API: API,
-        allReferences: retrieveReferences === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API),
-        allCitations: retrieveCitations === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API),
+        allCited: retrieveCitedArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API),
+        allCiting: retrieveCitingArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API),
         timestamp: Date.now(),
         localCitationNetworkVersion: localCitationNetworkVersion
       }
@@ -1227,54 +1508,54 @@ const vm = new Vue({
       this.listName = undefined
       this.bookmarkletURL = undefined
 
-      /* Perform API call for All / Top References (formerly Incoming suggestions) */
-      // OA & S2: If all references are supposed to be retrieved get multiple references at once based on inputArticlesIds (faster)
+      /* Perform API call for All / Top References (formerly References / Incoming suggestions) */
+      // OA & S2: If all references are supposed to be retrieved get multiple references at once based on seedArticlesIds (faster)
       // Otherwise use ids derived from references
-      let incomingSuggestionsIds
-      if (!(retrieveReferences === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API))) {
-        incomingSuggestionsIds = Object.keys(referenced)
-          // De-duplicate vs inputArticles in case only Top References are retrieved
-          .filter(x => !inputArticlesIds.includes(x))
+      let citedArticlesIds
+      if (!(retrieveCitedArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API))) {
+        citedArticlesIds = Object.keys(referenced)
+          // De-duplicate vs seedArticles in case only Top References are retrieved
+          .filter(x => !seedArticlesIds.includes(x))
           // Sort and slice for Top References
-          .sort((a, b) => referenced[b].length - referenced[a].length).slice(0, retrieveReferences)
+          .sort((a, b) => referenced[b].length - referenced[a].length).slice(0, retrieveCitedArticles)
       }
-      this.callAPI((retrieveReferences === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API)) ? inputArticlesIdsWithoutSource : incomingSuggestionsIds, data => this.retrievedIncomingSuggestions(data, API, newGraph, retrieveCitations, citing, inputArticlesIds), API, 'references', retrieveReferences === Infinity, false)
+      this.callAPI((retrieveCitedArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API)) ? seedArticlesIdsWithoutSource : citedArticlesIds, data => this.retrievedCitedArticles(data, API, newGraph, retrieveCitingArticles, citing, seedArticlesIds), API, 'references', retrieveCitedArticles, 0)
     },
-    retrievedIncomingSuggestions: function (data, API, newGraph, retrieveCitations, citing, inputArticlesIds) {
-      let incomingSuggestions = this.responseToArray(data, API)
+    retrievedCitedArticles: function (data, API, newGraph, retrieveCitingArticles, citing, seedArticlesIds) {
+      let citedArticles = this.responseToArray(data, API)
       // OpenCitations always has citations properties, delete to save space
-      incomingSuggestions = incomingSuggestions.map(article => { delete article.citations; return article })
+      citedArticles = citedArticles.map(article => { delete article.citations; return article })
 
       // Careful: Array/object item setting can't be picked up by Vue (https://vuejs.org/v2/guide/list.html#Caveats)
-      deepFreeze(incomingSuggestions)
-      this.$set(newGraph, 'incomingSuggestions', incomingSuggestions)
+      deepFreeze(citedArticles)
+      this.$set(newGraph, 'citedArticles', citedArticles)
       this.saveState()
       if (this.currentGraph === newGraph) this.init()
 
-      /* Perform API call for All / Top Citations (formerly Outgoing suggestions) */
+      /* Perform API call for All / Top Citations (formerly Citations / Outgoing suggestions) */
       // Only works with OpenAlex, Semantic Scholar and OpenCitations
-      // OA & S2: If all citations are supposed to be retrieved get multiple citations at once based on inputArticlesIds (faster)
+      // OA & S2: If all citations are supposed to be retrieved get multiple citations at once based on seedArticlesIds (faster)
       // Otherwise use ids derived from citations
-      if (this.retrieveCitations && ['OpenAlex', 'Semantic Scholar', 'OpenCitations'].includes(API)) {
-        let outgoingSuggestionsIds
-        if (!(retrieveCitations === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API))) {
-          outgoingSuggestionsIds = Object.keys(citing)
-            // De-duplicate vs inputArticles & incomingSuggestions in case only Top Citations are retrieved
-            .filter(x => !inputArticlesIds.includes(x) && !incomingSuggestions.map(x => x.id).includes(x))
+      if (this.retrieveCitingArticles && ['OpenAlex', 'Semantic Scholar', 'OpenCitations'].includes(API)) {
+        let citingArticlesIds
+        if (!(retrieveCitingArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API))) {
+          citingArticlesIds = Object.keys(citing)
+            // De-duplicate vs seedArticles & citedArticles in case only Top Citations are retrieved
+            .filter(x => !seedArticlesIds.includes(x) && !citedArticles.map(x => x.id).includes(x))
             // Sort and slice for Top Citations
-            .sort((a, b) => citing[b].length - citing[a].length).slice(0, retrieveCitations)
+            .sort((a, b) => citing[b].length - citing[a].length).slice(0, retrieveCitingArticles)
         }
-        this.callAPI((retrieveCitations === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API)) ? inputArticlesIds : outgoingSuggestionsIds, data => this.retrievedOutgoingSuggestions(data, API, newGraph), API, 'citations', false, retrieveCitations === Infinity)
+        this.callAPI((retrieveCitingArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API)) ? seedArticlesIds : citingArticlesIds, data => this.retrievedCitingArticles(data, API, newGraph), API, 'citations', 0, retrieveCitingArticles)
       }
     },
-    retrievedOutgoingSuggestions: function (data, API, newGraph) {
-      let outgoingSuggestions = this.responseToArray(data, API)
+    retrievedCitingArticles: function (data, API, newGraph) {
+      let citingArticles = this.responseToArray(data, API)
       // OpenCitations always has citations properties, delete to save space
-      outgoingSuggestions = outgoingSuggestions.map(article => { delete article.citations; return article })
+      citingArticles = citingArticles.map(article => { delete article.citations; return article })
 
       // Careful: Array/object item setting can't be picked up by Vue (https://vuejs.org/v2/guide/list.html#Caveats)
-      deepFreeze(outgoingSuggestions)
-      this.$set(newGraph, 'outgoingSuggestions', outgoingSuggestions)
+      deepFreeze(citingArticles)
+      this.$set(newGraph, 'citingArticles', citingArticles)
       this.saveState()
 
       if (this.currentGraph === newGraph) this.init()
@@ -1282,15 +1563,15 @@ const vm = new Vue({
     pushGraph: function (newGraph) {
       // Freeze these large article objects for performance (happens on the first call of init, is ignored afterwards)
       deepFreeze(newGraph.source)
-      deepFreeze(newGraph.input)
-      deepFreeze(newGraph.incomingSuggestions)
-      deepFreeze(newGraph.outgoingSuggestions)
+      deepFreeze(newGraph.seedArticles)
+      deepFreeze(newGraph.citedArticles)
+      deepFreeze(newGraph.citingArticles)
       this.graphs.push(newGraph)
 
       // Don't keep more articles in tab-bar than maxTabs
       if (this.graphs.length > this.maxTabs) this.graphs = this.graphs.slice(1)
 
-      // Let user explore input articles while suggestions are still loading
+      // Let user explore seed articles while suggestions are still loading
       this.setCurrentTabIndex(this.graphs.length - 1)
     },
     clickOpenReferences: function (article) {
@@ -1311,7 +1592,7 @@ const vm = new Vue({
         : ((this.API === 'Semantic Scholar')
           ? 'Enter <a href="https://api.semanticscholar.org/graph/v1#operation/get_graph_get_paper_references" target="_blank">DOI / PMID / ARXIV / other ID</a> of new source article'
           : 'Enter <a href="https://en.wikipedia.org/wiki/Digital_object_identifier" target="_blank">DOI</a> of new source article')
-      if (!this.editListOfIds) message += ' and use its references as input articles. <a onclick="vm.editListOfIds=true; document.querySelector(`footer.modal-card-foot:last-child button`).click()">Enter custom list of IDs instead.</a>'
+      if (!this.editListOfIds) message += ' and use its references as seed articles. <a onclick="vm.editListOfIds=true; document.querySelector(`footer.modal-card-foot:last-child button`).click()">Enter custom list of IDs instead.</a>'
       this.$buefy.dialog.prompt({
         message: message,
         inputAttrs: {
@@ -1445,78 +1726,78 @@ const vm = new Vue({
     initCurrentNetwork: function () {
       // Networks are handled by vis.js outside of Vue through these two global init function
       if (this.showAuthorNetwork) initAuthorNetwork(this, this.authorNetworkMinPublications)
-      else initCitationNetwork(this, this.currentGraph.minDegreeIncomingSuggestions, this.currentGraph.minDegreeOutgoingSuggestions)
+      else initCitationNetwork(this, this.currentGraph.minDegreeCitedArticles, this.currentGraph.minDegreeCitingArticles)
       this.highlightNodes()
     },
-    inDegree: function (id) {
+    citedCount: function (id) {
       if (id === undefined) return undefined
       return (this.referencedCiting.referenced[id]?.length || 0)
     },
-    outDegree: function (id) {
+    citingCount: function (id) {
       if (id === undefined) return undefined
       return (this.referencedCiting.citing[id]?.length || 0)
     },
-    // compareFunction for array.sort(), in this case descending by default (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort)
-    sortInDegree: function (articleA, articleB) {
-      let a = this.inDegree(articleA.id) ?? 0
-      let b = this.inDegree(articleB.id) ?? 0
-      // In case of a tie sort by outDegree secondarily
-      if (a === b) {
-        a = this.outDegree(articleA.id) ?? 0
-        b = this.outDegree(articleB.id) ?? 0
-      }
-      // In case of another tie sort by year thirdly
-      if (a === b) {
-        a = articleA.year ?? 0
-        b = articleB.year ?? 0
-      }
-      return a - b
+    articleIdToObject: function (id) {
+      // This order is important and must be consistent throughout the app because this is the order by which articles are de-duplicated
+      if (this.seedArticlesIds.includes(id)) return this.seedArticles[this.seedArticlesIds.indexOf(id)]
+      if (this.citedArticlesIds.includes(id)) return this.citedArticles[this.citedArticlesIds.indexOf(id)]
+      if (this.citingArticlesIds.includes(id)) return this.citingArticles[this.citingArticlesIds.indexOf(id)]
+      if (this.coCitedArticlesIds.includes(id)) return this.coCitedArticles[this.coCitedArticlesIds.indexOf(id)]
+      if (this.coCitingArticlesIds.includes(id)) return this.coCitingArticles[this.coCitingArticlesIds.indexOf(id)]
     },
-    sortOutDegree: function (articleA, articleB) {
-      let a = this.outDegree(articleA.id)
-      let b = this.outDegree(articleB.id)
-      // In case of a tie sort by inDegree secondarily
-      if (a === b) {
-        a = this.inDegree(articleA.id)
-        b = this.inDegree(articleB.id)
-      }
-      // In case of another tie sort by year thirdly
-      if (a === b) {
-        a = articleA.year || 0
-        b = articleB.year || 0
-      }
-      return a - b
+    coCitedCount: function (id) {
+      return this.articleIdToObject(id).coCited?.length ?? 0
     },
-    sortReferences: function (articleA, articleB) {
-      let a = articleA.referencesCount ?? articleA.references?.length ?? 0
-      let b = articleB.referencesCount ?? articleB.references?.length ?? 0
-      // In case of a tie sort by inDegree secondarily
-      if (a === b) {
-        a = this.inDegree(articleA.id)
-        b = this.inDegree(articleB.id)
-      }
-      // In case of another tie sort by year thirdly
-      if (a === b) {
-        a = articleA.year || 0
-        b = articleB.year || 0
-      }
-      return a - b
+    coCitingCount: function (id) {
+      return this.articleIdToObject(id).coCiting?.length ?? 0
+    },
+    rankNumber: function (id) {
+      return this.citedCount(id) + this.citingCount(id) + this.coCitedCount(id) + this.coCitingCount(id)
     },
     // Wrapper for Buefy tables with third argument "ascending"
-    sortInDegreeWrapper: function (a, b, ascending) {
-      return (ascending) ? this.sortInDegree(a, b) : this.sortInDegree(b, a)
-    },
-    sortOutDegreeWrapper: function (a, b, ascending) {
-      return (ascending) ? this.sortOutDegree(a, b) : this.sortOutDegree(b, a)
-    },
     sortReferencesWrapper: function (a, b, ascending) {
-      return (ascending) ? this.sortReferences(a, b) : this.sortReferences(b, a)
+      return this.sortWrapper(a, b, ascending, x => x.referencesCount ?? x.references?.length, x => this.citedCount(x.id), x => x.year)
     },
-    callAPI: function (ids, responseFunction, API, phase, retrieveAllReferences = false, retrieveAllCitations = false) {
+    sortCitedWrapper: function (a, b, ascending) {
+      return this.sortWrapper(a, b, ascending, x => this.citedCount(x.id), x => this.citingCount(x.id), x => x.year)
+    },
+    sortCitingWrapper: function (a, b, ascending) {
+      return this.sortWrapper(a, b, ascending, x => this.citingCount(x.id), x => this.citedCount(x.id), x => x.year)
+    },
+    sortCoCitedWrapper: function (a, b, ascending) {
+      return this.sortWrapper(a, b, ascending, x => x.coCited?.length, x => this.citedCount(x.id), x => x.year)
+    },
+    sortCoCitingWrapper: function (a, b, ascending) {
+      return this.sortWrapper(a, b, ascending, x => x.coCiting?.length, x => this.citingCount(x.id), x => x.year)
+    },
+    sortRankWrapper: function (a, b, ascending) {
+      return this.sortWrapper(a, b, ascending, x => this.citedCount(x.id) + this.citingCount(x.id) + (x.coCited?.length) + (x.coCiting?.length), x => this.citedCount(x.id), x => x.year)
+    },
+    sortWrapper: function (a, b, ascending, firstSortColumn, secondSortColumn, thirdSortColumn) {
+      // compareFunction for array.sort(), in this case descending by default (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort)
+      function compare (articleA, articleB) {
+        // Sort by firstSortColumn
+        let a = firstSortColumn(articleA)
+        let b = firstSortColumn(articleB)
+        // In case of a tie sort by secondSortColumn
+        if (a === b && secondSortColumn) {
+          a = secondSortColumn(articleA)
+          b = secondSortColumn(articleB)
+        }
+        // In case of another tie sort by thirdSortColumn
+        if (a === b && thirdSortColumn) {
+          a = thirdSortColumn(articleA)
+          b = thirdSortColumn(articleB)
+        }
+        return (a ?? 0) - (b ?? 0)
+      }
+      return (ascending) ? compare(a, b) : compare(b, a)
+    },
+    callAPI: function (ids, responseFunction, API, phase, retrieveCitedArticles = 0, retrieveCitingArticles = 0) {
       if (API === 'OpenAlex') {
-        return openAlexWrapper(ids, responseFunction, phase, retrieveAllReferences, retrieveAllCitations)
+        return openAlexWrapper(ids, responseFunction, phase, retrieveCitedArticles, retrieveCitingArticles)
       } else if (API === 'Semantic Scholar') {
-        return semanticScholarWrapper(ids, responseFunction, phase, retrieveAllReferences, retrieveAllCitations)
+        return semanticScholarWrapper(ids, responseFunction, phase, retrieveCitedArticles, retrieveCitingArticles)
       } else if (API === 'OpenCitations') {
         return openCitationsWrapper(ids, responseFunction, phase)
       } else if (API === 'Crossref') {
@@ -1536,7 +1817,7 @@ const vm = new Vue({
       } else if (API === 'Crossref') {
         articles = crossrefResponseToArticleArray(data)
       }
-      // Remove duplicates - important for de-duplication of All References / All Citations (can be duplicated mostly with S2 but also to lesser extent with OA), rarely also needed for other calls, e.g. for S2 in references of 10.1111/J.1461-0248.2009.01285.X, eebf363bc78ca7bc16a32fa339004d0ad43aa618 came up twice
+      // Remove duplicates - important for de-duplication of All References / All Citations (in the sense of proper duplicates within one category (not in the sense of "de-duplicated against Seed Articles and Cited"), can be duplicated mostly with S2 but also to lesser extent with OA), rarely also needed for other calls, e.g. for S2 in references of 10.1111/J.1461-0248.2009.01285.X, eebf363bc78ca7bc16a32fa339004d0ad43aa618 came up twice
       articles = articles.reduce((articlesKeep, article) => {
         const articlesKeepIds = articlesKeep.map(x => x.id)
         // Keep placeholders (id undefined) and non-duplicates
@@ -1554,7 +1835,7 @@ const vm = new Vue({
         }
         return articlesKeep
       }, [])
-      // Sort article arrays by years, number of references, number of global citations (fairly arbitrary but is never visible)
+      // Sort article arrays by years, number of references, number of global citations (fairly arbitrary but this order is never visible except RIS & CSV export)
       articles.sort((a, b) => a.year - b.year || a.references?.length - b.references?.length || a.referencesCount - b.referencesCount || a.citationsCount - b.citationsCount)
       return articles
     },
@@ -1569,20 +1850,20 @@ const vm = new Vue({
     },
     saveState: function (saveGraphs = true, saveSettings = true) {
       if (this.autosaveResults) {
-        const maxReferencesCitations = 100
+        const maxCitedCiting = 100
         if (saveGraphs) {
           const copiedGraphs = JSON.parse(JSON.stringify(this.graphs))
           localStorage.graphs = JSON.stringify(copiedGraphs.map(graph => {
             // Delete these two possibly existing flags so that only "Top References" / "Top Citations" instead of "All references" / "All citations" will be shown
-            if (graph.incomingSuggestions === undefined || graph.incomingSuggestions.length > maxReferencesCitations) delete graph.allReferences
-            if (graph.outgoingSuggestions === undefined || graph.outgoingSuggestions.length > maxReferencesCitations) delete graph.allCitations
+            if (graph.citedArticles === undefined || graph.citedArticles.length > maxCitedCiting) delete graph.allCited
+            if (graph.citingArticles === undefined || graph.citingArticles.length > maxCitedCiting) delete graph.allCiting
             // Don't save suggestions still in loading phase
             // Otherwise suggestions would be saved in loading state (undefined) but after reload they do not continue to load!
-            if (graph.incomingSuggestions === undefined) graph.incomingSuggestions = []
-            // Only save up to 100 de-duplicated incomingSuggestions (References) & outgoingSuggestions (Citations) for space constraints
-            else graph.incomingSuggestions = graph.incomingSuggestions.filter(article => !graph.input.map(x => x.id).includes(article.id)).slice(0, maxReferencesCitations)
-            if (graph.outgoingSuggestions === undefined) graph.outgoingSuggestions = []
-            else graph.outgoingSuggestions = graph.outgoingSuggestions.filter(article => !graph.input.map(x => x.id).includes(article.id) && !graph.incomingSuggestions.map(x => x.id).includes(article.id)).slice(0, maxReferencesCitations)
+            if (graph.citedArticles === undefined) graph.citedArticles = []
+            // Only save up to 100 de-duplicated citedArticles (References) & citingArticles (Citations) for space constraints
+            else graph.citedArticles = graph.citedArticles.filter(article => !graph.seedArticles.map(x => x.id).includes(article.id)).slice(0, maxCitedCiting)
+            if (graph.citingArticles === undefined) graph.citingArticles = []
+            else graph.citingArticles = graph.citingArticles.filter(article => !graph.seedArticles.map(x => x.id).includes(article.id) && !graph.citedArticles.map(x => x.id).includes(article.id)).slice(0, maxCitedCiting)
 
             return graph
           }))
@@ -1590,8 +1871,8 @@ const vm = new Vue({
         if (saveSettings) {
           localStorage.autosaveResults = true
           localStorage.API = this.API
-          localStorage.retrieveReferences = this.retrieveReferences
-          localStorage.retrieveCitations = this.retrieveCitations
+          localStorage.retrieveCitedArticles = this.retrieveCitedArticles
+          localStorage.retrieveCitingArticles = this.retrieveCitingArticles
           localStorage.semanticScholarAPIKey = this.semanticScholarAPIKey
         }
       } else {
@@ -1623,20 +1904,20 @@ const vm = new Vue({
         case 'citingId':
           ids = this.referencedCiting.referenced[this.filterString]
           return articles.filter(article => ids?.includes(article.id))
-        case 'citedByInputArticleId':
-          return this.citedByInputArticleId(articles, this.filterString)
-        case 'citesInputArticleId':
-          return this.citesInputArticleId(articles, this.filterString)
+        case 'citedBySeedArticleId':
+          return this.citedBySeedArticleId(articles, this.filterString)
+        case 'citesSeedArticleId':
+          return this.citesSeedArticleId(articles, this.filterString)
         default:
           return articles
       }
     },
-    citedByInputArticleId: function (articles, inputArticleId) {
-      const ids = this.currentGraph.input[this.inputArticlesIds.indexOf(inputArticleId)]?.references
+    citedBySeedArticleId: function (articles, seedArticleId) {
+      const ids = this.seedArticles[this.seedArticlesIds.indexOf(seedArticleId)]?.references
       return articles.filter(article => ids?.includes(article.id))
     },
-    citesInputArticleId: function (articles, inputArticleId) {
-      return articles.filter(article => article.references?.includes(inputArticleId))
+    citesSeedArticleId: function (articles, seedArticleId) {
+      return articles.filter(article => article.references?.includes(seedArticleId))
     },
     authorString: function (authors) {
       return (authors?.length) ? authors.map(x => ((x.FN) ? (x.FN) + ' ' : '') + x.LN).join(', ') : ''
@@ -1660,6 +1941,19 @@ const vm = new Vue({
           // Prior to v1.23 referenced and citing were cached in the graph object
           delete graph.referenced
           delete graph.citing
+          // Prior to v1.26 seedArticles array was called input, citedArticles array was called citedArticles, and citingArticles array was called citingArticles
+          if (!graph.seedArticles) {
+            graph.seedArticles = graph.input
+            graph.citedArticles = graph.incomingSuggestions
+            graph.citingArticles = graph.outgoingSuggestions
+            graph.allCited = graph.allReferences
+            graph.allCiting = graph.allCitations
+            delete graph.input
+            delete graph.incomingSuggestions
+            delete graph.outgoingSuggestions
+            delete graph.allReferences
+            delete graph.allCitations
+          }
           this.pushGraph(graph)
         } else {
           this.errorMessage("Tab with name '" + graph.tabLabel + "' already exists!")
@@ -1683,7 +1977,7 @@ const vm = new Vue({
     },
     toggleArticle: function () {
       // Same condition as in :has-detailed-visible
-      if (this.selected.authors.length || this.inDegree(this.selected.id) || this.outDegree(this.selected.id) || this.selected.abstract || this.selected.tldr) {
+      if (this.selected.authors.length || this.citedCount(this.selected.id) || this.citingCount(this.selected.id) || this.selected.abstract || this.selected.tldr) {
         this.$refs[this.showArticlesTab + 'Table'].toggleDetails(this.selected)
       }
     },
@@ -1730,21 +2024,22 @@ const vm = new Vue({
         case 'Semantic Scholar': return 'S2'
         case 'OpenCitations': return 'OC'
         case 'Crossref': return 'CR'
+        case 'Co*Citation Network via OpenAlex': return 'CCN via OA'
       }
     },
     articleLink: function (article) {
       if (article.doi) return 'https://doi.org/' + article.doi
-      else if (this.currentGraph.API === 'OpenAlex' && article.id) return 'https://openalex.org/' + article.id
+      else if (['OpenAlex', 'Co*Citation Network via OpenAlex'].includes(this.currentGraph.API) && article.id) return 'https://openalex.org/' + article.id
       else if (this.currentGraph.API === 'Semantic Scholar' && article.id) return 'https://semanticscholar.org/paper/' + article.id
       else return false
     },
     referencesLink: function (article) {
-      if (this.currentGraph.API === 'OpenAlex' && article.id) return 'https://openalex.org/works?page=1&filter=cited_by:' + article.id
+      if (['OpenAlex', 'Co*Citation Network via OpenAlex'].includes(this.currentGraph.API) && article.id) return 'https://openalex.org/works?page=1&filter=cited_by:' + article.id
       else if (this.currentGraph.API === 'Semantic Scholar' && article.id) return 'https://semanticscholar.org/paper/' + article.id + '#cited-papers'
       else return false
     },
     citationsLink: function (article) {
-      if (this.currentGraph.API === 'OpenAlex' && article.id) return 'https://openalex.org/works?page=1&filter=cites:' + article.id
+      if (['OpenAlex', 'Co*Citation Network via OpenAlex'].includes(this.currentGraph.API) && article.id) return 'https://openalex.org/works?page=1&filter=cites:' + article.id
       else if (this.currentGraph.API === 'Semantic Scholar' && article.id) return 'https://semanticscholar.org/paper/' + article.id + '#citing-papers'
       else return false
     },
@@ -1760,7 +2055,7 @@ const vm = new Vue({
       this.initCurrentNetwork()
       this.saveState(false)
     },
-    downloadCSVData: function (articlesArray) {
+    downloadCSVData: function (articlesArray, filenameSuffix = '') {
       function prepareCell (text) {
         if (!text) return ''
         if (typeof (text) === 'object') text = text.join(', ')
@@ -1773,9 +2068,9 @@ const vm = new Vue({
       let csv = 'sep=;\n'
       csv += '"# https://LocalCitationNetwork.github.io/' + this.linkToShareAppendix + '"\n'
       csv += '"# Data retrieved through ' + this.currentGraph.API + ' (' + this.abbreviateAPI(this.currentGraph.API) + ') on ' + new Date(this.currentGraph.timestamp).toLocaleString() + '"\n'
-      csv += '"id";"doi";' + ((this.showArticlesTab === 'inputArticles' && this.showNumberInSourceReferences) ? '"#";' : '') + '"type";"title";"authors";"journal";"year";"date";"volume";"issue";"firstPage";"lastPage";"abstract";"globalCitationsCount";"localInDegree";"localOutDegree";"referencesCount";"localIncomingCitations";"localOutgoingCitations";"references"\n'
+      csv += '"id";"doi";"#";"type";"title";"authors";"journal";"year";"date";"volume";"issue";"firstPage";"lastPage";"abstract";"globalCitationsCount";"referencesCount";"citedCount";"citingCount";"coCitedCount";"coCitingCount";"referencesIds";"citedIds";"citingIds";"coCitedIds";"coCitingIds"\n'
       csv += articlesArray.map(row => {
-        let arr = [row.id, row.doi, (this.showArticlesTab === 'inputArticles' && this.showNumberInSourceReferences) ? row.numberInSourceReferences : false, row.type, row.title, this.authorString(row.authors), row.journal, row.year, row.date, row.volume, row.issue, row.firstPage, row.lastPage, row.abstract, row.citationsCount, this.inDegree(row.id), this.outDegree(row.id), row.referencesCount || row.references?.length, this.referencedCiting.referenced[row.id], this.referencedCiting.citing[row.id], row.references]
+        let arr = [row.id, row.doi, row.numberInSourceReferences, row.type, row.title, this.authorString(row.authors), row.journal, row.year, row.date, row.volume, row.issue, row.firstPage, row.lastPage, row.abstract, row.citationsCount, row.referencesCount || row.references?.length, this.citedCount(row.id), this.citingCount(row.id), this.coCitedCount(row.id), this.coCitingCount(row.id), row.references, this.referencedCiting.referenced[row.id], this.referencedCiting.citing[row.id], this.coCited, this.coCiting]
         arr = arr.filter(x => x !== false).map(x => prepareCell(x))
         return '"' + arr.join('";"') + '"'
       }).join('\n')
@@ -1784,19 +2079,19 @@ const vm = new Vue({
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `${vm.currentGraph.tabLabel} ${vm.showArticlesTab}.csv`
+      anchor.download = `${vm.currentGraph.tabLabel}${filenameSuffix}.csv`
       anchor.click()
       anchor.remove()
     },
-    downloadRISData: function (articlesArray) {
+    downloadRISData: function (articlesArray, filenameSuffix = '') {
       // TODO consider mapping types to RIS types instead of always using "TY  - JOUR" (journal article)
       // OpenAlex types: https://api.openalex.org/works?group_by=type
       // RIS Types: https://en.wikipedia.org/wiki/RIS_(file_format)#Type_of_reference
       let ris = ''
       articlesArray.forEach(row => {
         ris += 'TY  - JOUR\n'
-        ris += 'ID  - ' + row.id + '\n'
-        ris += 'DO  - ' + row.doi + '\n'
+        if (row.id) ris += 'ID  - ' + row.id + '\n'
+        if (row.id) ris += 'DO  - ' + row.doi + '\n'
         ris += 'TI  - ' + row.title + '\n'
         for (const author of row.authors) {
           ris += 'AU  - ' + author.LN + ', ' + author.FN + '\n'
@@ -1808,6 +2103,8 @@ const vm = new Vue({
         if (row.firstPage)ris += 'SP  - ' + row.firstPage + '\n'
         if (row.lastPage) ris += 'EP  - ' + row.lastPage + '\n'
         if (row.abstract) ris += 'AB  - ' + row.abstract + '\n'
+        // N1 is Notes field
+        if (row.id) ris += 'N1  - ' + (this.seedArticlesIds.includes(row.id) ? 'Seed Article\n' : '') + 'Total Citations: ' + row.citationsCount + '\nTotal References: ' + (row.referencesCount || row.references?.length) + '\nCited: ' + this.citedCount(row.id) + '\nCiting: ' + this.citingCount(row.id) + ((this.currentGraph.API === 'Co*Citation Network via OpenAlex') ? ('\nCo-Cited: ' + this.coCitedCount(row.id) + '\nCo-Citing: ' + this.coCitingCount(row.id) + '\nRank: ' + this.rankNumber(row.id)) : '') + '\n'
         ris += 'ER  - \n\n'
       })
 
@@ -1815,7 +2112,7 @@ const vm = new Vue({
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `${vm.currentGraph.tabLabel} ${vm.showArticlesTab}.ris`
+      anchor.download = `${vm.currentGraph.tabLabel}${filenameSuffix}.ris`
       anchor.click()
       anchor.remove()
     },
@@ -1837,13 +2134,12 @@ const vm = new Vue({
       if (localStorage.graphs) this.addGraphs(JSON.parse(localStorage.graphs))
       if (localStorage.autosaveResults) this.autosaveResults = localStorage.autosaveResults === 'true'
       if (localStorage.API && ['OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref'].includes(localStorage.API)) this.API = localStorage.API
-      if (!isNaN(Number(localStorage.retrieveReferences))) this.retrieveReferences = Number(localStorage.retrieveReferences)
-      if (!isNaN(Number(localStorage.retrieveCitations))) this.retrieveCitations = Number(localStorage.retrieveCitations)
+      if (!isNaN(Number(localStorage.retrieveCitedArticles))) this.retrieveCitedArticles = Number(localStorage.retrieveCitedArticles)
+      if (!isNaN(Number(localStorage.retrieveCitingArticles))) this.retrieveCitingArticles = Number(localStorage.retrieveCitingArticles)
       if (localStorage.semanticScholarAPIKey) this.semanticScholarAPIKey = localStorage.semanticScholarAPIKey
     } catch (e) {
       localStorage.clear()
-      console.log('Could not load locally saved networks / settings.')
-      console.log(e)
+      this.errorMessage('Could not load locally saved networks / settings: ' + e)
     }
 
     // Set API according to link

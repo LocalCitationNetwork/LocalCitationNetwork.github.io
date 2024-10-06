@@ -9,7 +9,7 @@ describe('Check provided examples (examples.json)', () => {
   it('Check example: Amazon deforestation (S2)', () => {
     // Check number of Input Articles
     cy.window().should(win => {
-      expect(win.app.__vue__.currentGraph.input.length).to.equal(58)
+      expect(win.app.__vue__.currentGraph.seedArticles.length).to.equal(58)
     })
 
     // Manually check referencedCiting
@@ -26,7 +26,7 @@ describe('Check provided examples (examples.json)', () => {
 
     // Check number of Input Articles
     cy.window().should(win => {
-      expect(win.app.__vue__.currentGraph.input.length).to.equal(38)
+      expect(win.app.__vue__.currentGraph.seedArticles.length).to.equal(38)
     })
     
     // Manually check referencedCiting
@@ -43,7 +43,7 @@ describe('Check provided examples (examples.json)', () => {
 
     // Check number of Input Articles
     cy.window().should(win => {
-      expect(win.app.__vue__.currentGraph.input.length).to.equal(11)
+      expect(win.app.__vue__.currentGraph.seedArticles.length).to.equal(11)
     })
     
     // Manually check referencedCiting
