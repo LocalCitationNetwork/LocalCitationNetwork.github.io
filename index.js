@@ -6,7 +6,7 @@
 
 'use strict'
 
-const localCitationNetworkVersion = 1.26
+const localCitationNetworkVersion = 1.27
 
 const arrSum = arr => arr.reduce((a, b) => a + b, 0)
 const arrAvg = arr => arrSum(arr) / arr.length
@@ -731,7 +731,7 @@ function initCitationNetwork (app, minDegreeCitedArticles = 1, minDegreeCitingAr
 
   citationNetwork.on('configChange', function (config) {
     // Merge new config changes with previous config changes
-    vm.currentGraph.customConfigCitationNetwork = deepMerge(vm.currentGraph.customConfigCitationNetwork ?? {}, config)
+    vm.currentGraph.customConfigCitationNetwork = deepFreeze(deepMerge(vm.currentGraph.customConfigCitationNetwork ?? {}, config))
   })
 
   function networkOnClick (params) {
@@ -1027,7 +1027,9 @@ const vm = new Vue({
     editListOfIds: false,
     showCitationNetworkSettings: false,
     showAuthorNetworkSettings: false,
-    showOptionsAPI: false
+    showOptionsAPI: false,
+    showOptionsExportArticles: false,
+    exportArticles: ['seedArticles', 'citedArticlesDeDuplicated', 'citingArticlesDeDuplicated', 'coCitedArticlesDeDuplicated', 'coCitingArticlesDeDuplicated']
   },
   computed: {
     editedListOfIds: {
@@ -1039,22 +1041,22 @@ const vm = new Vue({
       return this.graphs[this.currentTabIndex]
     },
     seedArticles: function () {
-      return this.currentGraph.seedArticles
+      return this.currentGraph.seedArticles ?? []
     },
     citedArticles: function () {
-      if (!this.currentGraph.doNotDeDuplicate) return this.citedArticlesDeDuplicated
+      if (this.currentGraph.deDuplicate) return this.citedArticlesDeDuplicated
       else return this.currentGraph.citedArticles ?? []
     },
     citingArticles: function () {
-      if (!this.currentGraph.doNotDeDuplicate) return this.citingArticlesDeDuplicated
+      if (this.currentGraph.deDuplicate) return this.citingArticlesDeDuplicated
       else return this.currentGraph.citingArticles ?? []
     },
     coCitedArticles: function () {
-      if (!this.currentGraph.doNotDeDuplicate) return this.coCitedArticlesDeDuplicated
+      if (this.currentGraph.deDuplicate) return this.coCitedArticlesDeDuplicated
       else return this.currentGraph.coCitedArticles ?? []
     },
     coCitingArticles: function () {
-      if (!this.currentGraph.doNotDeDuplicate) return this.coCitingArticlesDeDuplicated
+      if (this.currentGraph.deDuplicate) return this.coCitingArticlesDeDuplicated
       return this.currentGraph.coCitingArticles ?? []
     },
     citedArticlesDeDuplicated: function () {
@@ -1161,6 +1163,9 @@ const vm = new Vue({
     },
     showNumberInSourceReferences: function () {
       return this.currentGraph.API === 'Crossref' || (this.currentGraph.source.customListOfReferences !== undefined) || !this.currentGraph.source.id
+    },
+    exportArticlesArray: function () {
+      return this.exportArticles.map(x => this[x]).flat()
     },
     // The following are settings and their default values
     maxCitedArticles: {
@@ -1309,13 +1314,13 @@ const vm = new Vue({
               })
 
               this.addGraphs([{
-                graphs: graphs,
+                // graphs: graphs, // keep original CCN JSON for debugging reasons
                 source: { references: graphs.seeds },
                 seedArticles: seedArticles,
                 citedArticles: udcs.filter(article => article.citations.length),
                 citingArticles: udcs.filter(article => article.references.length),
                 tabLabel: this.file.name.replace('.json', '') + ' UDCS',
-                tabTitle: this.file.name.replace('.json', '') + ' UDCS',
+                tabTitle: this.file.name.replace('.json', '') + '\nUnranked Direct Citation Searching (UDCS)',
                 allCited: true,
                 allCiting: true,
                 API: 'Co*Citation Network via OpenAlex',
@@ -1324,7 +1329,7 @@ const vm = new Vue({
               }])
 
               this.addGraphs([{
-                graphs: graphs,
+                // graphs: graphs, // keep original CCN JSON for debugging reasons
                 source: { references: graphs.seeds },
                 seedArticles: seedArticles,
                 citedArticles: rics.filter(article => article.citations.length),
@@ -1332,7 +1337,7 @@ const vm = new Vue({
                 coCitedArticles: rics.filter(article => article.coCited.length),
                 coCitingArticles: rics.filter(article => article.coCiting.length),
                 tabLabel: this.file.name.replace('.json', '') + ' RICS',
-                tabTitle: this.file.name.replace('.json', '') + ' RICS',
+                tabTitle: this.file.name.replace('.json', '') + '\nRanked (In)Direct Citation Searching (RICS)',
                 API: 'Co*Citation Network via OpenAlex',
                 ricsRankCutoff: graphs.rics_rank_cutoff,
                 timestamp: new Date(graphs.snapshot_date.substr(9).split('-').reverse().join('-')).getTime(),
@@ -1566,6 +1571,7 @@ const vm = new Vue({
       deepFreeze(newGraph.seedArticles)
       deepFreeze(newGraph.citedArticles)
       deepFreeze(newGraph.citingArticles)
+      if (Object.keys(newGraph).includes('customConfigCitationNetwork')) deepFreeze(newGraph.customConfigCitationNetwork)
       this.graphs.push(newGraph)
 
       // Don't keep more articles in tab-bar than maxTabs
@@ -1948,11 +1954,15 @@ const vm = new Vue({
             graph.citingArticles = graph.outgoingSuggestions
             graph.allCited = graph.allReferences
             graph.allCiting = graph.allCitations
+            graph.maxCitedArticles = graph.maxIncomingSuggestions
+            graph.maxCitingArticles = graph.maxOutgoingSuggestions
             delete graph.input
             delete graph.incomingSuggestions
             delete graph.outgoingSuggestions
             delete graph.allReferences
             delete graph.allCitations
+            delete graph.maxIncomingSuggestions
+            delete graph.maxOutgoingSuggestions
           }
           this.pushGraph(graph)
         } else {
@@ -2024,7 +2034,7 @@ const vm = new Vue({
         case 'Semantic Scholar': return 'S2'
         case 'OpenCitations': return 'OC'
         case 'Crossref': return 'CR'
-        case 'Co*Citation Network via OpenAlex': return 'CCN via OA'
+        case 'Co*Citation Network via OpenAlex': return 'CCN'
       }
     },
     articleLink: function (article) {
@@ -2067,7 +2077,7 @@ const vm = new Vue({
 
       let csv = 'sep=;\n'
       csv += '"# https://LocalCitationNetwork.github.io/' + this.linkToShareAppendix + '"\n'
-      csv += '"# Data retrieved through ' + this.currentGraph.API + ' (' + this.abbreviateAPI(this.currentGraph.API) + ') on ' + new Date(this.currentGraph.timestamp).toLocaleString() + '"\n'
+      csv += '"# Data retrieved through ' + this.currentGraph.API + ' (' + this.abbreviateAPI(this.currentGraph.API) + ') on ' + new Date(this.currentGraph.timestamp).toLocaleString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) + '"\n'
       csv += '"id";"doi";"#";"type";"title";"authors";"journal";"year";"date";"volume";"issue";"firstPage";"lastPage";"abstract";"globalCitationsCount";"referencesCount";"citedCount";"citingCount";"coCitedCount";"coCitingCount";"referencesIds";"citedIds";"citingIds";"coCitedIds";"coCitingIds"\n'
       csv += articlesArray.map(row => {
         let arr = [row.id, row.doi, row.numberInSourceReferences, row.type, row.title, this.authorString(row.authors), row.journal, row.year, row.date, row.volume, row.issue, row.firstPage, row.lastPage, row.abstract, row.citationsCount, row.referencesCount || row.references?.length, this.citedCount(row.id), this.citingCount(row.id), this.coCitedCount(row.id), this.coCitingCount(row.id), row.references, this.referencedCiting.referenced[row.id], this.referencedCiting.citing[row.id], this.coCited, this.coCiting]
@@ -2128,12 +2138,13 @@ const vm = new Vue({
   },
   mounted: function () {
     const urlParams = new URLSearchParams(window.location.search)
+    const possibleAPIs = ['OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref', 'Co*Citation Network via OpenAlex']
 
     // Load locally saved networks / settings from localStorage
     try {
       if (localStorage.graphs) this.addGraphs(JSON.parse(localStorage.graphs))
       if (localStorage.autosaveResults) this.autosaveResults = localStorage.autosaveResults === 'true'
-      if (localStorage.API && ['OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref'].includes(localStorage.API)) this.API = localStorage.API
+      if (localStorage.API && possibleAPIs.includes(localStorage.API)) this.API = localStorage.API
       if (!isNaN(Number(localStorage.retrieveCitedArticles))) this.retrieveCitedArticles = Number(localStorage.retrieveCitedArticles)
       if (!isNaN(Number(localStorage.retrieveCitingArticles))) this.retrieveCitingArticles = Number(localStorage.retrieveCitingArticles)
       if (localStorage.semanticScholarAPIKey) this.semanticScholarAPIKey = localStorage.semanticScholarAPIKey
@@ -2143,7 +2154,7 @@ const vm = new Vue({
     }
 
     // Set API according to link
-    if (urlParams.has('API') && ['OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref'].includes(urlParams.get('API'))) {
+    if (urlParams.has('API') && possibleAPIs.includes(urlParams.get('API'))) {
       this.API = urlParams.get('API')
     }
 

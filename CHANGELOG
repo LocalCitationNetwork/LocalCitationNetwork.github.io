@@ -1,3 +1,8 @@
+11.11.2024 v1.27
++ Export options modal for CSV / RIS download.
+* De-duplication of All Cited and All Citing is off again by default but can be turned on.
+! Fixed loading citation network settings "Max. number of Cited Articles" (maxCitedArticles) and "Max. number of Citing Articles" (maxCitingArticles) from old saves.
+
 06.10.2024 v1.26
 + Renamed "Input Articles" to "Seed Articles", "References" to "Cited", and "Citations" to "Citing" in accordance with "Guidance on terminology, application, and reporting of citation searching: the TARCiS statement" (Hirt 2024, https://doi.org/10.1136/bmj-2023-078384).
 + All Cited and All Citing are now de-duplicated against Seed Articles and All Citing also against All Cited by default (there is an option to turn this off).

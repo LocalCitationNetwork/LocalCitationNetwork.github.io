@@ -149,7 +149,7 @@
       <b-navbar style="border-bottom: 1px solid #dbdbdb; overflow-x:auto; overflow-y: hidden;">
         <template slot="brand">
           <a class="navbar-item" href="">
-            <h1 class="title">{{ (currentGraph?.API === 'Co*Citation Network via OpenAlex') ? 'Co✲Citation Network' : 'Local Citation Network' }}</h1>
+            <h1 class="title">{{ (currentGraph?.API === 'Co*Citation Network via OpenAlex' || API === 'Co*Citation Network via OpenAlex') ? 'Co✲Citation Network' : 'Local Citation Network' }}</h1>
           </a>
         </template>
           
@@ -191,15 +191,12 @@
             <div class="content">
               <p>
                 <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
-                download<template v-if="filterString"> filtered</template> seed articles: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(seedArticlesFiltered, ' Seed Articles')">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(seedArticlesFiltered, ' Seed Articles')">RIS</a></b-tooltip> /
-                <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels) -->
+                <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels when JSON is reloaded) -->
                 <template v-if="citedArticles && citingArticles">
-                  download full network:
-                  <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(vm.seedArticles.concat(vm.citedArticlesDeDuplicated).concat(vm.citingArticlesDeDuplicated).concat(vm.coCitedArticlesDeDuplicated).concat(vm.coCitingArticlesDeDuplicated))">CSV</a></b-tooltip>,
-                  <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(vm.seedArticles.concat(vm.citedArticlesDeDuplicated).concat(vm.citingArticlesDeDuplicated).concat(vm.coCitedArticlesDeDuplicated).concat(vm.coCitingArticlesDeDuplicated))">RIS</a></b-tooltip>,
+                  <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Can be shared and reloaded through the 'File' button at the top right!">
-                    <a @click="downloadJSON">JSON</a>
+                    <a @click="downloadJSON">download full network as JSON</a>
                   </b-tooltip>
                 </template>
               </p>
@@ -230,7 +227,7 @@
                 <a @click="selected = seedArticles.filter(x => x.isSource)[0]">(select)</a>
               </p>
               <p>
-                Data retrieved through <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">{{ currentGraph.API + ' (' + abbreviateAPI(currentGraph.API) + ')' }}</a> API on {{ new Date(currentGraph.timestamp).toLocaleDateString() }}
+                Data retrieved through <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">{{ currentGraph.API + ' (' + abbreviateAPI(currentGraph.API) + ')' }}</a> API on {{ new Date(currentGraph.timestamp).toLocaleString(undefined, {"day": "numeric", "month": "long", "year": "numeric"}) }}
                 <b-tooltip dashed multilined type="is-dark" position="is-bottom" :label="completenessLabel" v-if="currentGraph.API !== 'Co*Citation Network via OpenAlex'">
                   <a @click="indexFAQ = 'completeness'; showFAQ = true;" href="#completeness"
                     :style="'color: ' + ((completenessPercent > 40) ? '' : '#ff3860')">
@@ -472,9 +469,9 @@
           </b-tab-item>
 
           <!-- Have to use currentGraph.citedArticles === undefined to show progress indicator because the computed always returns [] if undefined -->
-          <b-tab-item value="citedArticlesTab" :disabled="currentGraph.citedArticles === undefined" v-if="currentGraph.citedArticles === undefined || citedArticles.length">
+          <b-tab-item value="citedArticlesTab" :disabled="currentGraph.citedArticles === undefined" v-if="currentGraph.citedArticles === undefined || citedArticles.length || currentGraph.API === 'Co*Citation Network via OpenAlex'">
             <template slot="header">
-              <h2 class="title is-4">{{ currentGraph.allCited ? 'All' : 'Top' }} Cited
+              <h2 class="title is-4">{{ (currentGraph.allCited) ? 'All ' : ((currentGraph.ricsRankCutoff) ? '' : 'Top ') }}Cited
                 (<template v-if="citedArticles.length">{{ citedArticles.length }}</template>
                 <b-progress v-else :value="(isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-medium" show-value format="percent" :precision="0" style="width: 50px; display: inline-block"></b-progress>)
               </h2>
@@ -482,26 +479,23 @@
             <div class="content" v-if="citedArticles.length">
               <p>
                 <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
-                download<template v-if="filterString"> filtered</template> cited: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(citedArticlesFiltered, ' Cited')">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(citedArticlesFiltered, ' Cited')">RIS</a></b-tooltip> /
-                <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels) -->
+                <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels when JSON is reloaded) -->
                 <template v-if="citedArticles && citingArticles">
-                  download full network:
-                  <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(vm.seedArticles.concat(vm.citedArticlesDeDuplicated).concat(vm.citingArticlesDeDuplicated).concat(vm.coCitedArticlesDeDuplicated).concat(vm.coCitingArticlesDeDuplicated))">CSV</a></b-tooltip>,
-                  <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(vm.seedArticles.concat(vm.citedArticlesDeDuplicated).concat(vm.citingArticlesDeDuplicated).concat(vm.coCitedArticlesDeDuplicated).concat(vm.coCitingArticlesDeDuplicated))">RIS</a></b-tooltip>,
+                  <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Can be shared and reloaded through the 'File' button at the top right!">
-                    <a @click="downloadJSON">JSON</a>
+                    <a @click="downloadJSON">download full network as JSON</a>
                   </b-tooltip>
                 </template>
               </p>
               <p>
                 Cited Articles (▲) are cited by the Seed Articles, i.e., Cited Articles are among the Seed Articles' references. They tend to be older than most Seed Articles. They are derived through <a href="https://doi.org/10.1136/bmj-2023-078384" title="Terminology from: Guidance on terminology, application, and reporting of citation searching: the TARCiS statement" target="_blank">direct backward citation searching</a> (backward in time). They are sorted by the number of Seed Articles they are cited by, with the <a @click="indexFAQ = 'top-cited'; showFAQ = true;" href="#top-cited">Top Cited</a> listed at the top.
                 <template v-if="currentGraph.ricsRankCutoff">
-                  Ranked indirect citation searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}
+                  Ranked (In)Direct Citation Searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}
                 </template>
               </p>
               <p v-if="(currentGraph.API === 'Co*Citation Network via OpenAlex') || (currentGraph.allCited)">
-                <a @click="$set(currentGraph, 'doNotDeDuplicate', !currentGraph.doNotDeDuplicate)">{{ (currentGraph.doNotDeDuplicate) ? 'Currently not de-duplicated against Seed Articles (click to toggle).' : 'Currently de-duplicated against Seed Articles (click to toggle).' }}</a>
+                <a @click="$set(currentGraph, 'deDuplicate', !currentGraph.deDuplicate)">{{ (!currentGraph.deDuplicate) ? 'Currently not de-duplicated against Seed Articles (click to toggle).' : 'Currently de-duplicated against Seed Articles (click to toggle).' }}</a>
               </p>
               <p v-else>
                 Top Cited are de-duplicated against Seed Articles.
@@ -710,35 +704,32 @@
           </b-tab-item>
 
           <!-- Have to use currentGraph.citingArticles === undefined to show progress indicator because the computed always returns [] if undefined -->
-          <b-tab-item value="citingArticlesTab" :disabled="currentGraph.citingArticles === undefined" v-if="currentGraph.citingArticles === undefined || citingArticles.length">
+          <b-tab-item value="citingArticlesTab" :disabled="currentGraph.citingArticles === undefined" v-if="currentGraph.citingArticles === undefined || citingArticles.length || currentGraph.API === 'Co*Citation Network via OpenAlex'">
             <template slot="header">
-              <h2 class="title is-4">{{ currentGraph.allCiting ? 'All' : 'Top' }} Citing
+              <h2 class="title is-4">{{ (currentGraph.allCiting) ? 'All ' : ((currentGraph.ricsRankCutoff) ? '' : 'Top ') }}Citing
                 (<template v-if="citingArticles.length">{{ citingArticles.length }}</template>
                 <b-progress v-else :value="(currentGraph.citedArticles === undefined) ? undefined : (isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-medium" show-value format="percent" :precision="0" style="width: 50px; display: inline-block"></b-progress>)
             </template>
             <div class="content" v-if="citingArticles.length">
               <p>
                 <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
-                download<template v-if="filterString"> filtered</template> citing: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(citingArticlesFiltered, ' Citing')">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(citingArticlesFiltered, ' Citing')">RIS</a></b-tooltip> /
-                <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels) -->
+                <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels when JSON is reloaded) -->
                 <template v-if="citedArticles && citingArticles">
-                  download full network:
-                  <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(vm.seedArticles.concat(vm.citedArticlesDeDuplicated).concat(vm.citingArticlesDeDuplicated).concat(vm.coCitedArticlesDeDuplicated).concat(vm.coCitingArticlesDeDuplicated))">CSV</a></b-tooltip>,
-                  <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(vm.seedArticles.concat(vm.citedArticlesDeDuplicated).concat(vm.citingArticlesDeDuplicated).concat(vm.coCitedArticlesDeDuplicated).concat(vm.coCitingArticlesDeDuplicated))">RIS</a></b-tooltip>,
+                  <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Can be shared and reloaded through the 'File' button at the top right!">
-                    <a @click="downloadJSON">JSON</a>
+                    <a @click="downloadJSON">download full network as JSON</a>
                   </b-tooltip>
                 </template>
               </p>
               <p>
                 Citing Articles (▼) are citing the Seed Articles, i.e., Citing Articles are among the Seed Articles' citations. They tend to be newer than most Seed Articles. They are derived through <a href="https://doi.org/10.1136/bmj-2023-078384" title="Terminology from: Guidance on terminology, application, and reporting of citation searching: the TARCiS statement" target="_blank">direct forward citation searching</a> (forward in time). They are sorted by the number of Seed Articles they are citing, with the <a @click="indexFAQ = 'top-citing'; showFAQ = true;" href="#top-citing">Top Citing</a> listed at the top.
                 <template v-if="currentGraph.ricsRankCutoff">
-                  Ranked indirect citation searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}
+                  Ranked (In)Direct Citation Searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}
                 </template>
               </p>
               <p v-if="(currentGraph.API === 'Co*Citation Network via OpenAlex') || (currentGraph.allCiting)">
-                <a @click="$set(currentGraph, 'doNotDeDuplicate', !currentGraph.doNotDeDuplicate)">{{ (currentGraph.doNotDeDuplicate) ? 'Currently not de-duplicated against Seed Articles and Cited (click to toggle).' : 'Currently de-duplicated against Seed Articles and Cited (click to toggle).' }}</a>
+                <a @click="$set(currentGraph, 'deDuplicate', !currentGraph.deDuplicate)">{{ (!currentGraph.deDuplicate) ? 'Currently not de-duplicated against Seed Articles and Cited (click to toggle).' : 'Currently de-duplicated against Seed Articles and Cited (click to toggle).' }}</a>
               </p>
               <p v-else>
                 Top Citing are de-duplicated against Seed Articles and Cited.
@@ -946,22 +937,19 @@
             </b-table>
           </b-tab-item>
 
-          <b-tab-item value="coCitedArticlesTab" v-if="coCitedArticles.length">
+          <b-tab-item value="coCitedArticlesTab" v-if="currentGraph.tabLabel.includes('RICS') && currentGraph.API === 'Co*Citation Network via OpenAlex'">
             <template slot="header">
-              <h2 class="title is-4">Top Co-Cited ({{ coCitedArticles.length }})</h2>
+              <h2 class="title is-4">Co-Cited ({{ coCitedArticles.length }})</h2>
             </template>
             <div class="content">
               <p>
                 <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
-                download<template v-if="filterString"> filtered</template> co-cited: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(coCitedArticlesFiltered, ' Co-Cited')">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(coCitedArticlesFiltered, ' Co-Cited')">RIS</a></b-tooltip> /
-                <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels) -->
+                <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels when JSON is reloaded) -->
                 <template v-if="citedArticles && citingArticles">
-                  download full network:
-                  <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(vm.seedArticles.concat(vm.citedArticlesDeDuplicated).concat(vm.citingArticlesDeDuplicated).concat(vm.coCitedArticlesDeDuplicated).concat(vm.coCitingArticlesDeDuplicated))">CSV</a></b-tooltip>,
-                  <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(vm.seedArticles.concat(vm.citedArticlesDeDuplicated).concat(vm.citingArticlesDeDuplicated).concat(vm.coCitedArticlesDeDuplicated).concat(vm.coCitingArticlesDeDuplicated))">RIS</a></b-tooltip>,
+                  <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Can be shared and reloaded through the 'File' button at the top right!">
-                    <a @click="downloadJSON">JSON</a>
+                    <a @click="downloadJSON">download full network as JSON</a>
                   </b-tooltip>
                 </template>
               </p>
@@ -974,10 +962,10 @@
                     <img src="img/Hirt.2024.BMJ.TARCiS.F1.large.jpg" style="width: 476px; height: 605px;">
                   </template>
                 </b-tooltip>. They are sorted by the number of Seed Articles they are cited by alongside.
-                Ranked indirect citation searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}
+                Ranked (In)Direct Citation Searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}
               </p>
               <p v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">
-                <a @click="$set(currentGraph, 'doNotDeDuplicate', !currentGraph.doNotDeDuplicate)">{{ (currentGraph.doNotDeDuplicate) ? 'Currently not de-duplicated against Seed Articles, Cited and Citing (click to toggle).' : 'Currently de-duplicated against Seed Articles, Cited and Citing (click to toggle).' }}</a>
+                <a @click="$set(currentGraph, 'deDuplicate', !currentGraph.deDuplicate)">{{ (!currentGraph.deDuplicate) ? 'Currently not de-duplicated against Seed Articles, Cited and Citing (click to toggle).' : 'Currently de-duplicated against Seed Articles, Cited and Citing (click to toggle).' }}</a>
               </p>
             </div>
             <b-field>
@@ -1182,27 +1170,24 @@
             </b-table>
           </b-tab-item>
 
-          <b-tab-item value="coCitingArticlesTab" v-if="coCitingArticles.length">
+          <b-tab-item value="coCitingArticlesTab" v-if="currentGraph.tabLabel.includes('RICS') && currentGraph.API === 'Co*Citation Network via OpenAlex'">
             <template slot="header">
-              <h2 class="title is-4">Top Co-Citing ({{ coCitingArticles.length }})</h2>
+              <h2 class="title is-4">Co-Citing ({{ coCitingArticles.length }})</h2>
             </template>
             <div class="content">
               <p>
                 <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
-                download<template v-if="filterString"> filtered</template> co-citing: <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(coCitingArticlesFiltered, ' Co-Citing')">CSV</a></b-tooltip>, <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(coCitingArticlesFiltered, ' Co-Citing')">RIS</a></b-tooltip> /
-                <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels) -->
+                <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels when JSON is reloaded) -->
                 <template v-if="citedArticles && citingArticles">
-                  download full network:
-                  <b-tooltip dashed position="is-bottom" type="is-dark" label="Open in spreadsheet editor (e.g. Microsoft Excel)"><a @click="downloadCSVData(vm.seedArticles.concat(vm.citedArticlesDeDuplicated).concat(vm.citingArticlesDeDuplicated).concat(vm.coCitedArticlesDeDuplicated).concat(vm.coCitingArticlesDeDuplicated))">CSV</a></b-tooltip>,
-                  <b-tooltip dashed mulitlined position="is-bottom" type="is-dark" label="Open in reference manager (e.g. Zotero)"><a @click="downloadRISData(vm.seedArticles.concat(vm.citedArticlesDeDuplicated).concat(vm.citingArticlesDeDuplicated).concat(vm.coCitedArticlesDeDuplicated).concat(vm.coCitingArticlesDeDuplicated))">RIS</a></b-tooltip>,
+                  <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Can be shared and reloaded through the 'File' button at the top right!">
-                    <a @click="downloadJSON">JSON</a>
+                    <a @click="downloadJSON">download full network as JSON</a>
                   </b-tooltip>
                 </template>
               </p>
               <p>
-                Co-Citing Articles (⬣) are citing the same articles as the Seed Articles are citing. They are derived through
+                Co-Citing Articles ( ⬣ ) are citing the same articles as the Seed Articles are citing. They are derived through
                 <b-tooltip dashed position="is-bottom" type="is-dark" mulitlined append-to-body>
                   <a href="https://doi.org/10.1136/bmj-2023-078384" target="_blank">indirect co-citing citation searching</a>
                   <template v-slot:content>
@@ -1210,10 +1195,10 @@
                     <img src="img/Hirt.2024.BMJ.TARCiS.F1.large.jpg" style="width: 476px; height: 605px;">
                   </template>
                 </b-tooltip>. They are sorted by the number of Seed Articles they are citing alongside with.
-                Ranked indirect citation searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}
+                Ranked (In)Direct Citation Searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}
               </p>
               <p v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">
-                <a @click="$set(currentGraph, 'doNotDeDuplicate', !currentGraph.doNotDeDuplicate)">{{ (currentGraph.doNotDeDuplicate) ? 'Currently not de-duplicated against Seed Articles, Cited, Citing and Co-Cited (click to toggle).' : 'Currently de-duplicated against Seed Articles, Cited, Citing and Co-Cited (click to toggle).' }}</a>
+                <a @click="$set(currentGraph, 'deDuplicate', !currentGraph.deDuplicate)">{{ (!currentGraph.deDuplicate) ? 'Currently not de-duplicated against Seed Articles, Cited, Citing and Co-Cited (click to toggle).' : 'Currently de-duplicated against Seed Articles, Cited, Citing and Co-Cited (click to toggle).' }}</a>
               </p>
             </div>
             <b-field>
@@ -1585,7 +1570,7 @@
         </div>
       </b-modal>
 
-      <b-modal :active.sync="showOptionsAPI" :width="750">
+      <b-modal :active.sync="showOptionsAPI" :width="460">
         <div class="card">
           <header class="modal-card-head">
             <content>
@@ -1624,10 +1609,34 @@
                 </b-select>
               </b-field>
             </b-field>
-            <b-field label="Semantic Scholar (S2) API Key:">
+            <b-field label="Semantic Scholar (S2) API Key:" v-if="API === 'Semantic Scholar'">
               <b-input v-model="semanticScholarAPIKey"></b-input>
             </b-field>
           </div>
+        </div>
+      </b-modal>
+
+      <b-modal :active.sync="showOptionsExportArticles" :width="460">
+        <div class="card">
+          <header class="modal-card-head">
+            <content>
+              <h3 class="modal-card-title">Export options</h3>
+            </content>
+          </header>
+          <div class="card-content">
+            <p class="content">
+              Articles are de-duplicated, which is why the numbers are not necessarily the same as on the main page.
+            </p>
+            <b-field><b-checkbox v-model="exportArticles" native-value="seedArticles">Seed Articles ({{ seedArticles?.length }})</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticles" native-value="citedArticlesDeDuplicated">Cited Articles ({{ citedArticlesDeDuplicated?.length }})</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticles" native-value="citingArticlesDeDuplicated">Citing Articles ({{ citingArticlesDeDuplicated?.length }})</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticles" native-value="coCitedArticlesDeDuplicated" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Cited Articles ({{ coCitedArticlesDeDuplicated?.length }})</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticles" native-value="coCitingArticlesDeDuplicated" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Citing Articles ({{ coCitingArticlesDeDuplicated?.length }})</b-checkbox></b-field>
+          </div>
+          <footer class="modal-card-foot">
+            <b-button type="is-primary" title="Open in spreadsheet editor (e.g. Microsoft Excel)" @click="downloadCSVData(exportArticlesArray)">Download CSV ({{ exportArticlesArray.length }})</b-button>
+            <b-button type="is-primary" title="Open in reference manager (e.g. Zotero)" @click="downloadRISData(exportArticlesArray)">Download RIS ({{ exportArticlesArray.length}})</b-button>
+          </footer>
         </div>
       </b-modal>
 
