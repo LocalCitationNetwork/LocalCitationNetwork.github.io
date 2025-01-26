@@ -1,8 +1,12 @@
 /* Local Citation Network (GPL-3) */
 /* by Tim Woelfle */
 /* https://LocalCitationNetwork.github.io */
+/* Adapted for Cita addon for Zotero */
+/* by Diego de la Hera */
+/* https://github.com/diegodlh/zotero-cita */
 
 /* global fetch, localStorage, Blob, vis, Vue, Buefy */
+/* global window */
 
 'use strict'
 
@@ -46,6 +50,23 @@ function deepMerge (target, source) {
   }
 
   return merge(targetCopy, sourceCopy)
+}
+
+/* Cita mock API */
+
+//window.arguments = [{}]
+
+const {
+  itemMap,
+  openItem,
+  openUrl,
+  getString
+} = window.arguments[0] || {};
+
+function cita (itemKeys, responseFunction) {
+  return new Promise((resolve) => {
+    resolve(itemKeys.map((itemId) => itemMap.get(itemId)));
+  }).then((data) => responseFunction(data));
 }
 
 /* Semantic Scholar API */
@@ -842,7 +863,7 @@ function initAuthorNetwork (app, minPublications = undefined) {
   })))
 
   const edges = Object.keys(links).map(authorId1 => Object.keys(links[authorId1]).map(authorId2 => {
-    return { from: authorId1, to: authorId2, value: links[authorId1][authorId2], title: allAuthors[authorId1].name + ' & ' + allAuthors[authorId2].name + ' (' + links[authorId1][authorId2] / 2 + ' collaboration(s) among input & suggested articles)' }
+    return { from: authorId1, to: authorId2, value: links[authorId1][authorId2], title: getString('networks.coauthorship.edge', [allAuthors[authorId1].name, allAuthors[authorId2].name, links[authorId1][authorId2] / 2]) }
   })).flat(2)
 
   const nodes = authorIdsWithMinPubs.map(authorId => {
@@ -979,11 +1000,17 @@ function initAuthorNetwork (app, minPublications = undefined) {
 
 Vue.use(Buefy)
 
+Vue.config.errorHandler = function (error, vm, info) {
+  alert(error)
+  alert(vm)
+  alert(info)
+}
+
 const vm = new Vue({
   el: '#app',
   data: {
     // Settings
-    API: 'OpenAlex', // Options: 'OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref'
+    API: 'Cita', // Options: 'OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref'
     semanticScholarAPIKey: '',
     retrieveCitedArticles: 10,
     retrieveCitingArticles: 10,
@@ -1162,7 +1189,7 @@ const vm = new Vue({
       return appendix
     },
     showNumberInSourceReferences: function () {
-      return this.currentGraph.API === 'Crossref' || (this.currentGraph.source.customListOfReferences !== undefined) || !this.currentGraph.source.id
+      return this.currentGraph.API !== 'Cita'  && (this.currentGraph.API === 'Crossref' || (this.currentGraph.source.customListOfReferences !== undefined) || !this.currentGraph.source.id)
     },
     exportArticlesArray: function () {
       return this.exportArticles.map(x => this[x]).flat()
@@ -1230,7 +1257,16 @@ const vm = new Vue({
     completenessLabel: function () {
       let label = ''
       // Show number of "original references" for source-based-graphs when available from API and for all listOfIds (i.e. file / bookmarklet) graphs
-      if (['Semantic Scholar', 'Crossref', 'OpenCitations'].includes(this.currentGraph.API) || this.currentGraph.source.customListOfReferences || !this.currentGraph.source.id) {
+      if (this.currentGraph.API === 'Cita') {
+        label = this.getString(
+          'input-articles.info.completeness.tooltip',
+          [
+            this.completenessInputHasReferences,
+            this.completenessSeedArticlesWithoutSource.length,
+            Math.round(this.completenessInputHasReferences / this.completenessSeedArticlesWithoutSource.length * 100)
+          ]
+        )
+      } else if (['Semantic Scholar', 'Crossref', 'OpenCitations'].includes(this.currentGraph.API) || this.currentGraph.source.customListOfReferences || !this.currentGraph.source.id) {
         if (this.currentGraph.source.id) {
           label += 'Source and '
         }
@@ -1453,15 +1489,22 @@ const vm = new Vue({
 
       this.createNewNetwork(source)
     },
-    createNewNetwork: function (source) {
+    createNewNetwork: async function (source) {
       // In case of file scanning, isLoading has not yet been set by setNewSource
       this.isLoading = true
 
-      this.$buefy.toast.open({
-        message: 'New query sent to ' + this.API + '.<br>This may take a while, depending on the number of references and API workload.',
-        duration: 6000,
-        queue: false
-      })
+      if (this.API === 'Cita') {
+        // some commands below seem to be blocking execution
+        // set a short delay to let window finish loading before them
+        // using window's load event doesn't work
+        //await new Promise((resolve) => setTimeout(() => resolve(), 500)) // introduced by diegolh back in 2021, doesn't seem to be necessary anymore as of 01/2025
+      } else {
+        this.$buefy.toast.open({
+          message: 'New query sent to ' + this.API + '.<br>This may take a while, depending on the number of references and API workload.',
+          duration: 4000,
+          queue: false
+        })
+      }
 
       // Get seed articles
       this.callAPI(source.references, data => this.retrievedSeedArticles(data, source, this.API, this.retrieveCitedArticles, this.retrieveCitingArticles), this.API, 'input', this.retrieveCitedArticles, this.retrieveCitingArticles)
@@ -1524,6 +1567,7 @@ const vm = new Vue({
           // Sort and slice for Top References
           .sort((a, b) => referenced[b].length - referenced[a].length).slice(0, retrieveCitedArticles)
       }
+      
       this.callAPI((retrieveCitedArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API)) ? seedArticlesIdsWithoutSource : citedArticlesIds, data => this.retrievedCitedArticles(data, API, newGraph, retrieveCitingArticles, citing, seedArticlesIds), API, 'references', retrieveCitedArticles, 0)
     },
     retrievedCitedArticles: function (data, API, newGraph, retrieveCitingArticles, citing, seedArticlesIds) {
@@ -1808,6 +1852,8 @@ const vm = new Vue({
         return openCitationsWrapper(ids, responseFunction, phase)
       } else if (API === 'Crossref') {
         return crossrefWrapper(ids, responseFunction, phase)
+      } else if (API === 'Cita') {
+        return cita(ids, responseFunction)
       } else {
         return this.errorMessage("Undefined API '" + API + "'. Must be one of 'OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref'.")
       }
@@ -1822,6 +1868,8 @@ const vm = new Vue({
         articles = openCitationsResponseToArticleArray(data)
       } else if (API === 'Crossref') {
         articles = crossrefResponseToArticleArray(data)
+      } else if (this.API === 'Cita') {
+        articles = data // TODO or return data as by diegolh?
       }
       // Remove duplicates - important for de-duplication of All References / All Citations (in the sense of proper duplicates within one category (not in the sense of "de-duplicated against Seed Articles and Cited"), can be duplicated mostly with S2 but also to lesser extent with OA), rarely also needed for other calls, e.g. for S2 in references of 10.1111/J.1461-0248.2009.01285.X, eebf363bc78ca7bc16a32fa339004d0ad43aa618 came up twice
       articles = articles.reduce((articlesKeep, article) => {
@@ -1882,7 +1930,7 @@ const vm = new Vue({
           localStorage.semanticScholarAPIKey = this.semanticScholarAPIKey
         }
       } else {
-        localStorage.clear()
+        //localStorage.clear()
       }
     },
     filterArticles: function (articles) {
@@ -2134,11 +2182,14 @@ const vm = new Vue({
       anchor.download = `${vm.currentGraph.tabLabel}.json`
       anchor.click()
       anchor.remove()
-    }
+    },
+    openItem: openItem,
+    openUrl: openUrl,
+    getString: getString
   },
   mounted: function () {
     const urlParams = new URLSearchParams(window.location.search)
-    const possibleAPIs = ['OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref', 'Co*Citation Network via OpenAlex']
+    const possibleAPIs = ['OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref', 'Co*Citation Network via OpenAlex', 'Cita']
 
     // Load locally saved networks / settings from localStorage
     try {
@@ -2149,8 +2200,8 @@ const vm = new Vue({
       if (!isNaN(Number(localStorage.retrieveCitingArticles))) this.retrieveCitingArticles = Number(localStorage.retrieveCitingArticles)
       if (localStorage.semanticScholarAPIKey) this.semanticScholarAPIKey = localStorage.semanticScholarAPIKey
     } catch (e) {
-      localStorage.clear()
-      this.errorMessage('Could not load locally saved networks / settings: ' + e)
+      //localStorage.clear()
+      //this.errorMessage('Could not load locally saved networks / settings: ' + e)
     }
 
     // Set API according to link
@@ -2189,6 +2240,25 @@ const vm = new Vue({
     // Linked to examples? Only load when no other graphs are opened
     } else if (!this.isLoading && !this.editListOfIds && this.graphs.length === 0 && urlParams.has('examples')) {
       this.loadGraphsFromJSON('examples.json')
+    }
+
+    if (this.API === 'Cita') {
+      window.document.title = this.getString('title')
+      const listOfKeys = urlParams.has('listOfKeys') ? urlParams.get('listOfKeys').split(',') : []
+      
+      this.retrieveCitedArticles = Infinity
+      this.retrieveCitingArticles = 0
+      
+      this.listOfIds = listOfKeys.reduce(
+        (dois, key) => {
+          const doi = itemMap.get(key).doi
+          if (doi) dois.push(doi)
+          return dois
+        }, []
+      )
+      this.listName = 'Cita'
+
+      this.createNewNetwork({ references: listOfKeys, citations: [] })
     }
 
     // Linked to FAQ?
