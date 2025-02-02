@@ -60,7 +60,8 @@ const {
   itemMap,
   openItem,
   openUrl,
-  getString
+  getString,
+  saveFile
 } = window.arguments[0] || {};
 
 function cita (itemKeys, responseFunction) {
@@ -2133,13 +2134,7 @@ const vm = new Vue({
         return '"' + arr.join('";"') + '"'
       }).join('\n')
 
-      const blob = new Blob([csv], { type: 'text/csv' })
-      const url = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = `${vm.currentGraph.tabLabel}${filenameSuffix}.csv`
-      anchor.click()
-      anchor.remove()
+      return this.downloadFile(csv, 'text/csv', `${vm.currentGraph.tabLabel}${filenameSuffix}.csv`)
     },
     downloadRISData: function (articlesArray, filenameSuffix = '') {
       // TODO consider mapping types to RIS types instead of always using "TY  - JOUR" (journal article)
@@ -2166,26 +2161,25 @@ const vm = new Vue({
         ris += 'ER  - \n\n'
       })
 
-      const blob = new Blob([ris], { type: 'application/x-research-info-systems' })
-      const url = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = `${vm.currentGraph.tabLabel}${filenameSuffix}.ris`
-      anchor.click()
-      anchor.remove()
+      return this.downloadFile(ris, 'application/x-research-info-systems', `${vm.currentGraph.tabLabel}${filenameSuffix}.ris`)
     },
     downloadJSON: function () {
-      const blob = new Blob([JSON.stringify([vm.currentGraph])], { type: 'application/json' })
+      return this.downloadFile(JSON.stringify([vm.currentGraph]), 'application/json', `${vm.currentGraph.tabLabel}.json`)
+    },
+    downloadFile: function (content, type, filename) {
+      if (this.API === 'Zotero Cita') return this.saveFile(content, filename)
+      const blob = new Blob([content], { type: type })
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `${vm.currentGraph.tabLabel}.json`
+      anchor.download = filename
       anchor.click()
       anchor.remove()
     },
     openItem: openItem,
     openUrl: openUrl,
-    getString: getString
+    getString: getString,
+    saveFile: saveFile
   },
   mounted: function () {
     const urlParams = new URLSearchParams(window.location.search)

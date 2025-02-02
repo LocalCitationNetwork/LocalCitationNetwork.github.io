@@ -198,7 +198,7 @@
               <p>
                 <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a>
                 <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels when JSON is reloaded) -->
-                <template v-if="citedArticles && citingArticles && API !== 'Zotero Cita'">
+                <template v-if="citedArticles && citingArticles">
                   / <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Can be shared and reloaded through the 'File' button at the top right!">
@@ -524,7 +524,7 @@
               <p>
                 <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a>
                 <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels when JSON is reloaded) -->
-                <template v-if="citedArticles && citingArticles && API !== 'Zotero Cita'">
+                <template v-if="citedArticles && citingArticles">
                   / <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Can be shared and reloaded through the 'File' button at the top right!">
