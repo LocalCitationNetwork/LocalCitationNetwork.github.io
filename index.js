@@ -10,7 +10,7 @@
 
 'use strict'
 
-const localCitationNetworkVersion = 1.27
+const localCitationNetworkVersion = 1.28
 
 const arrSum = arr => arr.reduce((a, b) => a + b, 0)
 const arrAvg = arr => arrSum(arr) / arr.length
@@ -108,7 +108,7 @@ async function semanticScholarWrapper (ids, responseFunction, phase, retrieveCit
         offset = response.next
         response = response.data.map(x => x.citedPaper || x.citingPaper) // citedPaper for references, citingPaper for citations
         // Semantic Scholar doesn't provide references & citations lists for citations & references endpoint
-        // That's why for S2: All Citations always only have one reference and All References only have one citation (the one that called them), which are merged in responseToArray during de-duplication
+        // That's why for S2: All Citing (i.e. citations) always only have one reference and All Cited (i.e. references) only have one citation (the one that called them), which are merged in responseToArray during de-duplication
         // response can be null in case of placeholders in id-list
         if (phase === 'citations' && response) {
           response = response.map(x => { x.references = [{ paperId: id }]; return x })
@@ -120,8 +120,8 @@ async function semanticScholarWrapper (ids, responseFunction, phase, retrieveCit
         responses = responses.concat(response)
       }
     }
-    // For phase 'input' and Top Citations (i.e. retrieveCitingArticles > 0 but not retrieveAllCiting) load seed articles one by one in order to retrieve proper citations fields to calculate top citations ids
-    // With batch endpoint (below), there is a maximum of 9999 citations in total, which leads to incorrect Top Citations (compare https://github.com/allenai/s2-folks/issues/199)
+    // For phase 'input' and Top Citing (i.e. retrieveCitingArticles > 0 but not retrieveAllCiting) load seed articles one by one in order to retrieve proper citations fields to calculate Top Citing ids
+    // With batch endpoint (below), there is a maximum of 9999 citations in total, which leads to incorrect Top Citing (compare https://github.com/allenai/s2-folks/issues/199)
     // However, single API calls are currently always blocked by 429 responses, even with 15s waits, which is why this part is commented out
   /* } else if (phase === 'input' && retrievetopCiting) {
     let response
@@ -141,12 +141,12 @@ async function semanticScholarWrapper (ids, responseFunction, phase, retrieveCit
       responses = responses.concat(response)
     }
     vm.isLoadingTotal = 0 */
-  // Phase 'source' / 'input' && retrieveAllCiting / 'references' && !retrieveAllCited (i.e. Top references only) / 'citations' && !retrieveAllCiting (i.e. Top Citations only)
+  // Phase 'source' / 'input' && retrieveAllCiting / 'references' && !retrieveAllCited (i.e. Top Cited only) / 'citations' && !retrieveAllCiting (i.e. Top Citing only)
   // Use batch endpoint (https://api.semanticscholar.org/api-docs/graph#tag/Paper-Data/operation/post_graph_get_papers)
   } else {
     // These fields cannot be retrieved on references / citations endpoints
     selectFields += ',authors.externalIds,authors.name,authors.affiliations,references.paperId,tldr'
-    // Get citations ids for seed articles for Top Citations
+    // Get citations ids for seed articles for Top Citing
     if (['source', 'input'].includes(phase) && retrievetopCiting) selectFields += ',citations.paperId'
 
     // Batch endpoint allows max. 500 ids and 9999 citations at the same time
@@ -267,7 +267,7 @@ async function openAlexWrapper (ids, responseFunction, phase, retrieveCitedArtic
         if (response.results?.length) responses = responses.concat(response.results)
       }
     }
-  // Phase 'source' / 'input' / 'references' && !retrieveAllCited (i.e. Top references only) / 'citations' && !retrieveAllCiting (i.e. Top Citations only)
+  // Phase 'source' / 'input' / 'references' && !retrieveAllCited (i.e. Top Cited only) / 'citations' && !retrieveAllCiting (i.e. Top Citing only)
   } else {
     vm.isLoadingTotal = ids.length
     for (const i of Array(ids.length).keys()) {
@@ -276,7 +276,7 @@ async function openAlexWrapper (ids, responseFunction, phase, retrieveCitedArtic
       vm.isLoadingIndex = i
       if (id) {
         response = await openAlexWorks('/' + id.replace('openalex:', '') + '?select=' + selectFields)
-        // Get citations ids for seed articles (if not all citations are retrieved anyway)
+        // Get citations ids for seed articles (if not All Citing (i.e. citations) are retrieved anyway)
         if (['source', 'input'].includes(phase) && response.id && !retrieveAllCiting) {
           // Careful: Citation results are incomplete when a paper is cited by >200 (current per-page upper-limit of OA), use "API options => Retrieve citations => All" for completeness
           const citations = await openAlexWorks('?select=id&per-page=200&sort=referenced_works_count:desc&filter=cites:' + response.id.replace('https://openalex.org/', ''))
@@ -909,10 +909,7 @@ function initAuthorNetwork (app, minPublications = undefined) {
       smooth: false
     },
     physics: {
-      barnesHut: {
-        centralGravity: 10
-      },
-      maxVelocity: 20
+      solver: 'barnesHut'
     },
     interaction: {
       multiselect: true,
@@ -1516,7 +1513,7 @@ const vm = new Vue({
       if (source.id) seedArticles = seedArticles.concat(source)
       const seedArticlesIds = seedArticles.map(article => article.id)
 
-      // Temporary scope variables needed (without having been reduced like in computed.referencedCiting!) for getting id lists for Top References / Top Citations
+      // Temporary scope variables needed (without having been reduced like in computed.referencedCiting!) for getting id lists for Top Cited / Top Citing
       let referenced, citing
       if (!(retrieveCitedArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API))) {
         referenced = this.computeSeedArticlesRelationships(seedArticles, seedArticlesIds).seedArticlesA
@@ -1525,7 +1522,7 @@ const vm = new Vue({
         citing = this.computeSeedArticlesRelationships(seedArticles, seedArticlesIds, 'citations').seedArticlesA
       }
 
-      // Delete citations arrays in articles to save space, they were only needed for calculating citing (above) for "Top citations"
+      // Delete citations arrays in articles to save space, they were only needed for calculating citing (above) for "Top Citing"
       seedArticles = seedArticles.map(article => { delete article.citations; return article })
 
       // Add new tab
@@ -1549,15 +1546,15 @@ const vm = new Vue({
       this.listName = undefined
       this.bookmarkletURL = undefined
 
-      /* Perform API call for All / Top References (formerly References / Incoming suggestions) */
-      // OA & S2: If all references are supposed to be retrieved get multiple references at once based on seedArticlesIds (faster)
+      /* Perform API call for All / Top Cited (formerly References / Incoming suggestions) */
+      // OA & S2: If All Cited (i.e. references) are supposed to be retrieved get multiple references at once based on seedArticlesIds (faster)
       // Otherwise use ids derived from references
       let citedArticlesIds
       if (!(retrieveCitedArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API))) {
         citedArticlesIds = Object.keys(referenced)
-          // De-duplicate vs seedArticles in case only Top References are retrieved
+          // De-duplicate vs seedArticles in case only Top Cited are retrieved
           .filter(x => !seedArticlesIds.includes(x))
-          // Sort and slice for Top References
+          // Sort and slice for Top Cited
           .sort((a, b) => referenced[b].length - referenced[a].length).slice(0, retrieveCitedArticles)
       }
       // Zotero Cita shows All Cited (i.e. all references) => do not de-duplicate against seedArticles like above
@@ -1578,17 +1575,17 @@ const vm = new Vue({
       this.saveState()
       if (this.currentGraph === newGraph) this.init()
 
-      /* Perform API call for All / Top Citations (formerly Citations / Outgoing suggestions) */
+      /* Perform API call for All / Top Citing (formerly Citations / Outgoing suggestions) */
       // Only works with OpenAlex, Semantic Scholar and OpenCitations
-      // OA & S2: If all citations are supposed to be retrieved get multiple citations at once based on seedArticlesIds (faster)
+      // OA & S2: If All Citing (i.e. citations) are supposed to be retrieved get multiple citations at once based on seedArticlesIds (faster)
       // Otherwise use ids derived from citations
       if (this.retrieveCitingArticles && ['OpenAlex', 'Semantic Scholar', 'OpenCitations'].includes(API)) {
         let citingArticlesIds
         if (!(retrieveCitingArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API))) {
           citingArticlesIds = Object.keys(citing)
-            // De-duplicate vs seedArticles & citedArticles in case only Top Citations are retrieved
+            // De-duplicate vs seedArticles & citedArticles in case only Top Citing are retrieved
             .filter(x => !seedArticlesIds.includes(x) && !citedArticles.map(x => x.id).includes(x))
-            // Sort and slice for Top Citations
+            // Sort and slice for Top Citing
             .sort((a, b) => citing[b].length - citing[a].length).slice(0, retrieveCitingArticles)
         }
         this.callAPI((retrieveCitingArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API)) ? seedArticlesIds : citingArticlesIds, data => this.retrievedCitingArticles(data, API, newGraph), API, 'citations', 0, retrieveCitingArticles)
@@ -1870,19 +1867,19 @@ const vm = new Vue({
         const articlesIds = data.map(article => article.id)
         articles = data.map(article => { if (article.numberInSourceReferences === undefined) article.numberInSourceReferences = articlesIds.indexOf(article.id)+1; return article; })
       }
-      // Remove duplicates - important for de-duplication of All References / All Citations (in the sense of proper duplicates within one category (not in the sense of "de-duplicated against Seed Articles and Cited"), can be duplicated mostly with S2 but also to lesser extent with OA), rarely also needed for other calls, e.g. for S2 in references of 10.1111/J.1461-0248.2009.01285.X, eebf363bc78ca7bc16a32fa339004d0ad43aa618 came up twice
+      // Remove duplicates - important for de-duplication of All Cited (i.e. references) / All Citing (i.e. citations) (in the sense of proper duplicates within one category (not in the sense of "de-duplicated against Seed Articles and Cited"), can be duplicated mostly with S2 but also to lesser extent with OA), rarely also needed for other calls, e.g. for S2 in references of 10.1111/J.1461-0248.2009.01285.X, eebf363bc78ca7bc16a32fa339004d0ad43aa618 came up twice
       articles = articles.reduce((articlesKeep, article) => {
         const articlesKeepIds = articlesKeep.map(x => x.id)
         // Keep placeholders (id undefined) and non-duplicates
         if (article.id === undefined || !articlesKeepIds.includes(article.id)) {
           articlesKeep.push(article)
         } else {
-          // S2: All References and All Citations always only have one reference (the one that called them) - merge them on de-duplication
+          // S2: All Cited (i.e. references) and All Citing (i.e. citations) always only have one reference (the one that called them) - merge them on de-duplication
           if (article.references?.length === 1) {
-            // This should only occur for All Citations for S2
+            // This should only occur for All Citing (i.e. citations) for S2
             if (!articlesKeep[articlesKeepIds.indexOf(article.id)].references.includes(article.references[0])) articlesKeep[articlesKeepIds.indexOf(article.id)].references.push(article.references[0])
           } else if (article.citations?.length === 1) {
-            // This should only occur for All References for S2
+            // This should only occur for All Cited (i.e. references) for S2
             if (!articlesKeep[articlesKeepIds.indexOf(article.id)].citations.includes(article.citations[0])) articlesKeep[articlesKeepIds.indexOf(article.id)].citations.push(article.citations[0])
           }
         }
@@ -1907,7 +1904,7 @@ const vm = new Vue({
         if (saveGraphs) {
           const copiedGraphs = JSON.parse(JSON.stringify(this.graphs))
           localStorage.graphs = JSON.stringify(copiedGraphs.map(graph => {
-            // Delete these two possibly existing flags so that only "Top References" / "Top Citations" instead of "All references" / "All citations" will be shown
+            // Delete these two possibly existing flags so that only "Top Cited" / "Top Citing" instead of "All Cited" (i.e. references) / "All Citing" (i.e. citations) will be shown
             if (graph.citedArticles === undefined || graph.citedArticles.length > maxCitedCiting) delete graph.allCited
             if (graph.citingArticles === undefined || graph.citingArticles.length > maxCitedCiting) delete graph.allCiting
             // Don't save suggestions still in loading phase
@@ -1994,7 +1991,7 @@ const vm = new Vue({
           // Prior to v1.23 referenced and citing were cached in the graph object
           delete graph.referenced
           delete graph.citing
-          // Prior to v1.26 seedArticles array was called input, citedArticles array was called citedArticles, and citingArticles array was called citingArticles
+          // Prior to v1.26 seedArticles array was called input, citedArticles array was called incomingSuggestions, and citingArticles array was called outgoingSuggestions
           if (!graph.seedArticles) {
             graph.seedArticles = graph.input
             graph.citedArticles = graph.incomingSuggestions
