@@ -198,7 +198,7 @@
               <p>
                 <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a>
                 <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels when JSON is reloaded) -->
-                <template v-if="citedArticles && citingArticles && API !== 'Cita'">
+                <template v-if="citedArticles && citingArticles && API !== 'Zotero Cita'">
                   / <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Can be shared and reloaded through the 'File' button at the top right!">
@@ -206,7 +206,7 @@
                   </b-tooltip>
                 </template>
               </p>
-              <p v-if="currentGraph.API !== 'Cita'">
+              <p v-if="currentGraph.API !== 'Zotero Cita'">
                 Seed Articles ( ⏺ ) are based on
                 <template v-if="currentGraph.source.id">
                   the
@@ -233,7 +233,7 @@
                 <a @click="selected = seedArticles.filter(x => x.isSource)[0]">(select)</a>
               </p>
               <p>
-                <template v-if="currentGraph.API === 'Cita'">
+                <template v-if="currentGraph.API === 'Zotero Cita'">
                   {{ getString('input-articles.info.source') }}
                 </template>
                 <template v-else>
@@ -241,7 +241,7 @@
                 </template>
                 <b-tooltip dashed multilined type="is-dark" position="is-bottom" :label="completenessLabel" v-if="currentGraph.API !== 'Co*Citation Network via OpenAlex'">
                   <a @click="indexFAQ = 'completeness'; showFAQ = true;" href="#completeness"
-                    :style="'color: ' + ((completenessPercent > 40) ? '' : '#ff3860')" v-if="API !== 'Cita'">
+                    :style="'color: ' + ((completenessPercent > 40) ? '' : '#ff3860')" v-if="API !== 'Zotero Cita'">
                     ({{ getString('input-articles.info.completeness', completenessPercent) }})
                   </a>
                   <template v-else>
@@ -249,7 +249,7 @@
                   </template>
                 </b-tooltip>.
                 <b-tooltip dashed multilined position="is-bottom" type="is-dark"
-                  label="Copy this link's address and share - network data will be retrieved from scratch (Right-click → 'Copy Link')" v-if="API !== 'Cita'">
+                  label="Copy this link's address and share - network data will be retrieved from scratch (Right-click → 'Copy Link')" v-if="API !== 'Zotero Cita'">
                   <a :href="linkToShareAppendix" @click="e => e.preventDefault()">Recreate network.</a>
                 </b-tooltip>
                 <template v-else>
@@ -295,7 +295,7 @@
               :paginated="seedArticlesFiltered.length > articlesPerPage" :per-page="articlesPerPage" pagination-position="both">
               <template slot="detail" slot-scope="props">
                 <p class="content">
-                  <b-button v-if="(props.row.referencesCount || props.row.references?.length) && !props.row.isSource && API !== 'Cita'" 
+                  <b-button v-if="(props.row.referencesCount || props.row.references?.length) && !props.row.isSource && API !== 'Zotero Cita'" 
                     @click.stop="clickOpenReferences(props.row)"
                     :disabled="isLoading">
                     Add network for references
@@ -366,7 +366,7 @@
               <b-table-column :label="getString('table.column.title.label')" v-slot="props">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
-                  <template v-if="currentGraph.API !== 'Cita'">
+                  <template v-if="currentGraph.API !== 'Zotero Cita'">
                     {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : '' }}
                     <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank" v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></a>
                     <span v-else v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></span>
@@ -403,7 +403,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Cita'" sortable>
+              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita'" sortable>
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     {{ column.label }}
@@ -510,7 +510,7 @@
           <b-tab-item value="citedArticlesTab" :disabled="currentGraph.citedArticles === undefined" v-if="currentGraph.citedArticles === undefined || citedArticles.length || currentGraph.API === 'Co*Citation Network via OpenAlex'">
             <template slot="header">
               <h2 class="title is-4">
-                <template v-if="currentGraph.API !== 'Cita'">
+                <template v-if="currentGraph.API !== 'Zotero Cita'">
                   {{ (currentGraph.allCited) ? 'All ' : ((currentGraph.ricsRankCutoff) ? '' : 'Top ') }}Cited
                   (<template v-if="citedArticles.length">{{ citedArticles.length }}</template>
                   <b-progress v-else :value="(isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-medium" show-value format="percent" :precision="0" style="width: 50px; display: inline-block"></b-progress>)
@@ -524,7 +524,7 @@
               <p>
                 <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a>
                 <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels when JSON is reloaded) -->
-                <template v-if="citedArticles && citingArticles && API !== 'Cita'">
+                <template v-if="citedArticles && citingArticles && API !== 'Zotero Cita'">
                   / <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Can be shared and reloaded through the 'File' button at the top right!">
@@ -532,7 +532,7 @@
                   </b-tooltip>
                 </template>
               </p>
-              <p v-if="currentGraph.API === 'Cita'">
+              <p v-if="currentGraph.API === 'Zotero Cita'">
                 {{ getString('incoming-suggestions.info') }}
               </p>
               <template v-else>
@@ -627,7 +627,7 @@
               <b-table-column :label="getString('table.column.title.label')" v-slot="props">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
-                  <template v-if="currentGraph.API !== 'Cita'">
+                  <template v-if="currentGraph.API !== 'Zotero Cita'">
                     {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : '' }}
                     <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank" v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></a>
                     <span v-else v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></span>
@@ -664,7 +664,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Cita'" sortable>
+              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita'" sortable>
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     {{ column.label }}
@@ -1703,7 +1703,7 @@
         </div>
       </b-modal>
 
-      <b-modal v-if="currentGraph.API !== 'Cita'" :active.sync="showFAQ" :width="840" scroll="keep">
+      <b-modal v-if="currentGraph.API !== 'Zotero Cita'" :active.sync="showFAQ" :width="840" scroll="keep">
         <div class="card">
           <div class="card-header-title">
             <content>

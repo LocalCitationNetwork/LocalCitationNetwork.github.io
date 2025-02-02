@@ -1010,7 +1010,7 @@ const vm = new Vue({
   el: '#app',
   data: {
     // Settings
-    API: 'Cita', // Options: 'OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref'
+    API: 'Zotero Cita', // Options: 'OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref'
     semanticScholarAPIKey: '',
     retrieveCitedArticles: 10,
     retrieveCitingArticles: 10,
@@ -1189,7 +1189,7 @@ const vm = new Vue({
       return appendix
     },
     showNumberInSourceReferences: function () {
-      return this.currentGraph.API !== 'Cita'  && (this.currentGraph.API === 'Crossref' || (this.currentGraph.source.customListOfReferences !== undefined) || !this.currentGraph.source.id)
+      return this.currentGraph.API !== 'Zotero Cita'  && (this.currentGraph.API === 'Crossref' || (this.currentGraph.source.customListOfReferences !== undefined) || !this.currentGraph.source.id)
     },
     exportArticlesArray: function () {
       return this.exportArticles.map(x => this[x]).flat()
@@ -1257,7 +1257,7 @@ const vm = new Vue({
     completenessLabel: function () {
       let label = ''
       // Show number of "original references" for source-based-graphs when available from API and for all listOfIds (i.e. file / bookmarklet) graphs
-      if (this.currentGraph.API === 'Cita') {
+      if (this.currentGraph.API === 'Zotero Cita') {
         label = this.getString(
           'input-articles.info.completeness.tooltip',
           [
@@ -1493,7 +1493,7 @@ const vm = new Vue({
       // In case of file scanning, isLoading has not yet been set by setNewSource
       this.isLoading = true
 
-      if (this.API === 'Cita') {
+      if (this.API === 'Zotero Cita') {
         // some commands below seem to be blocking execution
         // set a short delay to let window finish loading before them
         // using window's load event doesn't work
@@ -1852,7 +1852,7 @@ const vm = new Vue({
         return openCitationsWrapper(ids, responseFunction, phase)
       } else if (API === 'Crossref') {
         return crossrefWrapper(ids, responseFunction, phase)
-      } else if (API === 'Cita') {
+      } else if (API === 'Zotero Cita') {
         return cita(ids, responseFunction)
       } else {
         return this.errorMessage("Undefined API '" + API + "'. Must be one of 'OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref'.")
@@ -1868,7 +1868,7 @@ const vm = new Vue({
         articles = openCitationsResponseToArticleArray(data)
       } else if (API === 'Crossref') {
         articles = crossrefResponseToArticleArray(data)
-      } else if (this.API === 'Cita') {
+      } else if (this.API === 'Zotero Cita') {
         articles = data // TODO or return data as by diegolh?
       }
       // Remove duplicates - important for de-duplication of All References / All Citations (in the sense of proper duplicates within one category (not in the sense of "de-duplicated against Seed Articles and Cited"), can be duplicated mostly with S2 but also to lesser extent with OA), rarely also needed for other calls, e.g. for S2 in references of 10.1111/J.1461-0248.2009.01285.X, eebf363bc78ca7bc16a32fa339004d0ad43aa618 came up twice
@@ -2189,7 +2189,7 @@ const vm = new Vue({
   },
   mounted: function () {
     const urlParams = new URLSearchParams(window.location.search)
-    const possibleAPIs = ['OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref', 'Co*Citation Network via OpenAlex', 'Cita']
+    const possibleAPIs = ['OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref', 'Co*Citation Network via OpenAlex', 'Zotero Cita']
 
     // Load locally saved networks / settings from localStorage
     try {
@@ -2242,7 +2242,7 @@ const vm = new Vue({
       this.loadGraphsFromJSON('examples.json')
     }
 
-    if (this.API === 'Cita') {
+    if (this.API === 'Zotero Cita') {
       window.document.title = this.getString('title')
       const listOfKeys = urlParams.has('listOfKeys') ? urlParams.get('listOfKeys').split(',') : []
       
@@ -2256,7 +2256,7 @@ const vm = new Vue({
           return dois
         }, []
       )
-      this.listName = 'Cita'
+      this.listName = 'Zotero Cita'
 
       this.createNewNetwork({ references: listOfKeys, citations: [] })
     }
