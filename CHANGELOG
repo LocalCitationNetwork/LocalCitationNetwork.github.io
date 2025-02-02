@@ -1,3 +1,11 @@
+02.02.2025 v1.28
+* Some adaptations for better integration with the awesome Zotero Cita plugin: https://github.com/diegodlh/zotero-cita.
+* Slightly changed linkToShareAppendix() logic.
+* Added downloadFile function.
+! Fixed physics of Co-authorship network by reverting to default barnesHut configuration.
+! Fix title of edges in Co-authorship network (only considers seed articles as of 1.21).
+! Fixed some old terminology in comments.
+
 11.11.2024 v1.27
 + Export options modal for CSV / RIS download.
 * De-duplication of All Cited and All Citing is off again by default but can be turned on.

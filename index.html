@@ -157,7 +157,7 @@
           <ul class="buttons">
             <b-navbar-item tag="li" v-for="item, index in graphs" :key="index" class="navbar-item">
               <b-button :type="(index==currentTabIndex) ? 'is-primary' : ''" :title="item.tabTitle" @click="setCurrentTabIndex(index)" rounded>
-                {{ item.tabLabel }} ({{ abbreviateAPI(item.API) }})
+                {{ item.tabLabel + ((abbreviateAPI(item.API)) ? ' (' + abbreviateAPI(item.API) + ')' : '') }}
                 <a title="Close tab" class="delete" @click.stop="clickCloseTab(index)"></a> <!-- .stop prevents event propagation to parent @click event -->
               </b-button>
             </b-navbar-item>
@@ -190,10 +190,10 @@
             </template>
             <div class="content">
               <p>
-                <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
+                <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a>
                 <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels when JSON is reloaded) -->
                 <template v-if="citedArticles && citingArticles">
-                  <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
+                  / <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Can be shared and reloaded through the 'File' button at the top right!">
                     <a @click="downloadJSON">download full network as JSON</a>
@@ -227,7 +227,7 @@
                 <a @click="selected = seedArticles.filter(x => x.isSource)[0]">(select)</a>
               </p>
               <p>
-                Data retrieved through <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">{{ currentGraph.API + ' (' + abbreviateAPI(currentGraph.API) + ')' }}</a> API on {{ new Date(currentGraph.timestamp).toLocaleString(undefined, {"day": "numeric", "month": "long", "year": "numeric"}) }}
+                Data retrieved through <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">{{ currentGraph.API + ((abbreviateAPI(currentGraph.API)) ? ' (' + abbreviateAPI(currentGraph.API) + ')' : '') }}</a> on {{ new Date(currentGraph.timestamp).toLocaleString(undefined, {"day": "numeric", "month": "long", "year": "numeric"}) }}
                 <b-tooltip dashed multilined type="is-dark" position="is-bottom" :label="completenessLabel" v-if="currentGraph.API !== 'Co*Citation Network via OpenAlex'">
                   <a @click="indexFAQ = 'completeness'; showFAQ = true;" href="#completeness"
                     :style="'color: ' + ((completenessPercent > 40) ? '' : '#ff3860')">
@@ -365,7 +365,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" sortable>
+              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita'" sortable>
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     {{ column.label }}
@@ -471,17 +471,18 @@
           <!-- Have to use currentGraph.citedArticles === undefined to show progress indicator because the computed always returns [] if undefined -->
           <b-tab-item value="citedArticlesTab" :disabled="currentGraph.citedArticles === undefined" v-if="currentGraph.citedArticles === undefined || citedArticles.length || currentGraph.API === 'Co*Citation Network via OpenAlex'">
             <template slot="header">
-              <h2 class="title is-4">{{ (currentGraph.allCited) ? 'All ' : ((currentGraph.ricsRankCutoff) ? '' : 'Top ') }}Cited
+              <h2 class="title is-4">
+                {{ (currentGraph.allCited) ? 'All ' : ((currentGraph.ricsRankCutoff) ? '' : 'Top ') }}Cited
                 (<template v-if="citedArticles.length">{{ citedArticles.length }}</template>
                 <b-progress v-else :value="(isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-medium" show-value format="percent" :precision="0" style="width: 50px; display: inline-block"></b-progress>)
               </h2>
             </template>
             <div class="content" v-if="citedArticles.length">
               <p>
-                <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
+                <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a>
                 <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels when JSON is reloaded) -->
                 <template v-if="citedArticles && citingArticles">
-                  <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
+                  / <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Can be shared and reloaded through the 'File' button at the top right!">
                     <a @click="downloadJSON">download full network as JSON</a>
@@ -600,7 +601,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" sortable>
+              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita'" sortable>
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     {{ column.label }}
@@ -706,16 +707,18 @@
           <!-- Have to use currentGraph.citingArticles === undefined to show progress indicator because the computed always returns [] if undefined -->
           <b-tab-item value="citingArticlesTab" :disabled="currentGraph.citingArticles === undefined" v-if="currentGraph.citingArticles === undefined || citingArticles.length || currentGraph.API === 'Co*Citation Network via OpenAlex'">
             <template slot="header">
-              <h2 class="title is-4">{{ (currentGraph.allCiting) ? 'All ' : ((currentGraph.ricsRankCutoff) ? '' : 'Top ') }}Citing
+              <h2 class="title is-4">
+                {{ (currentGraph.allCiting) ? 'All ' : ((currentGraph.ricsRankCutoff) ? '' : 'Top ') }}Citing
                 (<template v-if="citingArticles.length">{{ citingArticles.length }}</template>
                 <b-progress v-else :value="(currentGraph.citedArticles === undefined) ? undefined : (isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-medium" show-value format="percent" :precision="0" style="width: 50px; display: inline-block"></b-progress>)
+              </h2>
             </template>
             <div class="content" v-if="citingArticles.length">
               <p>
-                <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
+                <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a>
                 <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels when JSON is reloaded) -->
                 <template v-if="citedArticles && citingArticles">
-                  <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
+                  / <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Can be shared and reloaded through the 'File' button at the top right!">
                     <a @click="downloadJSON">download full network as JSON</a>
@@ -834,7 +837,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" sortable>
+              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita'" sortable>
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     {{ column.label }}
@@ -943,10 +946,10 @@
             </template>
             <div class="content">
               <p>
-                <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
+                <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a>
                 <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels when JSON is reloaded) -->
                 <template v-if="citedArticles && citingArticles">
-                  <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
+                  / <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Can be shared and reloaded through the 'File' button at the top right!">
                     <a @click="downloadJSON">download full network as JSON</a>
@@ -1067,7 +1070,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" sortable>
+              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita'" sortable>
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     {{ column.label }}
@@ -1176,10 +1179,10 @@
             </template>
             <div class="content">
               <p>
-                <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a> /
+                <a @click="fullscreenTable = !fullscreenTable; if (fullscreenTable) resetBothNetworks(); else initCurrentNetwork();" title="Toggle table fullscreen">{{ (fullscreenTable) ? 'show networks' : 'fullscreen table' }}</a>
                 <!-- Make sure network is fully loaded (otherwise citedArticles / citingArticles tabs would show eternal spinning wheels when JSON is reloaded) -->
                 <template v-if="citedArticles && citingArticles">
-                  <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
+                  / <a @click="showOptionsExportArticles = true">export articles as CSV or RIS</a> /
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
                     label="Can be shared and reloaded through the 'File' button at the top right!">
                     <a @click="downloadJSON">download full network as JSON</a>
@@ -1300,7 +1303,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" sortable>
+              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita'" sortable>
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     {{ column.label }}
@@ -1554,7 +1557,7 @@
           <header class="modal-card-head">
             <content>
               <h3 class="modal-card-title">Import custom list of IDs</h3>
-              <p>One ID per row. Use OpenAlex / Semantic Scholar for PMIDs. Empty rows are placeholders in order to help preserve original numbering.</p>
+              <p>One ID per row, usually DOI. Use OpenAlex / Semantic Scholar for PMIDs. Empty rows are placeholders in order to help preserve original numbering.</p>
             </content>
           </header>
           <section style="position: relative; height:300px">
@@ -1579,7 +1582,7 @@
           </header>
           <div class="card-content">
             <p class="content">
-              Cited Articles (References) can be retrieved through all <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">APIs</a>. Citing Articles (Citations) can be retrieved through OpenAlex (OA), Semantic Scholar (S2) and OpenCitations (OC). <a @click="indexFAQ = 'top-cited'; showFAQ = true;" href="#top-cited">Top Cited</a> are the most cited references by the Seed Articles. <a @click="indexFAQ = 'top-citing'; showFAQ = true;" href="#top-citing">Top Citing</a> are citing the most Seed Articles. Retrieving All References / Citations works best with OpenAlex (OA) & Semantic Scholar (S2).
+              Cited Articles (References) can be retrieved through all <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">APIs</a>. Citing Articles (Citations) can be retrieved through OpenAlex (OA), Semantic Scholar (S2) and OpenCitations (OC). <a @click="indexFAQ = 'top-cited'; showFAQ = true;" href="#top-cited">Top Cited</a> are the most cited references by the Seed Articles. <a @click="indexFAQ = 'top-citing'; showFAQ = true;" href="#top-citing">Top Citing</a> are citing the most Seed Articles. Retrieving All Cited (i.e. references) / All Citing (i.e. citations) works best with OpenAlex (OA) & Semantic Scholar (S2).
             </p>
             <b-field grouped>
               <b-field label="Select API">
