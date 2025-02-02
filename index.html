@@ -681,7 +681,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column :label="getString('table.column.references.label')" :meta="getString('table.column.references.tooltip')"
+              <b-table-column :label="getString('table.column.references.label')" :meta="getString('table.column.references.tooltip')" :visible="currentGraph.API !== 'Zotero Cita'"
                 sortable :custom-sort="sortReferencesWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
