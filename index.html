@@ -255,8 +255,8 @@
                 <template v-else>
                   {{ getString('input-articles.info.open-external', 'Local Citation Network') }}
                   <b-tooltip dashed multilined position="is-bottom" type="is-dark"
-                    :label="getString('input-articles.info.open-external.tooltip', listOfIds.length)">
-                    <a @click="e => { e.preventDefault(); openUrl('https://LocalCitationNetwork.github.io/?listOfIds=' + listOfIds.join(',')) }">
+                    :label="getString('input-articles.info.open-external.tooltip', currentGraph.source?.customListOfReferences?.length)">
+                    <a @click="e => { e.preventDefault(); openUrl('https://LocalCitationNetwork.github.io/?listOfIds=' + currentGraph.source?.customListOfReferences.join(',')) }">
                       &#8618
                     </a>
                   </b-tooltip>
@@ -366,8 +366,8 @@
               <b-table-column :label="getString('table.column.title.label')" v-slot="props">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
+                  {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : '' }}
                   <template v-if="currentGraph.API !== 'Zotero Cita'">
-                    {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : '' }}
                     <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank" v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></a>
                     <span v-else v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></span>
                   </template>
@@ -627,8 +627,8 @@
               <b-table-column :label="getString('table.column.title.label')" v-slot="props">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
+                  {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : (seedArticlesIds.includes(props.row.id) ? 'Seed Article: ' : '') }}
                   <template v-if="currentGraph.API !== 'Zotero Cita'">
-                    {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : '' }}
                     <a v-if="articleLink(props.row)" :href="articleLink(props.row)" target="_blank" v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></a>
                     <span v-else v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></span>
                   </template>

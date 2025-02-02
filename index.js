@@ -64,7 +64,7 @@ const {
   saveFile
 } = window.arguments[0] || {};
 
-function cita (itemKeys, responseFunction) {
+function citaWrapper (itemKeys, responseFunction) {
   return new Promise((resolve) => {
     resolve(itemKeys.map((itemId) => itemMap.get(itemId)));
   }).then((data) => responseFunction(data));
@@ -1176,21 +1176,18 @@ const vm = new Vue({
     },
     linkToShareAppendix: function () {
       let appendix = '?API=' + encodeURIComponent(this.currentGraph.API)
+      appendix += '&name=' + encodeURIComponent(this.currentGraph.tabLabel)
       if (this.currentGraph.source.id) {
         appendix += '&source=' + (this.currentGraph.source.doi ? this.currentGraph.source.doi : this.currentGraph.source.id)
-        if (this.currentGraph.source.customListOfReferences) {
-          appendix += '&listOfIds=' + this.currentGraph.source.customListOfReferences.join(',')
-        }
-        if (this.currentGraph.bookmarkletURL) {
-          appendix += '&bookmarkletURL=' + this.currentGraph.bookmarkletURL
-        }
-      } else {
-        appendix += '&name=' + encodeURIComponent(this.currentGraph.tabLabel) + '&listOfIds=' + this.currentGraph.source.references.join(',')
       }
+      if (this.currentGraph.bookmarkletURL) {
+        appendix += '&bookmarkletURL=' + this.currentGraph.bookmarkletURL
+      }
+      appendix += '&listOfIds=' + (this.currentGraph.source.customListOfReferences ? this.currentGraph.source.customListOfReferences : this.currentGraph.source.references).join(',')
       return appendix
     },
     showNumberInSourceReferences: function () {
-      return this.currentGraph.API !== 'Zotero Cita'  && (this.currentGraph.API === 'Crossref' || (this.currentGraph.source.customListOfReferences !== undefined) || !this.currentGraph.source.id)
+      return this.currentGraph.API === 'Crossref' || (this.currentGraph.source.customListOfReferences !== undefined) || !this.currentGraph.source.id
     },
     exportArticlesArray: function () {
       return this.exportArticles.map(x => this[x]).flat()
@@ -1494,15 +1491,10 @@ const vm = new Vue({
       // In case of file scanning, isLoading has not yet been set by setNewSource
       this.isLoading = true
 
-      if (this.API === 'Zotero Cita') {
-        // some commands below seem to be blocking execution
-        // set a short delay to let window finish loading before them
-        // using window's load event doesn't work
-        //await new Promise((resolve) => setTimeout(() => resolve(), 500)) // introduced by diegolh back in 2021, doesn't seem to be necessary anymore as of 01/2025
-      } else {
+      if (this.API !== 'Zotero Cita') {
         this.$buefy.toast.open({
           message: 'New query sent to ' + this.API + '.<br>This may take a while, depending on the number of references and API workload.',
-          duration: 4000,
+          duration: 6000,
           queue: false
         })
       }
@@ -1858,7 +1850,7 @@ const vm = new Vue({
       } else if (API === 'Crossref') {
         return crossrefWrapper(ids, responseFunction, phase)
       } else if (API === 'Zotero Cita') {
-        return cita(ids, responseFunction)
+        return citaWrapper(ids, responseFunction)
       } else {
         return this.errorMessage("Undefined API '" + API + "'. Must be one of 'OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref'.")
       }
@@ -1874,7 +1866,9 @@ const vm = new Vue({
       } else if (API === 'Crossref') {
         articles = crossrefResponseToArticleArray(data)
       } else if (this.API === 'Zotero Cita') {
-        articles = data // TODO or return data as by diegolh?
+        // Add numberInSourceReferences so that "#" column in Seed Articles table shows order just like in Zotero (which can be sorted differently than LCN, e.g. by "Date Added")
+        const articlesIds = data.map(article => article.id)
+        articles = data.map(article => { if (article.numberInSourceReferences === undefined) article.numberInSourceReferences = articlesIds.indexOf(article.id)+1; return article; })
       }
       // Remove duplicates - important for de-duplication of All References / All Citations (in the sense of proper duplicates within one category (not in the sense of "de-duplicated against Seed Articles and Cited"), can be duplicated mostly with S2 but also to lesser extent with OA), rarely also needed for other calls, e.g. for S2 in references of 10.1111/J.1461-0248.2009.01285.X, eebf363bc78ca7bc16a32fa339004d0ad43aa618 came up twice
       articles = articles.reduce((articlesKeep, article) => {
@@ -2248,16 +2242,13 @@ const vm = new Vue({
       this.retrieveCitedArticles = Infinity
       this.retrieveCitingArticles = 0
       
-      this.listOfIds = listOfKeys.reduce(
-        (dois, key) => {
-          const doi = itemMap.get(key).doi
-          if (doi) dois.push(doi)
-          return dois
-        }, []
-      )
-      this.listName = 'Zotero Cita ' + (new Date().toLocaleString('en-CA', {hour12: false}).replace(", ", " ").substr(0,16)) // Add datetime (YYYY-MM-DD HH:MM) so that the graph's tabLabel becoms more unique and multiple Cita JSON files can be opened at the same time
+      // Tab name: Add datetime (YYYY-MM-DD HH:MM) so that the graph's tabLabel becoms more unique and multiple Cita JSON files can be opened at the same time
+      this.listName = 'Zotero Cita ' + (new Date().toLocaleString('en-CA', {hour12: false}).replace(", ", " ").substr(0,16))
 
-      this.createNewNetwork({ references: listOfKeys, citations: [] })
+      // This list of DOIs is for "Recreate network"
+      const listOfDOIs = listOfKeys.map(key => itemMap.get(key).doi)
+
+      this.createNewNetwork({ references: listOfKeys, customListOfReferences: listOfDOIs, citations: [] })
     }
 
     // Linked to FAQ?
