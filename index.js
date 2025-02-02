@@ -1546,7 +1546,7 @@ const vm = new Vue({
         tabTitle: source.id ? source.title : this.listName,
         bookmarkletURL: this.bookmarkletURL,
         API: API,
-        allCited: retrieveCitedArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API),
+        allCited: retrieveCitedArticles === Infinity && ['OpenAlex', 'Semantic Scholar', 'Zotero Cita'].includes(API), // Zotero Cita shows All Cited (i.e. all references)
         allCiting: retrieveCitingArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API),
         timestamp: Date.now(),
         localCitationNetworkVersion: localCitationNetworkVersion
@@ -1567,6 +1567,10 @@ const vm = new Vue({
           .filter(x => !seedArticlesIds.includes(x))
           // Sort and slice for Top References
           .sort((a, b) => referenced[b].length - referenced[a].length).slice(0, retrieveCitedArticles)
+      }
+      // Zotero Cita shows All Cited (i.e. all references) => do not de-duplicate against seedArticles like above
+      if (retrieveCitedArticles === Infinity && API === 'Zotero Cita') {
+        citedArticlesIds = Object.keys(referenced)
       }
       
       this.callAPI((retrieveCitedArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API)) ? seedArticlesIdsWithoutSource : citedArticlesIds, data => this.retrievedCitedArticles(data, API, newGraph, retrieveCitingArticles, citing, seedArticlesIds), API, 'references', retrieveCitedArticles, 0)
@@ -2240,6 +2244,7 @@ const vm = new Vue({
       window.document.title = this.getString('title')
       const listOfKeys = urlParams.has('listOfKeys') ? urlParams.get('listOfKeys').split(',') : []
       
+      // Zotero Cita shows All Cited (i.e. all references)
       this.retrieveCitedArticles = Infinity
       this.retrieveCitingArticles = 0
       
@@ -2250,7 +2255,7 @@ const vm = new Vue({
           return dois
         }, []
       )
-      this.listName = 'Zotero Cita'
+      this.listName = 'Zotero Cita ' + (new Date().toLocaleString('en-CA', {hour12: false}).replace(", ", " ").substr(0,16)) // Add datetime (YYYY-MM-DD HH:MM) so that the graph's tabLabel becoms more unique and multiple Cita JSON files can be opened at the same time
 
       this.createNewNetwork({ references: listOfKeys, citations: [] })
     }
