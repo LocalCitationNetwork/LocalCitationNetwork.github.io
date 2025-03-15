@@ -6,7 +6,7 @@
 
 'use strict'
 
-const localCitationNetworkVersion = 1.28
+const localCitationNetworkVersion = 1.29
 
 const arrSum = arr => arr.reduce((a, b) => a + b, 0)
 const arrAvg = arr => arrSum(arr) / arr.length
@@ -172,7 +172,7 @@ function semanticScholarResponseToArticleArray (data) {
     return {
       id: article.paperId,
       numberInSourceReferences: data.indexOf(article) + 1,
-      doi: doi,
+      doi,
       type: article.publicationTypes,
       title: article.title || '',
       authors: (article.authors || []).map(author => {
@@ -296,7 +296,7 @@ function openAlexResponseToArticleArray (data) {
     return {
       id: article.id?.replace('https://openalex.org/', ''),
       numberInSourceReferences: data.indexOf(article) + 1,
-      doi: doi,
+      doi,
       type: article.type,
       title: article.title || '',
       authors: (article.authorships || []).map(authorship => {
@@ -312,7 +312,7 @@ function openAlexResponseToArticleArray (data) {
       }),
       year: article.publication_year,
       date: article.publication_date,
-      journal: journal,
+      journal,
       volume: article.biblio?.volume,
       issue: article.biblio?.issue,
       firstPage: article.biblio?.first_page,
@@ -349,10 +349,19 @@ function coCitationNetworkResponseToArticleArray (data) {
 
     const journal = article.biblio?.title
 
+    let abstract
+    if (article.abstract_inverted_index && (article.abstract_inverted_index !== 'null')) {
+      try {
+        abstract = revertAbstractFromInvertedIndex(JSON.parse(article.abstract_inverted_index))
+      } catch (error) {
+        console.error('Error while parsing abstract_inverted_index for ' + articleId + ': ' + error)
+      }
+    }
+
     return {
       id: articleId,
       numberInSourceReferences: Object.keys(data).indexOf(articleId) + 1,
-      doi: doi,
+      doi,
       type: article.type,
       title: article.title || '',
       authors: Object.keys((article.authors || {})).map(authorId => {
@@ -368,7 +377,7 @@ function coCitationNetworkResponseToArticleArray (data) {
       }),
       year: article.publication_year,
       date: article.publication_date,
-      journal: journal,
+      journal,
       volume: article.biblio?.volume,
       issue: article.biblio?.issue,
       firstPage: article.biblio?.first_page,
@@ -379,7 +388,7 @@ function coCitationNetworkResponseToArticleArray (data) {
       citationsCount: article.cited_by_count,
       coCited: linkedSeeds.cocited_indirect,
       coCiting: linkedSeeds.cociting_indirect,
-      abstract: (article.abstract_inverted_index && (article.abstract_inverted_index !== 'null')) ? revertAbstractFromInvertedIndex(JSON.parse(article.abstract_inverted_index)) : undefined,
+      abstract,
       isRetracted: article.is_retracted
     }
   })
@@ -441,15 +450,17 @@ function crossrefResponseToArticleArray (data) {
     return {
       id: doi,
       numberInSourceReferences: data.indexOf(article) + 1,
-      doi: doi,
+      doi,
       type: article.type,
       title: String(article.title), // most of the time title is an array with length=1, but I've also seen pure strings
-      authors: (article.author?.length) ? article.author.map(x => ({
-        orcid: x.ORCID,
-        LN: x.family || x.name,
-        FN: x.given,
-        affil: (x.affiliation?.length) ? x.affiliation.map(aff => aff.name).join(', ') : (typeof (x.affiliation) === 'string' ? x.affiliation : undefined)
-      })) : [{ LN: article.author || undefined }],
+      authors: (article.author?.length)
+        ? article.author.map(x => ({
+          orcid: x.ORCID,
+          LN: x.family || x.name,
+          FN: x.given,
+          affil: (x.affiliation?.length) ? x.affiliation.map(aff => aff.name).join(', ') : (typeof (x.affiliation) === 'string' ? x.affiliation : undefined)
+        }))
+        : [{ LN: article.author || undefined }],
       year: article.issued?.['date-parts']?.[0]?.[0],
       date: (article.issued?.['date-parts']?.[0]?.[0]) ? formatDate(article.issued['date-parts'][0][0], article.issued['date-parts'][0][1], article.issued['date-parts'][0][2]) : undefined,
       journal: String(article['container-title']),
@@ -505,7 +516,7 @@ function openCitationsResponseToArticleArray (data) {
     return {
       id: doi,
       numberInSourceReferences: data.indexOf(article) + 1,
-      doi: doi,
+      doi,
       title: String(article.title), // most of the time title is an array with length=1, but I've also seen pure strings
       authors: article.author?.split('; ').map(x => ({ LN: x.split(', ')[0], FN: x.split(', ')[1] })) ?? [],
       year: Number(article.year?.substr(0, 4)) || undefined,
@@ -703,7 +714,7 @@ function initCitationNetwork (app, minDegreeCitedArticles = 1, minDegreeCitingAr
     }
   }
 
-  citationNetwork = new vis.Network(document.getElementById('citationNetwork'), { nodes: nodes, edges: edges }, options)
+  citationNetwork = new vis.Network(document.getElementById('citationNetwork'), { nodes, edges }, options)
   citationNetwork.setOptions(vm.currentGraph.customConfigCitationNetwork)
   citationNetwork.on('click', networkOnClick)
   citationNetwork.on('doubleClick', networkOnDoubleClick)
@@ -906,7 +917,7 @@ function initAuthorNetwork (app, minPublications = undefined) {
       showButton: false
     }
   }
-  authorNetwork = new vis.Network(document.getElementById('authorNetwork'), { nodes: nodes, edges: edges }, options)
+  authorNetwork = new vis.Network(document.getElementById('authorNetwork'), { nodes, edges }, options)
   authorNetwork.setOptions(vm.currentGraph.customConfigAuthorNetwork)
   authorNetwork.on('click', networkOnClick)
   authorNetwork.on('doubleClick', networkOnDoubleClick)
@@ -1316,7 +1327,7 @@ const vm = new Vue({
               this.addGraphs([{
                 // graphs: graphs, // keep original CCN JSON for debugging reasons
                 source: { references: graphs.seeds },
-                seedArticles: seedArticles,
+                seedArticles,
                 citedArticles: udcs.filter(article => article.citations.length),
                 citingArticles: udcs.filter(article => article.references.length),
                 tabLabel: this.file.name.replace('.json', '') + ' UDCS',
@@ -1325,13 +1336,13 @@ const vm = new Vue({
                 allCiting: true,
                 API: 'Co*Citation Network via OpenAlex',
                 timestamp: new Date(graphs.snapshot_date.substr(9).split('-').reverse().join('-')).getTime(),
-                localCitationNetworkVersion: localCitationNetworkVersion
+                localCitationNetworkVersion
               }])
 
               this.addGraphs([{
                 // graphs: graphs, // keep original CCN JSON for debugging reasons
                 source: { references: graphs.seeds },
-                seedArticles: seedArticles,
+                seedArticles,
                 citedArticles: rics.filter(article => article.citations.length),
                 citingArticles: rics.filter(article => article.references.length),
                 coCitedArticles: rics.filter(article => article.coCited.length),
@@ -1341,7 +1352,7 @@ const vm = new Vue({
                 API: 'Co*Citation Network via OpenAlex',
                 ricsRankCutoff: graphs.rics_rank_cutoff,
                 timestamp: new Date(graphs.snapshot_date.substr(9).split('-').reverse().join('-')).getTime(),
-                localCitationNetworkVersion: localCitationNetworkVersion
+                localCitationNetworkVersion
               }])
             } catch (e) {
               this.errorMessage('Could not load exploratory Co*Citation Network file: ' + e)
@@ -1494,18 +1505,18 @@ const vm = new Vue({
 
       // Add new tab
       const newGraph = {
-        source: source,
-        seedArticles: seedArticles,
+        source,
+        seedArticles,
         citedArticles: (retrieveCitedArticles) ? undefined : [], // undefined leads to loading indicator, empty array means no references
         citingArticles: (retrieveCitingArticles && API !== 'Crossref') ? undefined : [], // undefined leads to loading indicator, empty array means no citations
         tabLabel: source.id ? ((source.authors[0] && source.authors[0].LN) + ' ' + source.year) : this.listName,
         tabTitle: source.id ? source.title : this.listName,
         bookmarkletURL: this.bookmarkletURL,
-        API: API,
+        API,
         allCited: retrieveCitedArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API),
         allCiting: retrieveCitingArticles === Infinity && ['OpenAlex', 'Semantic Scholar'].includes(API),
         timestamp: Date.now(),
-        localCitationNetworkVersion: localCitationNetworkVersion
+        localCitationNetworkVersion
       }
       this.pushGraph(newGraph)
       vm.saveState()
@@ -1596,11 +1607,11 @@ const vm = new Vue({
       let message = (this.API === 'OpenAlex')
         ? 'Enter <a href="https://docs.openalex.org/api-entities/works/work-object#ids" target="_blank">DOI / PMID / other ID</a> of new source article'
         : ((this.API === 'Semantic Scholar')
-          ? 'Enter <a href="https://api.semanticscholar.org/graph/v1#operation/get_graph_get_paper_references" target="_blank">DOI / PMID / ARXIV / other ID</a> of new source article'
-          : 'Enter <a href="https://en.wikipedia.org/wiki/Digital_object_identifier" target="_blank">DOI</a> of new source article')
+            ? 'Enter <a href="https://api.semanticscholar.org/graph/v1#operation/get_graph_get_paper_references" target="_blank">DOI / PMID / ARXIV / other ID</a> of new source article'
+            : 'Enter <a href="https://en.wikipedia.org/wiki/Digital_object_identifier" target="_blank">DOI</a> of new source article')
       if (!this.editListOfIds) message += ' and use its references as seed articles. <a onclick="vm.editListOfIds=true; document.querySelector(`footer.modal-card-foot:last-child button`).click()">Enter custom list of IDs instead.</a>'
       this.$buefy.dialog.prompt({
-        message: message,
+        message,
         inputAttrs: {
           placeholder: 'doi:10.1126/SCIENCE.AAC4716',
           maxlength: 50,
@@ -2118,7 +2129,7 @@ const vm = new Vue({
       return this.downloadFile(JSON.stringify([vm.currentGraph]), 'application/json', `${vm.currentGraph.tabLabel}.json`)
     },
     downloadFile: function (content, type, filename) {
-      const blob = new Blob([content], { type: type })
+      const blob = new Blob([content], { type })
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url

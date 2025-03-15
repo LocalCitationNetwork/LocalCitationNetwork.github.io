@@ -16,8 +16,8 @@
       }
     
       ::-webkit-scrollbar {
-          height: 6px;
-          width: 6px;
+          height: 0.4rem;
+          width: 0.4rem;
       }
 
       ::-webkit-scrollbar-thumb {
@@ -26,7 +26,7 @@
       }
 
       html {
-        font-size: 9pt;
+        font-size: 10pt;
         overflow-y: auto;
       }
       
@@ -60,7 +60,7 @@
       }
       
       div.content {
-        padding-top: 10px
+        padding-top: 0.2rem
       }
 
       .tab-item {
@@ -79,12 +79,8 @@
         padding: 0.5rem 0.2rem
       }
 
-      .navbar-end button, h2 button {
-        width: 40px;
-      }
-
-      .navbar-end .buttons .button {
-        width: 45px
+      .navbar-end button, h2 button, .navbar-end .buttons .button {
+        width: 3.8rem
       }
 
       h2 label.upload {
@@ -136,11 +132,10 @@
       /* Vis.js Network tooltip */
 
       div.vis-tooltip {
-        font-size: 0.8em;
         white-space: normal;
-        max-width: 250px;
+        max-width: 20vw;
         word-wrap: break-word;
-        padding: 5px;
+        padding: 0.5vw;
       }
     </style>
   </head>
@@ -162,8 +157,8 @@
               </b-button>
             </b-navbar-item>
             <b-navbar-item tag="li">
-              <b-button v-if="isLoading" disabled rounded style="width: 130px">
-                <b-progress :value="(isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-large" show-value format="percent" :precision="0" title="To cancel loading activate 'Save' button on the right and refresh page." style="width: 100px"></b-progress>
+              <b-button v-if="isLoading" disabled rounded style="width: 12rem">
+                <b-progress :value="(isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-large" show-value format="percent" :precision="0" title="To cancel loading activate 'Save' button on the right and refresh page." style="width: 10rem"></b-progress>
               </b-button>
             </b-navbar-item>
           </ul>
@@ -172,7 +167,7 @@
         <template slot="end">
           <ul class="buttons">
             <b-navbar-item tag="li"><b-button @click="clickButtonAdd" rounded type="is-dark" title="Add network based on references from a single source DOI" :disabled="isLoading"><span style="font-size: 1.8em; line-height: 0.9 ">+</span></b-button></b-navbar-item>
-            <b-navbar-item tag="li"><b-upload v-model="file" :disabled="isLoading"><a class="button is-dark is-rounded" title="Scan plain text file for DOIs" :disabled="isLoading" style="margin: 0 0 6px 0"><span style="font-size: 1.2em">File</span></a></b-upload></b-navbar-item>
+            <b-navbar-item tag="li"><b-upload v-model="file" :disabled="isLoading"><a class="button is-dark is-rounded" title="Scan plain text file for DOIs" :disabled="isLoading" style="margin: 0 0 0.5rem 0"><span style="font-size: 1.2em">File</span></a></b-upload></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="clickCloseAllTabs" rounded type="is-dark" title="Close all tabs" :disabled="!graphs.length"><span style="font-size: 1.2em">Close</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="clickToggleAutosave" rounded :type="(autosaveResults) ? '' : 'is-dark'" title="Autosave results locally (only up to 100 References & Citations are kept because of space constraints - if all are needed, use 'download full network: JSON')"><span style="font-size: 1.2em">Save</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="showOptionsAPI = !showOptionsAPI" rounded type="is-dark" title="API Options: OpenAlex (OA) / Semantic Scholar (S2) / OpenCitations (OC) / Crossref (CR)" :disabled="isLoading"><span  style="font-size: 1.2em">{{ abbreviateAPI(API) }}</span></b-button></b-navbar-item>
@@ -474,7 +469,7 @@
               <h2 class="title is-4">
                 {{ (currentGraph.allCited) ? 'All ' : ((currentGraph.ricsRankCutoff) ? '' : 'Top ') }}Cited
                 (<template v-if="citedArticles.length">{{ citedArticles.length }}</template>
-                <b-progress v-else :value="(isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-medium" show-value format="percent" :precision="0" style="width: 50px; display: inline-block"></b-progress>)
+                <b-progress v-else :value="(isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-medium" show-value format="percent" :precision="0" style="width: 5rem; display: inline-block"></b-progress>)
               </h2>
             </template>
             <div class="content" v-if="citedArticles.length">
@@ -618,7 +613,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="Ref." meta="Number of global references (citing how many articles in total)"
+              <b-table-column label="Ref." meta="Number of global references (citing how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita'"
                 sortable :custom-sort="sortReferencesWrapper">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -710,7 +705,7 @@
               <h2 class="title is-4">
                 {{ (currentGraph.allCiting) ? 'All ' : ((currentGraph.ricsRankCutoff) ? '' : 'Top ') }}Citing
                 (<template v-if="citingArticles.length">{{ citingArticles.length }}</template>
-                <b-progress v-else :value="(currentGraph.citedArticles === undefined) ? undefined : (isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-medium" show-value format="percent" :precision="0" style="width: 50px; display: inline-block"></b-progress>)
+                <b-progress v-else :value="(currentGraph.citedArticles === undefined) ? undefined : (isLoadingTotal > 1) ? isLoadingIndex/isLoadingTotal*100 : undefined" size="is-medium" show-value format="percent" :precision="0" style="width: 5rem; display: inline-block"></b-progress>)
               </h2>
             </template>
             <div class="content" v-if="citingArticles.length">
@@ -1413,14 +1408,14 @@
             
             <b-loading :is-full-page="false" :active="citationNetworkIsLoading"></b-loading>
             <div id="citationNetwork" style="height: 100%; cursor: pointer;" :loading="true"></div>
-            <span style="position:absolute; top: 0px; left: 10px">
+            <span style="position:absolute; top: 0; left: 1rem">
               <a @click="fullscreenNetwork = !fullscreenNetwork; setTimeout(function () { citationNetwork.fit() }, 1)" title="Toggle network fullscreen">{{ (fullscreenNetwork) ? 'show tables' : 'fullscreen network' }}</a> /
               <a @click="indexFAQ = 'citation-network'; showFAQ = true;" href="#citation-network">how to read this network</a> /
               <a @click="showCitationNetworkSettings = true">network settings</a> /
               <a @click="$set(currentGraph, 'citationNetworkTurned', !currentGraph.citationNetworkTurned); changeCurrentNetworkSettings()" title="Rotate network 90°">{{ (currentGraph.citationNetworkTurned) ? '↺' : '↻'}}</a>
             </span>
-            <span style="position:absolute; top: 0px; right: 0px" v-if="citationNetwork?.layoutEngine.options.hierarchical.enabled">{{ (['LR', 'DU'].includes(citationNetwork?.layoutEngine.options.hierarchical.direction)) ? 'newer' : 'older' }} articles {{ (['LR', 'RL'].includes(citationNetwork?.layoutEngine.options.hierarchical.direction)) ? '→' : '↑' }}</span>
-            <!--<span style="position:absolute; bottom: 0px; left: 10px">
+            <span style="position:absolute; top: 0; right: 0" v-if="citationNetwork?.layoutEngine.options.hierarchical.enabled">{{ (['LR', 'DU'].includes(citationNetwork?.layoutEngine.options.hierarchical.direction)) ? 'newer' : 'older' }} articles {{ (['LR', 'RL'].includes(citationNetwork?.layoutEngine.options.hierarchical.direction)) ? '→' : '↑' }}</span>
+            <!--<span style="position:absolute; bottom: 0; left: 1rem">
               (seed articles and articles with a minimum rank of
               <select v-model="citationNetworkMinRank" @change="changeCurrentNetworkSettings()">
                 <template v-for="val in [...Array(100).keys()].splice(1)">
@@ -1429,19 +1424,19 @@
               </select>
               are shown)
             </span>-->
-            <span style="position:absolute; bottom: 0px; right: 0px" v-if="citationNetwork?.layoutEngine.options.hierarchical.enabled">{{ (['LR', 'DU'].includes(citationNetwork?.layoutEngine.options.hierarchical.direction)) ? 'older' : 'newer' }} articles {{ (['LR', 'RL'].includes(citationNetwork?.layoutEngine.options.hierarchical.direction)) ? '←' : '↓' }}</span>
+            <span style="position:absolute; bottom: 0; right: 0" v-if="citationNetwork?.layoutEngine.options.hierarchical.enabled">{{ (['LR', 'DU'].includes(citationNetwork?.layoutEngine.options.hierarchical.direction)) ? 'older' : 'newer' }} articles {{ (['LR', 'RL'].includes(citationNetwork?.layoutEngine.options.hierarchical.direction)) ? '←' : '↓' }}</span>
           </b-tab-item>
           <b-tab-item>
             <template slot="header"><h2 class="title is-4">Co-authorship network</h2></template>
             
             <b-loading :is-full-page="false" :active="authorNetworkIsLoading"></b-loading>
             <div id="authorNetwork" style="height: 100%; cursor: pointer;"></div>
-            <span style="position:absolute; top: 0px; left: 10px">
+            <span style="position:absolute; top: 0; left: 1rem">
               <a @click="fullscreenNetwork = !fullscreenNetwork; setTimeout(function () { authorNetwork.fit() }, 1)" title="Toggle network fullscreen">{{ (fullscreenNetwork) ? 'show tables' : 'fullscreen network' }}</a> /
               <a @click="indexFAQ = 'author-network'; showFAQ = true;" href="#author-network">how to read this network</a> /
               <a @click="showAuthorNetworkSettings = true">network settings</a>
             </span>
-            <span style="position:absolute; bottom: 0px; left: 10px">
+            <span style="position:absolute; bottom: 0; left: 1rem">
               (only authors with a minimum of
               <select v-model="authorNetworkMinPublications" @change="changeCurrentNetworkSettings()">
                 <template v-for="val in [...Array(seedArticles.length+1).keys()].splice(1)">
@@ -1459,7 +1454,7 @@
           <div class="container has-text-centered">
             <b-loading :active.sync="isLoading"></b-loading>
             <h2 class="title">
-              Click <b-button @click="clickButtonAdd" rounded type="is-dark" title="Add network based on references from a single source DOI" :disabled="isLoading" style="width: 45px"><span style="font-size: 1.8em; line-height: 0.9 ">+</span></b-button> to enter source DOI<br>or scan a plain text file for DOIs instead <b-upload v-model="file" :disabled="isLoading"><a class="button is-dark is-rounded" title="Scan plain text file for DOIs" :disabled="isLoading" style="width: 45px"><span style="font-size: 1.2em; font-weight: normal">File</span></a></b-upload>!
+              Click <b-button @click="clickButtonAdd" rounded type="is-dark" title="Add network based on references from a single source DOI" :disabled="isLoading" style="width: 3.5rem"><span style="font-size: 1.8em; line-height: 0.9">+</span></b-button> to enter source DOI<br>or scan a plain text file for DOIs instead <b-upload v-model="file" :disabled="isLoading"><a class="button is-dark is-rounded" title="Scan plain text file for DOIs" :disabled="isLoading" style="width: 3.5rem"><span style="font-size: 1.2em; font-weight: normal">File</span></a></b-upload>!
             </h2>
             (<a @click="loadGraphsFromJSON('examples.json')">Load examples</a> or see <a @click="showFAQ=true">Frequently asked questions</a>)
           </div>
@@ -1482,7 +1477,7 @@
                 </b-select>
               </b-field>
               <b-field label="Show source article node" label-position="on-border">
-                <b-select v-model="citationNetworkShowSource" @input="changeCurrentNetworkSettings()" style="width: 150px">
+                <b-select v-model="citationNetworkShowSource" @input="changeCurrentNetworkSettings()" style="width: 15rem">
                   <option :value="false">No</option>
                   <option :value="true">Yes</option>
                 </b-select>
@@ -1491,21 +1486,21 @@
             <b-field grouped>
               <b-field label="Min. degree of Cited Articles" label-position="on-border">
                 <b-input v-model.lazy="minDegreeCitedArticles" type="number" :min="1" :step="1" 
-                  @blur="changeCurrentNetworkSettings()" required style="width: 150px">
+                  @blur="changeCurrentNetworkSettings()" required style="width: 15rem">
               </b-field>
               <b-field label="Max. number of Cited Articles" label-position="on-border">
                 <b-input v-model.lazy="maxCitedArticles" type="number" :min="0" :max="citedArticles.length" :step="1" 
-                  @blur="changeCurrentNetworkSettings()" required style="width: 150px">
+                  @blur="changeCurrentNetworkSettings()" required style="width: 15rem">
               </b-field>
             </b-field>
             <b-field grouped>
               <b-field label="Min. degree of Citing Articles" label-position="on-border">
                 <b-input v-model.lazy="minDegreeCitingArticles" type="number" :min="1" :step="1"
-                  @blur="changeCurrentNetworkSettings()" required style="width: 150px">
+                  @blur="changeCurrentNetworkSettings()" required style="width: 15rem">
               </b-field>
               <b-field label="Max. number of Citing Articles" label-position="on-border">
                 <b-input v-model.lazy="maxCitingArticles" type="number" :min="0" :max="citingArticles.length" :step="1" 
-                  @blur="changeCurrentNetworkSettings()" required style="width: 150px">
+                  @blur="changeCurrentNetworkSettings()" required style="width: 15rem">
               </b-field>
             </b-field>
             <p class="content">
@@ -1535,7 +1530,7 @@
                 </b-select>
               </b-field>
               <b-field label="Show first names" label-position="on-border">
-                <b-select v-model="authorNetworkFirstNames" @input="changeCurrentNetworkSettings()" style="width: 150px">
+                <b-select v-model="authorNetworkFirstNames" @input="changeCurrentNetworkSettings()" style="width: 15rem">
                   <option :value="false">No</option>
                   <option :value="true">Yes</option>
                 </b-select>
@@ -1557,12 +1552,12 @@
           <header class="modal-card-head">
             <content>
               <h3 class="modal-card-title">Import custom list of IDs</h3>
-              <p>One ID per row, usually DOI. Use OpenAlex / Semantic Scholar for PMIDs. Empty rows are placeholders in order to help preserve original numbering.</p>
+              <p>One ID per row, usually DOI. Use OpenAlex / Semantic Scholar for PMIDs (with prefix "pmid:"). Empty rows are placeholders in order to help preserve original numbering.</p>
             </content>
           </header>
-          <section style="position: relative; height:300px">
-            <textarea id="rownumber" disabled style="overflow-y: scroll; height: 100%; width: 80px; text-align: right; position: absolute; padding-right: 35px; color: grey; resize: none; background-color: white; border: 1px darkgrey" onscroll="this.scrollTop = document.getElementById('DOIs').scrollTop" v-model="(listOfIds || []).map((x,i)=>i+1).join('\n')"></textarea>
-            <textarea id="DOIs" style="height: 100%; width: calc(100% - 50px); position: absolute; left: 50px; padding: 0px 5px; resize: none" spellcheck="false" onscroll="document.getElementById('rownumber').scrollTop = this.scrollTop" v-model="editedListOfIds"></textarea>
+          <section style="position: relative; height: 50vh">
+            <textarea id="rownumber" disabled style="overflow-y: scroll; height: 100%; width: 5rem; text-align: right; position: absolute; padding: 0 1.2rem 0 0; color: grey; resize: none; background-color: white; border: solid 1px white" onscroll="this.scrollTop = document.getElementById('DOIs').scrollTop" v-model="(listOfIds || []).map((x,i)=>i+1).join('\n')"></textarea>
+            <textarea id="DOIs" style="height: 100%; width: calc(100% - 4rem); position: absolute; left: 4rem; padding: 0 0.2rem; resize: none; border: solid 1px lightgray" spellcheck="false" onscroll="document.getElementById('rownumber').scrollTop = this.scrollTop" v-model="editedListOfIds"></textarea>
           </section>
           <footer class="modal-card-foot">
             <b-button @click="showOptionsAPI = !showOptionsAPI" style="width: 100%">API: {{ API }} ({{ abbreviateAPI(API) }})</b-button>
@@ -1692,7 +1687,7 @@
                 A <a href="https://en.wikipedia.org/wiki/Bookmarklet" target="_blank">bookmarklet</a> is a small JavaScript program that can be saved as a bookmark in your browser. This particular bookmarklet allows you to open a new network in Local Citation Network directly when surfing many journals' websites (e.g. Nature, Science, Lancet, …) with the advantage that the <a @click="indexFAQ = 'original-order'" href="#original-order">original order</a> of references is preserved. Save the following link as a bookmark (e.g. by dragging it to your bookmarks bar) and then click on it when reading an article:
                 <b-tooltip dashed position="is-bottom" type="is-dark"
                   label="Right-click → 'Bookmark Link'">
-                  <a @click="e => e.preventDefault()" href="javascript:(function(){if(!(sourceDOI=document.querySelector('meta[name=\'citation_doi\']')||document.querySelector('meta[name=\'evt-doiPage\']')||document.querySelector('meta[scheme=\'doi\']')||document.querySelector('meta[name=\'prism.doi\']')))return alert('Unfortunately could not extract source DOI.');sourceDOI=sourceDOI.content.toUpperCase(),(lis=document.querySelectorAll('#references-section ul > li')).length||(lis=document.querySelectorAll('ol.c-article-references > li')),lis.length||(lis=document.querySelectorAll('ol.cit-list > li')),lis.length||(lis=document.querySelectorAll('div.References')),lis.length||(lis=document.querySelectorAll('ol#referenceContent > li')),lis.length||(lis=document.querySelectorAll('ol.referenceList > li')),lis.length||(lis=document.querySelectorAll('.ref-list .ref')),lis.length||(lis=document.querySelectorAll('.references > li')),lis.length||(lis=document.querySelectorAll('li.ref')),lis.length||(lis=document.querySelectorAll('table.references tr')),lis.length||(lis=document.querySelectorAll('.footnotes > ol > li')),lis.length||(lis=document.querySelectorAll('.reference')),lis.length||(lis=document.querySelectorAll('#bibliography .citation')),lis.length||(lis=document.querySelectorAll('ol#top-cited-list-1 > li')),lis.length||(lis=document.querySelectorAll('.text-base-md-lh div.reference-container')),(listOfReferences=Array.from(lis).map(e=>(id=decodeURIComponent(e.innerHTML).match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi))?id&&id.map(e=>e.toUpperCase()).filter(e=>e!==sourceDOI)[0]:((pubmed_a=e.querySelectorAll('a.reference-link:not([href*=\'pmc\'])')).length&&pubmed_a[0].attributes['data-ga-action']?id=pubmed_a[0].attributes['data-ga-action'].value:(a=e.querySelectorAll('a[href*=\'ncbi.nlm.nih.gov\']:not([href*=\'pmc\'])')).length&&(id=a[0].attributes.href.value.match(/\d+/g)[0]),id)?'pmid:'+id:void 0)).length?window.open('https://LocalCitationNetwork.github.io?source='+sourceDOI+'&listOfIds='+listOfReferences.join(',')+'&bookmarkletURL='+document.URL):alert('Unfortunately could not extract references.')}())">
+                  <a @click="e => e.preventDefault()" href="javascript:(function(){if(!(sourceDOI=document.querySelector('meta[name=\'citation_doi\']')||document.querySelector('meta[name=\'evt-doiPage\']')||document.querySelector('meta[scheme=\'doi\']')||document.querySelector('meta[name=\'prism.doi\']')))return alert('Unfortunately could not extract source DOI.');sourceDOI=sourceDOI.content.toUpperCase(),(lis=document.querySelectorAll('#references-section ul > li')).length||(lis=document.querySelectorAll('ol.c-article-references > li')),lis.length||(lis=document.querySelectorAll('ol.cit-list > li')),lis.length||(lis=document.querySelectorAll('div.References')),lis.length||(lis=document.querySelectorAll('ol#referenceContent > li')),lis.length||(lis=document.querySelectorAll('ol.referenceList > li')),lis.length||(lis=document.querySelectorAll('.ref-list .ref')),lis.length||(lis=document.querySelectorAll('.references > li')),lis.length||(lis=document.querySelectorAll('li.ref')),lis.length||(lis=document.querySelectorAll('table.references tr')),lis.length||(lis=document.querySelectorAll('.footnotes > ol > li')),lis.length||(lis=document.querySelectorAll('.reference')),lis.length||(lis=document.querySelectorAll('#bibliography .citation')),lis.length||(lis=document.querySelectorAll('ol#top-cited-list-1 > li')),lis.length||(lis=document.querySelectorAll('.text-base-md-lh div.reference-container')),(listOfReferences=Array.from(lis).map(e=>(id=decodeURIComponent(encodeURIComponent(e.innerHTML)).match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi))?id&&id.map(e=>e.toUpperCase()).filter(e=>e!==sourceDOI)[0]:((pubmed_a=e.querySelectorAll('a.reference-link:not([href*=\'pmc\'])')).length&&pubmed_a[0].attributes['data-ga-action']?id=pubmed_a[0].attributes['data-ga-action'].value:(a=e.querySelectorAll('a[href*=\'ncbi.nlm.nih.gov\']:not([href*=\'pmc\'])')).length&&(id=a[0].attributes.href.value.match(/\d+/g)[0]),id)?'pmid:'+id:void 0)).length?window.open('https://LocalCitationNetwork.github.io?source='+sourceDOI+'&listOfIds='+listOfReferences.join(',')+'&bookmarkletURL='+document.URL):alert('Unfortunately could not extract references.')}())">
                     Open in Local Citation Network
                   </a>
                 </b-tooltip>

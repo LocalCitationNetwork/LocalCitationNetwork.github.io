@@ -38,13 +38,13 @@ javascript:(function () {
   listOfReferences = Array.from(lis).map(x => {
     // Regular expression adapted from Crossref's recommendation (https://www.crossref.org/blog/dois-and-matching-regular-expressions/)
     // Using the set [-_;()/:A-Z0-9] twice (fullstop . and semicolon ; only in first set) makes sure that the trailing character is neither a fullstop nor semicolon
-    id = decodeURIComponent(x.innerHTML).match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi)
+    id = decodeURIComponent(encodeURIComponent(x.innerHTML)).match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+[-_()/:A-Z0-9]+/gi)
     if (id) {
       // Make sure DOI fetched for this reference is not sourceDOI
       return (id && id.map(id => id.toUpperCase()).filter(id => id !== sourceDOI)[0])
       // If no DOI try PMID
     } else {
-      // Try to fet PMID from pubmed itself
+      // Try to get PMID from pubmed itself
       pubmed_a = x.querySelectorAll('a.reference-link:not([href*=\'pmc\'])')
       if (pubmed_a.length && pubmed_a[0].attributes['data-ga-action']) {
         id = pubmed_a[0].attributes['data-ga-action'].value
