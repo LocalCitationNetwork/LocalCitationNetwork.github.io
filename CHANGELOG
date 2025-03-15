@@ -1,3 +1,9 @@
+15.03.2025 v1.29
+* Slightly increased standard font size from 9pt to 10pt for better readability.
+* Made CSS layout more flexible by replacing most px measures in rem.
+* Bumped vis.js Network to newest versions.
+! Fixed bugmarklet, in rare cases decodeURIComponent(x.innerHTML) caused an "URIError: malformed URI sequence" (e.g. on https://doi.org/10.1177/13524585251316242)
+
 02.02.2025 v1.28
 * Some adaptations for better integration with the awesome Zotero Cita plugin: https://github.com/diegodlh/zotero-cita.
 * Slightly changed linkToShareAppendix() logic.
