@@ -2266,3 +2266,24 @@ const vm = new Vue({
     }
   }
 })
+
+// As Cita's LCN window doesn't support native browser-like zooming with [Ctrl]+[+] / [Ctrl]+[-] / [Ctrl]+[0], imitate it by adjusting document's fontSize
+const defaultFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize)
+document.addEventListener("keydown", function (e) {
+  // Check that Ctrl is held down (skip if Alt or Meta are pressed)
+  if (e.ctrlKey && !e.altKey && !e.metaKey) {
+      let currentFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize)
+      if (e.key === '+' || e.key === '=') {
+          e.preventDefault()
+          currentFontSize += 1
+      } else if (e.key === '-') {
+          e.preventDefault()
+          currentFontSize -= 1
+      } else if (e.key === '0') {
+          e.preventDefault()
+          currentFontSize = defaultFontSize
+      }
+      currentFontSize = Math.max(8, Math.min(currentFontSize, 32))
+      document.documentElement.style.fontSize = currentFontSize + "px"
+  }
+})
