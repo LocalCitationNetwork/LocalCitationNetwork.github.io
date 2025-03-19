@@ -116,7 +116,7 @@
       }
 
       .mdi-chevron-left:before {
-        content: "❰";
+        content: "❮";
         font-style: normal;
       }
 
@@ -530,20 +530,18 @@
               <p v-if="currentGraph.API === 'Zotero Cita'">
                 {{ getString('incoming-suggestions.info') }}
               </p>
-              <template v-else>
-                <p>
-                  Cited Articles (▲) are cited by the Seed Articles, i.e., Cited Articles are among the Seed Articles' references. They tend to be older than most Seed Articles. They are derived through <a href="https://doi.org/10.1136/bmj-2023-078384" title="Terminology from: Guidance on terminology, application, and reporting of citation searching: the TARCiS statement" target="_blank">direct backward citation searching</a> (backward in time). They are sorted by the number of Seed Articles they are cited by, with the <a @click="indexFAQ = 'top-cited'; showFAQ = true;" href="#top-cited">Top Cited</a> listed at the top.
-                  <template v-if="currentGraph.ricsRankCutoff">
-                    Ranked (In)Direct Citation Searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}
-                  </template>
-                </p>
-                <p v-if="(currentGraph.API === 'Co*Citation Network via OpenAlex') || (currentGraph.allCited)">
-                  <a @click="$set(currentGraph, 'deDuplicate', !currentGraph.deDuplicate)">{{ (!currentGraph.deDuplicate) ? 'Currently not de-duplicated against Seed Articles (click to toggle).' : 'Currently de-duplicated against Seed Articles (click to toggle).' }}</a>
-                </p>
-                <p v-else>
-                  Top Cited are de-duplicated against Seed Articles.
-                </p>
-              </template>
+              <p v-else>
+                Cited Articles (▲) are cited by the Seed Articles, i.e., Cited Articles are among the Seed Articles' references. They tend to be older than most Seed Articles. They are derived through <a href="https://doi.org/10.1136/bmj-2023-078384" title="Terminology from: Guidance on terminology, application, and reporting of citation searching: the TARCiS statement" target="_blank">direct backward citation searching</a> (backward in time). They are sorted by the number of Seed Articles they are cited by, with the <a @click="indexFAQ = 'top-cited'; showFAQ = true;" href="#top-cited">Top Cited</a> listed at the top.
+                <template v-if="currentGraph.ricsRankCutoff">
+                  Ranked (In)Direct Citation Searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}
+                </template>
+              </p>
+              <p v-if="(currentGraph.API === 'Co*Citation Network via OpenAlex') || (currentGraph.allCited)">
+                <a @click="$set(currentGraph, 'deDuplicate', !currentGraph.deDuplicate)">{{ (!currentGraph.deDuplicate) ? 'Currently not de-duplicated against Seed Articles (click to toggle).' : 'Currently de-duplicated against Seed Articles (click to toggle).' }}</a>
+              </p>
+              <p v-else>
+                Top Cited are de-duplicated against Seed Articles.
+              </p>
             </div>
             <b-field>
               <b-select v-model="filterColumn">
@@ -983,7 +981,7 @@
             </p>
             <b-field><b-checkbox v-model="exportArticles" native-value="seedArticles">Seed Articles ({{ seedArticles?.length }})</b-checkbox></b-field>
             <b-field><b-checkbox v-model="exportArticles" native-value="citedArticlesDeDuplicated">Cited Articles ({{ citedArticlesDeDuplicated?.length }})</b-checkbox></b-field>
-            <b-field><b-checkbox v-model="exportArticles" native-value="citingArticlesDeDuplicated">Citing Articles ({{ citingArticlesDeDuplicated?.length }})</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticles" native-value="citingArticlesDeDuplicated" v-if="currentGraph.citingArticles?.length">Citing Articles ({{ citingArticlesDeDuplicated?.length }})</b-checkbox></b-field>
             <b-field><b-checkbox v-model="exportArticles" native-value="coCitedArticlesDeDuplicated" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Cited Articles ({{ coCitedArticlesDeDuplicated?.length }})</b-checkbox></b-field>
             <b-field><b-checkbox v-model="exportArticles" native-value="coCitingArticlesDeDuplicated" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Citing Articles ({{ coCitingArticlesDeDuplicated?.length }})</b-checkbox></b-field>
           </div>
