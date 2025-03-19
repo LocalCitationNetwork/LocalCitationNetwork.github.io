@@ -575,7 +575,7 @@
               :paginated="citedArticlesFiltered.length > articlesPerPage" :per-page="articlesPerPage" pagination-position="both">
               <template slot="detail" slot-scope="props">
                 <p class="content">
-                  <b-button v-if="(props.row.referencesCount || props.row.references?.length) && !props.row.isSource"
+                  <b-button v-if="(props.row.referencesCount || props.row.references?.length) && !props.row.isSource && API !== 'Zotero Cita'" 
                     @click.stop="clickOpenReferences(props.row)"
                     :disabled="isLoading">
                     Add network for references
