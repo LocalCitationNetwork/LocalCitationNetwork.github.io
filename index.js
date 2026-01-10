@@ -174,7 +174,7 @@ function semanticScholarResponseToArticleArray (data) {
       numberInSourceReferences: data.indexOf(article) + 1,
       doi,
       type: article.publicationTypes,
-      title: article.title || '',
+      title: (article.title || '').replace(/\s+|<br>/g, ' ').trim(),
       authors: (article.authors || []).map(author => {
         const cutPoint = (author.name.lastIndexOf(',') !== -1) ? author.name.lastIndexOf(',') : author.name.lastIndexOf(' ')
         return {
@@ -298,7 +298,7 @@ function openAlexResponseToArticleArray (data) {
       numberInSourceReferences: data.indexOf(article) + 1,
       doi,
       type: article.type,
-      title: article.title || '',
+      title: (article.title || '').replace(/\s+|<br>/g, ' ').trim(),
       authors: (article.authorships || []).map(authorship => {
         const display_name = authorship.author.display_name || ''
         const cutPoint = (display_name.lastIndexOf(',') !== -1) ? display_name.lastIndexOf(',') : display_name.lastIndexOf(' ')
@@ -363,7 +363,7 @@ function coCitationNetworkResponseToArticleArray (data) {
       numberInSourceReferences: Object.keys(data).indexOf(articleId) + 1,
       doi,
       type: article.type,
-      title: article.title || '',
+      title: (article.title || '').replace(/\s+|<br>/g, ' ').trim(),
       authors: Object.keys((article.authors || {})).map(authorId => {
         const author = article.authors[authorId]
         const display_name = author.display_name || ''
@@ -452,7 +452,7 @@ function crossrefResponseToArticleArray (data) {
       numberInSourceReferences: data.indexOf(article) + 1,
       doi,
       type: article.type,
-      title: String(article.title), // most of the time title is an array with length=1, but I've also seen pure strings
+      title: String(article.title).replace(/\s+|<br>/g, ' ').trim(), // most of the time title is an array with length=1, but I've also seen pure strings
       authors: (article.author?.length)
         ? article.author.map(x => ({
           orcid: x.ORCID,
@@ -474,7 +474,7 @@ function crossrefResponseToArticleArray (data) {
 }
 
 /* OpenCitations API */
-// https://opencitations.net/index/api/v1#/metadata/{dois}
+// https://opencitations.net/index/api/v1#/metadata/{dois} // seems discontinued - even example does not work?!
 
 async function openCitationsWrapper (ids, responseFunction, phase) {
   const responses = []
@@ -517,7 +517,7 @@ function openCitationsResponseToArticleArray (data) {
       id: doi,
       numberInSourceReferences: data.indexOf(article) + 1,
       doi,
-      title: String(article.title), // most of the time title is an array with length=1, but I've also seen pure strings
+      title: String(article.title).replace(/\s+|<br>/g, ' ').trim(), // most of the time title is an array with length=1, but I've also seen pure strings
       authors: article.author?.split('; ').map(x => ({ LN: x.split(', ')[0], FN: x.split(', ')[1] })) ?? [],
       year: Number(article.year?.substr(0, 4)) || undefined,
       date: article.year, // is apparerently sometimes date not only year
