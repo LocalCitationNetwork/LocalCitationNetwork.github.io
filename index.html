@@ -306,17 +306,9 @@
                     @click="showArticlesTab='citedArticlesTab'; filterColumn='citedBySeedArticleId'; filterString=props.row.id">
                     Filter Cited ({{ citedBySeedArticleId(citedArticles, props.row.id).length }})
                   </b-button>
-                  <b-button v-if="citingArticles.length && ((currentGraph.allCiting) ? props.row.citationsCount : citesSeedArticleId(citingArticles, props.row.id).length)"
-                    @click="showArticlesTab='citingArticlesTab'; filterColumn='citesSeedArticleId'; filterString=props.row.id">
-                    Filter Citing ({{ citesSeedArticleId(citingArticles, props.row.id).length }})
-                  </b-button>
-                  <b-button v-if="citingCount(props.row.id)"
-                    @click="showArticlesTab='seedArticlesTab'; filterColumn='citedById'; filterString=props.row.id">
-                    Filter Seed Articles cited by this ({{ citingCount(props.row.id) }})
-                  </b-button>
-                  <b-button v-if="citedCount(props.row.id)"
-                    @click="showArticlesTab='seedArticlesTab'; filterColumn='citingId'; filterString=props.row.id">
-                    Filter Seed Articles citing this ({{ citedCount(props.row.id) }})
+                  <b-button v-if="citingArticles.length && ((currentGraph.allCiting) ? props.row.citationsCount : citingSeedArticleId(citingArticles, props.row.id).length)"
+                    @click="showArticlesTab='citingArticlesTab'; filterColumn='citingSeedArticleId'; filterString=props.row.id">
+                    Filter Citing ({{ citingSeedArticleId(citingArticles, props.row.id).length }})
                   </b-button>
                 </p>
                 <p class="content" v-if="props.row.authors.length">
@@ -436,7 +428,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="Cited" meta="In-Degree: Cited by how many Seed Articles" :visible="showColumns.includes('citedCount')"
+              <b-table-column label="Cited" meta="Cited by how many Seed Articles (incoming local citations)" :visible="showColumns.includes('citedCount')"
                 sortable :custom-sort="sortCitedWrapper" field="citedCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -444,12 +436,14 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="In-Degree: Cited by how many Seed Articles" dashed position="is-left" type="is-dark">
-                    {{ citedCount(props.row.id) }}
+                  <b-tooltip label="Cited by how many Seed Articles (incoming local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
+                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citingId'; filterString=props.row.id">
+                      {{ citedCount(props.row.id) }}
+                    </a>
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="Citing" meta="Out-Degree: Citing how many Seed Articles" :visible="showColumns.includes('citingCount')"
+              <b-table-column label="Citing" meta="Citing how many Seed Articles (outgoing local citations)" :visible="showColumns.includes('citingCount')"
                 sortable :custom-sort="sortCitingWrapper" field="citingCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -457,8 +451,10 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="Out-Degree: Citing how many Seed Articles" dashed position="is-left" type="is-dark">
-                    {{ citingCount(props.row.id) }}
+                  <b-tooltip label="Citing how many Seed Articles (outgoing local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
+                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citedById'; filterString=props.row.id">
+                      {{ citingCount(props.row.id) }}
+                    </a>
                   </b-tooltip>
                 </template>
               </b-table-column>
@@ -598,14 +594,6 @@
                     :disabled="isLoading">
                     Add network for references
                   </b-button>
-                  <b-button v-if="citingCount(props.row.id)"
-                    @click="showArticlesTab='seedArticlesTab'; filterColumn='citedById'; filterString=props.row.id">
-                    Filter Seed Articles cited by this ({{ citingCount(props.row.id) }})
-                  </b-button>
-                  <b-button v-if="citedCount(props.row.id)"
-                    @click="showArticlesTab='seedArticlesTab'; filterColumn='citingId'; filterString=props.row.id">
-                    Filter Seed Articles citing this ({{ citedCount(props.row.id) }})
-                  </b-button>
                 </p>
                 <p class="content" v-if="props.row.authors.length">
                   <b>Authors ({{ props.row.authors.length }}):</b>
@@ -707,7 +695,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="Cited" meta="In-Degree: Cited by how many Seed Articles" :visible="showColumns.includes('citedCount')"
+              <b-table-column label="Cited" meta="Cited by how many Seed Articles (incoming local citations)" :visible="showColumns.includes('citedCount')"
                 sortable :custom-sort="sortCitedWrapper" field="citedCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -715,12 +703,14 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="In-Degree: Cited by how many Seed Articles" dashed position="is-left" type="is-dark">
-                    {{ citedCount(props.row.id) }}
+                  <b-tooltip label="Cited by how many Seed Articles (incoming local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
+                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citingId'; filterString=props.row.id">
+                      {{ citedCount(props.row.id) }}
+                    </a>
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="Citing" meta="Out-Degree: Citing how many Seed Articles" :visible="showColumns.includes('citingCount')"
+              <b-table-column label="Citing" meta="Citing how many Seed Articles (outgoing local citations)" :visible="showColumns.includes('citingCount')"
                 sortable :custom-sort="sortCitingWrapper" field="citingCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -728,8 +718,10 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="Out-Degree: Citing how many Seed Articles" dashed position="is-left" type="is-dark">
-                    {{ citingCount(props.row.id) }}
+                  <b-tooltip label="Citing how many Seed Articles (outgoing local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
+                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citedById'; filterString=props.row.id">
+                      {{ citingCount(props.row.id) }}
+                    </a>
                   </b-tooltip>
                 </template>
               </b-table-column>
@@ -815,7 +807,7 @@
                 <option value="authors">Authors</option>
                 <option value="year">Year</option>
                 <option value="journal">Journal</option>
-                <option value="citesSeedArticleId">Citing ID</option>
+                <option value="citingSeedArticleId">Citing ID</option>
               </b-select>
               <b-input v-model="filterString" icon="magnify" placeholder="Filter Articles…" expanded
                 :icon-right="filterString ? 'close' : undefined"
@@ -868,14 +860,6 @@
                     @click.stop="clickOpenReferences(props.row)"
                     :disabled="isLoading">
                     Add network for references
-                  </b-button>
-                  <b-button v-if="citingCount(props.row.id)"
-                    @click="showArticlesTab='seedArticlesTab'; filterColumn='citedById'; filterString=props.row.id">
-                    Filter Seed Articles cited by this ({{ citingCount(props.row.id) }})
-                  </b-button>
-                  <b-button v-if="citedCount(props.row.id)"
-                    @click="showArticlesTab='seedArticlesTab'; filterColumn='citingId'; filterString=props.row.id">
-                    Filter Seed Articles citing this ({{ citedCount(props.row.id) }})
                   </b-button>
                 </p>
                 <p class="content" v-if="props.row.authors.length">
@@ -978,7 +962,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="Cited" meta="In-Degree: Cited by how many Seed Articles" :visible="showColumns.includes('citedCount')"
+              <b-table-column label="Cited" meta="Cited by how many Seed Articles (incoming local citations)" :visible="showColumns.includes('citedCount')"
                 sortable :custom-sort="sortCitedWrapper" field="citedCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -986,12 +970,14 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="In-Degree: Cited by how many Seed Articles" dashed position="is-left" type="is-dark">
-                    {{ citedCount(props.row.id) }}
+                  <b-tooltip label="Cited by how many Seed Articles (incoming local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
+                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citingId'; filterString=props.row.id">
+                      {{ citedCount(props.row.id) }}
+                    </a>
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="Citing" meta="Out-Degree: Citing how many Seed Articles" :visible="showColumns.includes('citingCount')"
+              <b-table-column label="Citing" meta="Citing how many Seed Articles (outgoing local citations)" :visible="showColumns.includes('citingCount')"
                 sortable :custom-sort="sortCitingWrapper" field="citingCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -999,8 +985,10 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="Out-Degree: Citing how many Seed Articles" dashed position="is-left" type="is-dark">
-                    {{ citingCount(props.row.id) }}
+                  <b-tooltip label="Citing how many Seed Articles (outgoing local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
+                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citedById'; filterString=props.row.id">
+                      {{ citingCount(props.row.id) }}
+                    </a>
                   </b-tooltip>
                 </template>
               </b-table-column>
@@ -1137,14 +1125,6 @@
                     :disabled="isLoading">
                     Add network for references
                   </b-button>
-                  <b-button v-if="citingCount(props.row.id)"
-                    @click="showArticlesTab='seedArticlesTab'; filterColumn='citedById'; filterString=props.row.id">
-                    Filter Seed Articles cited by this ({{ citingCount(props.row.id) }})
-                  </b-button>
-                  <b-button v-if="citedCount(props.row.id)"
-                    @click="showArticlesTab='seedArticlesTab'; filterColumn='citingId'; filterString=props.row.id">
-                    Filter Seed Articles citing this ({{ citedCount(props.row.id) }})
-                  </b-button>
                 </p>
                 <p class="content" v-if="props.row.authors.length">
                   <b>Authors ({{ props.row.authors.length }}):</b>
@@ -1246,7 +1226,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="Cited" meta="In-Degree: Cited by how many Seed Articles" :visible="showColumns.includes('citedCount')"
+              <b-table-column label="Cited" meta="Cited by how many Seed Articles (incoming local citations)" :visible="showColumns.includes('citedCount')"
                 sortable :custom-sort="sortCitedWrapper" field="citedCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -1254,12 +1234,14 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="In-Degree: Cited by how many Seed Articles" dashed position="is-left" type="is-dark">
-                    {{ citedCount(props.row.id) }}
+                  <b-tooltip label="Cited by how many Seed Articles (incoming local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
+                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citingId'; filterString=props.row.id">
+                      {{ citedCount(props.row.id) }}
+                    </a>
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="Citing" meta="Out-Degree: Citing how many Seed Articles" :visible="showColumns.includes('citingCount')"
+              <b-table-column label="Citing" meta="Citing how many Seed Articles (outgoing local citations)" :visible="showColumns.includes('citingCount')"
                 sortable :custom-sort="sortCitingWrapper" field="citingCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -1267,8 +1249,10 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="Out-Degree: Citing how many Seed Articles" dashed position="is-left" type="is-dark">
-                    {{ citingCount(props.row.id) }}
+                  <b-tooltip label="Citing how many Seed Articles (outgoing local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
+                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citedById'; filterString=props.row.id">
+                      {{ citingCount(props.row.id) }}
+                    </a>
                   </b-tooltip>
                 </template>
               </b-table-column>
@@ -1405,14 +1389,6 @@
                     :disabled="isLoading">
                     Add network for references
                   </b-button>
-                  <b-button v-if="citingCount(props.row.id)"
-                    @click="showArticlesTab='seedArticlesTab'; filterColumn='citedById'; filterString=props.row.id">
-                    Filter Seed Articles cited by this ({{ citingCount(props.row.id) }})
-                  </b-button>
-                  <b-button v-if="citedCount(props.row.id)"
-                    @click="showArticlesTab='seedArticlesTab'; filterColumn='citingId'; filterString=props.row.id">
-                    Filter Seed Articles citing this ({{ citedCount(props.row.id) }})
-                  </b-button>
                 </p>
                 <p class="content" v-if="props.row.authors.length">
                   <b>Authors ({{ props.row.authors.length }}):</b>
@@ -1514,7 +1490,7 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="Cited" meta="In-Degree: Cited by how many Seed Articles" :visible="showColumns.includes('citedCount')"
+              <b-table-column label="Cited" meta="Cited by how many Seed Articles (incoming local citations)" :visible="showColumns.includes('citedCount')"
                 sortable :custom-sort="sortCitedWrapper" field="citedCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -1522,12 +1498,14 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="In-Degree: Cited by how many Seed Articles" dashed position="is-left" type="is-dark">
-                    {{ citedCount(props.row.id) }}
+                  <b-tooltip label="Cited by how many Seed Articles (incoming local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
+                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citingId'; filterString=props.row.id">
+                      {{ citedCount(props.row.id) }}
+                    </a>
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column label="Citing" meta="Out-Degree: Citing how many Seed Articles" :visible="showColumns.includes('citingCount')"
+              <b-table-column label="Citing" meta="Citing how many Seed Articles (outgoing local citations)" :visible="showColumns.includes('citingCount')"
                 sortable :custom-sort="sortCitingWrapper" field="citingCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
@@ -1535,8 +1513,10 @@
                   </b-tooltip>
                 </template>
                 <template v-slot="props">
-                  <b-tooltip label="Out-Degree: Citing how many Seed Articles" dashed position="is-left" type="is-dark">
-                    {{ citingCount(props.row.id) }}
+                  <b-tooltip label="Citing how many Seed Articles (outgoing local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
+                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citedById'; filterString=props.row.id">
+                      {{ citingCount(props.row.id) }}
+                    </a>
                   </b-tooltip>
                 </template>
               </b-table-column>

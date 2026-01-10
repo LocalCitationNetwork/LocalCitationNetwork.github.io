@@ -1389,7 +1389,7 @@ const vm = new Vue({
       if (
         (this.showArticlesTab !== 'seedArticlesTab' && ['citedById', 'citingId'].includes(this.filterColumn)) ||
         (this.showArticlesTab !== 'citedArticlesTab' && this.filterColumn === 'citedBySeedArticleId') ||
-        (this.showArticlesTab !== 'citingArticlesTab' && this.filterColumn === 'citesSeedArticleId')
+        (this.showArticlesTab !== 'citingArticlesTab' && this.filterColumn === 'citingSeedArticleId')
       ) {
         this.filterColumn = 'titleAbstract'
         this.filterString = ''
@@ -1806,7 +1806,7 @@ const vm = new Vue({
           a = secondSortColumn(articleA)
           b = secondSortColumn(articleB)
         }
-        return (a ?? ((typeof(b) === 'string') ? '0' : 0)) > (b ?? ((typeof(a) === 'string') ? '0' : 0))
+        return (a ?? ((typeof(b) === 'string') ? '0' : -1)) > (b ?? ((typeof(a) === 'string') ? '0' : -1))
       }
       return (ascending) ? compare(a, b) : compare(b, a)
     },
@@ -1923,8 +1923,8 @@ const vm = new Vue({
           return articles.filter(article => ids?.includes(article.id))
         case 'citedBySeedArticleId':
           return this.citedBySeedArticleId(articles, this.filterString)
-        case 'citesSeedArticleId':
-          return this.citesSeedArticleId(articles, this.filterString)
+        case 'citingSeedArticleId':
+          return this.citingSeedArticleId(articles, this.filterString)
         default:
           return articles
       }
@@ -1933,7 +1933,7 @@ const vm = new Vue({
       const ids = this.seedArticles[this.seedArticlesIds.indexOf(seedArticleId)]?.references
       return articles.filter(article => ids?.includes(article.id))
     },
-    citesSeedArticleId: function (articles, seedArticleId) {
+    citingSeedArticleId: function (articles, seedArticleId) {
       return articles.filter(article => article.references?.includes(seedArticleId))
     },
     authorString: function (authors) {
