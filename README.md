@@ -1,8 +1,8 @@
-# Local-Citation-Network
+# Local Citation Network
 
-This web app aims to help scientists with their literature review using metadata from [OpenAlex](https://openalex.org/) (OA), [Semantic Scholar](https://semanticscholar.org/) (S2) and [Crossref](https://crossref.org/) (CR). Academic papers cite one another, thus creating a [citation network (= graph)](https://en.wikipedia.org/wiki/Citation_graph). Each node (= vertex) represents an article and each edge (= link / arrow) represents a reference / citation. Citation graphs are a topic of [bibliometrics, for which other great software exists as well](https://localcitationnetwork.github.io/#bibliometrics).
+This web app aims to help scientists with their literature review using data from [OpenAlex](https://openalex.org/) (OA), [Semantic Scholar](https://semanticscholar.org/) (S2), [OpenCitations](https://opencitations.net/) (OC), [Crossref](https://crossref.org/) (CR) or [Zotero Cita](https://github.com/zotero-cita/zotero-cita/). Academic papers cite one another, thus creating a [citation network (= graph)](https://en.wikipedia.org/wiki/Citation_graph). Each node (= vertex) represents an article and each edge (= link / arrow) represents a citation. Citation networks are a topic of [bibliometrics, for which other great software exists as well](https://localcitationnetwork.github.io/#bibliometrics).
 
-This web app visualizes subsets of the global citation network that I call 'local citation networks', defined by the references (and citations) of a given set of input articles. In addition, the locally most relevant references (and citations) missing in the set of input articles are suggested for further review. 
+Local Citation Network visualizes subsets of the global citation network, defined by the cited (and citing) articles of a given set of seed articles. The locally most relevant articles missing in the set of seed articles are suggested for further review.
 
 ## Open source contributions
 

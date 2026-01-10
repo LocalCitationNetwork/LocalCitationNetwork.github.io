@@ -1,3 +1,6 @@
+v1.30
++ Add "Show Columns" dropdown and add new optional "Journal" column, combine with moved "Show x Rows / Page" select in table-props "top-left" slot.
+
 15.03.2025 v1.29
 * Slightly increased standard font size from 9pt to 10pt for better readability.
 * Made CSS layout more flexible by replacing most px measures in rem.
@@ -5,7 +8,7 @@
 ! Fixed bugmarklet, in rare cases decodeURIComponent(x.innerHTML) caused an "URIError: malformed URI sequence" (e.g. on https://doi.org/10.1177/13524585251316242)
 
 02.02.2025 v1.28
-* Some adaptations for better integration with the awesome Zotero Cita plugin: https://github.com/diegodlh/zotero-cita.
+* Some adaptations for better integration with the awesome Zotero Cita plugin: https://github.com/zotero-cita/zotero-cita.
 * Slightly changed linkToShareAppendix() logic.
 * Added downloadFile function.
 ! Fixed physics of Co-authorship network by reverting to default barnesHut configuration.

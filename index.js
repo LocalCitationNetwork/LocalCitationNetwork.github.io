@@ -1015,6 +1015,7 @@ const vm = new Vue({
     // UI
     fullscreenTable: false,
     fullscreenNetwork: false,
+    showColumns: ['numberInSourceReferences', 'title', 'author', 'year', 'totalCitedCount', 'totalCitingCount', 'citedCount', 'citingCount', 'coCitedCount', 'coCitingCount', 'rank'],
     filterColumn: 'titleAbstract',
     filterString: undefined,
     selectedSeedArticle: undefined,
