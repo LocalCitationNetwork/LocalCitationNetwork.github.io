@@ -6,7 +6,7 @@
 
 'use strict'
 
-const localCitationNetworkVersion = 1.29
+const localCitationNetworkVersion = 1.30
 
 const arrSum = arr => arr.reduce((a, b) => a + b, 0)
 const arrAvg = arr => arrSum(arr) / arr.length
