@@ -173,7 +173,7 @@
             <b-navbar-item tag="li"><b-upload v-model="file" :disabled="isLoading"><a class="button is-dark is-rounded" title="Scan plain text file for DOIs" :disabled="isLoading" style="margin: 0 0 0.5rem 0"><span style="font-size: 1.2em">File</span></a></b-upload></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="clickCloseAllTabs" rounded type="is-dark" title="Close all tabs" :disabled="!graphs.length"><span style="font-size: 1.2em">Close</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="clickToggleAutosave" rounded :type="(autosaveResults) ? '' : 'is-dark'" title="Autosave results locally (only up to 100 References & Citations are kept because of space constraints - if all are needed, use 'download full network: JSON')"><span style="font-size: 1.2em">Save</span></b-button></b-navbar-item>
-            <b-navbar-item tag="li"><b-button @click="showOptionsAPI = !showOptionsAPI" rounded type="is-dark" title="API Options: OpenAlex (OA) / Semantic Scholar (S2) / OpenCitations (OC) / Crossref (CR)" :disabled="isLoading"><span  style="font-size: 1.2em">{{ abbreviateAPI(API) }}</span></b-button></b-navbar-item>
+            <b-navbar-item tag="li"><b-button @click="showOptionsAPI = !showOptionsAPI" rounded type="is-dark" title="API Options: OpenAlex (OA) / Semantic Scholar (S2) / Crossref (CR)" :disabled="isLoading"><span  style="font-size: 1.2em">{{ abbreviateAPI(API) }}</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="showFAQ = !showFAQ" rounded type="is-dark" title="Frequently asked questions"><span style="font-size: 1.8em">?</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><a @click="indexFAQ = 'contact'; showFAQ = true;" href="#contact" class="button is-dark is-rounded" title="Contact app creator"><span style="font-size: 1.2em">Mail</span></a></b-navbar-item>
           </ul>
@@ -1732,14 +1732,14 @@
           </header>
           <div class="card-content">
             <p class="content">
-              Cited Articles (References) can be retrieved through all <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">APIs</a>. Citing Articles (Citations) can be retrieved through OpenAlex (OA), Semantic Scholar (S2) and OpenCitations (OC). <a @click="indexFAQ = 'top-cited'; showFAQ = true;" href="#top-cited">Top Cited</a> are the most cited references by the Seed Articles. <a @click="indexFAQ = 'top-citing'; showFAQ = true;" href="#top-citing">Top Citing</a> are citing the most Seed Articles. Retrieving All Cited (i.e. references) / All Citing (i.e. citations) works best with OpenAlex (OA) & Semantic Scholar (S2).
+              Cited Articles (References) can be retrieved through all <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">APIs</a>. Citing Articles (Citations) can be retrieved through OpenAlex (OA) and Semantic Scholar (S2). <a @click="indexFAQ = 'top-cited'; showFAQ = true;" href="#top-cited">Top Cited</a> are the most cited references by the Seed Articles. <a @click="indexFAQ = 'top-citing'; showFAQ = true;" href="#top-citing">Top Citing</a> are citing the most Seed Articles. Retrieving All Cited (i.e. references) / All Citing (i.e. citations) works best with OpenAlex (OA) & Semantic Scholar (S2).
             </p>
             <b-field grouped>
               <b-field label="Select API">
                 <b-select v-model="API" @input="saveState(false)">
                   <option value="OpenAlex">OpenAlex (OA)</option>
                   <option value="Semantic Scholar">Semantic Scholar (S2)</option>
-                  <option value="OpenCitations">OpenCitations (OC)</option>
+                  <!--<option value="OpenCitations">OpenCitations (OC)</option>-->
                   <option value="Crossref">Crossref (CR)</option>
                 </b-select>
               </b-field>
