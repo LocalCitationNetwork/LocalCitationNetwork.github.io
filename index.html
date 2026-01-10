@@ -170,9 +170,9 @@
         <template slot="end">
           <ul class="buttons">
             <b-navbar-item tag="li"><b-button @click="clickButtonAdd" rounded type="is-dark" title="Add network based on references from a single source DOI" :disabled="isLoading"><span style="font-size: 1.8em; line-height: 0.9 ">+</span></b-button></b-navbar-item>
-            <b-navbar-item tag="li"><b-upload v-model="file" :disabled="isLoading"><a class="button is-dark is-rounded" title="Scan plain text file for DOIs" :disabled="isLoading" style="margin: 0 0 0.5rem 0"><span style="font-size: 1.2em">File</span></a></b-upload></b-navbar-item>
+            <b-navbar-item tag="li"><b-upload v-model="file" :disabled="isLoading"><a class="button is-dark is-rounded" title="Reload downloaded network from JSON or scan plain text file for DOIs" :disabled="isLoading" style="margin: 0 0 0.5rem 0"><span style="font-size: 1.2em">File</span></a></b-upload></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="clickCloseAllTabs" rounded type="is-dark" title="Close all tabs" :disabled="!graphs.length"><span style="font-size: 1.2em">Close</span></b-button></b-navbar-item>
-            <b-navbar-item tag="li"><b-button @click="clickToggleAutosave" rounded :type="(autosaveResults) ? '' : 'is-dark'" title="Autosave results locally (only up to 100 References & Citations are kept because of space constraints - if all are needed, use 'download full network: JSON')"><span style="font-size: 1.2em">Save</span></b-button></b-navbar-item>
+            <b-navbar-item tag="li"><b-button @click="clickToggleAutosave" rounded :type="(autosaveResults) ? '' : 'is-dark'" title="Autosave results locally (only up to 100 References & Citations are kept because of space constraints - if all are needed, use 'download full network as JSON')"><span style="font-size: 1.2em">Save</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="showOptionsAPI = !showOptionsAPI" rounded type="is-dark" title="API Options: OpenAlex (OA) / Semantic Scholar (S2) / Crossref (CR)" :disabled="isLoading"><span  style="font-size: 1.2em">{{ abbreviateAPI(API) }}</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="showFAQ = !showFAQ" rounded type="is-dark" title="Frequently asked questions"><span style="font-size: 1.8em">?</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><a @click="indexFAQ = 'contact'; showFAQ = true;" href="#contact" class="button is-dark is-rounded" title="Contact app creator"><span style="font-size: 1.2em">Mail</span></a></b-navbar-item>
@@ -255,7 +255,7 @@
               <span class="button is-static" style="border-radius: 0 4px 4px 0">{{ seedArticlesFiltered.length + " / " + seedArticles.length }}</span>
             </b-field>
             <b-table ref="seedArticlesTabTable" :data="seedArticlesFiltered" :selected.sync="selectedSeedArticle" :current-page.sync="seedArticlesTabTablePage"
-              default-sort="citedCount" default-sort-direction="desc"
+              :default-sort="(showNumberInSourceReferences) ? ['numberInSourceReferences', 'asc'] : ['year', 'desc']"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
               @keydown.native.arrow-up.capture="tableArrowUpChangePage"
@@ -355,7 +355,8 @@
                 </template>
               </template>
 
-              <b-table-column field="numberInSourceReferences" label="#" :meta="currentGraph.source.id ? 'Original reference number in source' : 'Number in custom list'" :visible="showNumberInSourceReferences && showColumns.includes('numberInSourceReferences')" sortable>
+              <b-table-column label="#" :meta="currentGraph.source.id ? 'Original reference number in source' : 'Number in custom list'" :visible="showNumberInSourceReferences && showColumns.includes('numberInSourceReferences')" 
+                sortable field="numberInSourceReferences">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-right" type="is-dark">
                     <span v-html="column.label"></span>
@@ -365,7 +366,8 @@
                   {{ (props.row.isSource) ? '' : props.row.numberInSourceReferences }}
                 </template>
               </b-table-column>
-              <b-table-column label="Title" v-slot="props" :visible="showColumns.includes('title')">
+              <b-table-column label="Title" v-slot="props" :visible="showColumns.includes('title')"
+                sortable field="title">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
                   {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : '' }}
@@ -373,12 +375,14 @@
                   <span v-else v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></span>
                 </span>
               </b-table-column>
-              <b-table-column field="authors" label="Author" v-slot="props" :visible="showColumns.includes('author')">
+              <b-table-column label="Authors" v-slot="props" :visible="showColumns.includes('author')"
+                sortable :custom-sort="sortAuthorsWrapper">
                 <b-tooltip dashed multilined :label="authorString(props.row.authors)" position="is-left" type="is-dark">
                   {{ props.row.authors[0]?.LN }}
                 </b-tooltip>
               </b-table-column>
-              <b-table-column field="year" label="Year" meta="Hover year to see journal" sortable :visible="showColumns.includes('year')">
+              <b-table-column label="Year" meta="Hover year to see journal" :visible="showColumns.includes('year')"
+                sortable field="year">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -390,12 +394,14 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="journal" label="Journal" sortable :visible="showColumns.includes('journal')">
+              <b-table-column label="Journal" :visible="showColumns.includes('journal')"
+                sortable field="journal">
                 <template v-slot="props">
                   {{ props.row.journal }}
                 </template>
               </b-table-column>
-              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita' && showColumns.includes('totalCitedCount')" sortable>
+              <b-table-column label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita' && showColumns.includes('totalCitedCount')" 
+                sortable field="citationsCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -430,8 +436,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citedCount" label="Cited" meta="In-Degree: Cited by how many Seed Articles" :visible="showColumns.includes('citedCount')"
-                sortable :custom-sort="sortCitedWrapper">
+              <b-table-column label="Cited" meta="In-Degree: Cited by how many Seed Articles" :visible="showColumns.includes('citedCount')"
+                sortable :custom-sort="sortCitedWrapper" field="citedCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -443,8 +449,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citingCount" label="Citing" meta="Out-Degree: Citing how many Seed Articles" :visible="showColumns.includes('citingCount')"
-                sortable :custom-sort="sortCitingWrapper">
+              <b-table-column label="Citing" meta="Out-Degree: Citing how many Seed Articles" :visible="showColumns.includes('citingCount')"
+                sortable :custom-sort="sortCitingWrapper" field="citingCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -456,8 +462,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="coCitedCount" label="Co-Cited" meta="Co-Cited by alongside how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitedCount')"
-                sortable :custom-sort="sortCoCitedWrapper">
+              <b-table-column label="Co-Cited" meta="Co-Cited by alongside how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitedCount')"
+                sortable :custom-sort="sortCoCitedWrapper" field="coCitedCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -469,8 +475,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="coCitingCount" label="Co-Citing" meta="Co-Citing alongside with how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitingCount')"
-                sortable :custom-sort="sortCoCitingWrapper">
+              <b-table-column label="Co-Citing" meta="Co-Citing alongside with how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitingCount')"
+                sortable :custom-sort="sortCoCitingWrapper" field="coCitingCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -547,7 +553,7 @@
               <span class="button is-static" style="border-radius: 0 4px 4px 0">{{ citedArticlesFiltered.length + " / " + citedArticles.length }}</span>
             </b-field>
             <b-table ref="citedArticlesTabTable" :data="citedArticlesFiltered" :selected.sync="selectedCitedArticle" :current-page.sync="citedArticlesTabTablePage"
-              default-sort="citedCount" default-sort-direction="desc"
+              :default-sort="['citedCount', 'desc']"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
               @keydown.native.arrow-up.capture="tableArrowUpChangePage"
@@ -631,7 +637,8 @@
                 </template>
               </template>
               
-              <b-table-column label="Title" v-slot="props" :visible="showColumns.includes('title')">
+              <b-table-column label="Title" v-slot="props" :visible="showColumns.includes('title')"
+                sortable field="title">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
                   {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : (seedArticlesIds.includes(props.row.id) ? 'Seed Article: ' : '') }}
@@ -639,12 +646,14 @@
                   <span v-else v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></span>
                 </span>
               </b-table-column>
-              <b-table-column field="authors" label="Author" v-slot="props" :visible="showColumns.includes('author')">
+              <b-table-column label="Authors" v-slot="props" :visible="showColumns.includes('author')"
+                sortable :custom-sort="sortAuthorsWrapper">
                 <b-tooltip dashed multilined :label="authorString(props.row.authors)" position="is-left" type="is-dark">
                   {{ props.row.authors[0]?.LN }}
                 </b-tooltip>
               </b-table-column>
-              <b-table-column field="year" label="Year" meta="Hover year to see journal" sortable :visible="showColumns.includes('year')">
+              <b-table-column label="Year" meta="Hover year to see journal" :visible="showColumns.includes('year')"
+                sortable field="year">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -656,12 +665,14 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="journal" label="Journal" sortable :visible="showColumns.includes('journal')">
+              <b-table-column label="Journal" :visible="showColumns.includes('journal')"
+                sortable field="journal">
                 <template v-slot="props">
                   {{ props.row.journal }}
                 </template>
               </b-table-column>
-              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita' && showColumns.includes('totalCitedCount')" sortable>
+              <b-table-column label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita' && showColumns.includes('totalCitedCount')" 
+                sortable field="citationsCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -696,8 +707,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citedCount" label="Cited" meta="In-Degree: Cited by how many Seed Articles" :visible="showColumns.includes('citedCount')"
-                sortable :custom-sort="sortCitedWrapper">
+              <b-table-column label="Cited" meta="In-Degree: Cited by how many Seed Articles" :visible="showColumns.includes('citedCount')"
+                sortable :custom-sort="sortCitedWrapper" field="citedCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -709,8 +720,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citingCount" label="Citing" meta="Out-Degree: Citing how many Seed Articles" :visible="showColumns.includes('citingCount')"
-                sortable :custom-sort="sortCitingWrapper">
+              <b-table-column label="Citing" meta="Out-Degree: Citing how many Seed Articles" :visible="showColumns.includes('citingCount')"
+                sortable :custom-sort="sortCitingWrapper" field="citingCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -722,8 +733,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="coCitedCount" label="Co-Cited" meta="Co-Cited by alongside how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitedCount')"
-                sortable :custom-sort="sortCoCitedWrapper">
+              <b-table-column label="Co-Cited" meta="Co-Cited by alongside how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitedCount')"
+                sortable :custom-sort="sortCoCitedWrapper" field="coCitedCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -735,8 +746,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="coCitingCount" label="Co-Citing" meta="Co-Citing alongside with how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitingCount')"
-                sortable :custom-sort="sortCoCitingWrapper">
+              <b-table-column label="Co-Citing" meta="Co-Citing alongside with how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitingCount')"
+                sortable :custom-sort="sortCoCitingWrapper" field="coCitingCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -813,7 +824,7 @@
               <span class="button is-static" style="border-radius: 0 4px 4px 0">{{ citingArticlesFiltered.length + " / " + citingArticles.length }}</span>
             </b-field>
             <b-table ref="citingArticlesTabTable" :data="citingArticlesFiltered" :selected.sync="selectedCitingArticle" :current-page.sync="citingArticlesTabTablePage"
-              default-sort="citingCount" default-sort-direction="desc"
+              :default-sort="['citingCount', 'desc']"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
               @keydown.native.arrow-up.capture="tableArrowUpChangePage"
@@ -897,7 +908,8 @@
                 </template>
               </template>
 
-              <b-table-column label="Title" v-slot="props" :visible="showColumns.includes('title')">
+              <b-table-column label="Title" v-slot="props" :visible="showColumns.includes('title')"
+                sortable field="title">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
                   {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : (seedArticlesIds.includes(props.row.id) ? 'Seed Article: ' : (citedArticlesIds.includes(props.row.id) ? 'Cited: ' : '')) }}
@@ -905,12 +917,14 @@
                   <span v-else v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></span>
                 </span>
               </b-table-column>
-              <b-table-column field="authors" label="Author" v-slot="props" :visible="showColumns.includes('author')">
+              <b-table-column label="Authors" v-slot="props" :visible="showColumns.includes('author')"
+                sortable :custom-sort="sortAuthorsWrapper">
                 <b-tooltip dashed multilined :label="authorString(props.row.authors)" position="is-left" type="is-dark">
                   {{ props.row.authors[0]?.LN }}
                 </b-tooltip>
               </b-table-column>
-              <b-table-column field="year" label="Year" meta="Hover year to see journal" sortable :visible="showColumns.includes('year')">
+              <b-table-column label="Year" meta="Hover year to see journal" :visible="showColumns.includes('year')"
+                sortable field="year">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -922,12 +936,14 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="journal" label="Journal" sortable :visible="showColumns.includes('journal')">
+              <b-table-column label="Journal" :visible="showColumns.includes('journal')"
+                sortable field="journal">
                 <template v-slot="props">
                   {{ props.row.journal }}
                 </template>
               </b-table-column>
-              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita' && showColumns.includes('totalCitedCount')" sortable>
+              <b-table-column label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita' && showColumns.includes('totalCitedCount')" 
+                sortable field="citationsCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -962,8 +978,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citedCount" label="Cited" meta="In-Degree: Cited by how many Seed Articles" :visible="showColumns.includes('citedCount')"
-                sortable :custom-sort="sortCitedWrapper">
+              <b-table-column label="Cited" meta="In-Degree: Cited by how many Seed Articles" :visible="showColumns.includes('citedCount')"
+                sortable :custom-sort="sortCitedWrapper" field="citedCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -975,8 +991,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citingCount" label="Citing" meta="Out-Degree: Citing how many Seed Articles" :visible="showColumns.includes('citingCount')"
-                sortable :custom-sort="sortCitingWrapper">
+              <b-table-column label="Citing" meta="Out-Degree: Citing how many Seed Articles" :visible="showColumns.includes('citingCount')"
+                sortable :custom-sort="sortCitingWrapper" field="citingCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -988,8 +1004,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="coCitedCount" label="Co-Cited" meta="Co-Cited by alongside how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitedCount')"
-                sortable :custom-sort="sortCoCitedWrapper">
+              <b-table-column label="Co-Cited" meta="Co-Cited by alongside how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitedCount')"
+                sortable :custom-sort="sortCoCitedWrapper" field="coCitedCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -1001,8 +1017,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="coCitingCount" label="Co-Citing" meta="Co-Citing alongside with how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitingCount')"
-                sortable :custom-sort="sortCoCitingWrapper">
+              <b-table-column label="Co-Citing" meta="Co-Citing alongside with how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitingCount')"
+                sortable :custom-sort="sortCoCitingWrapper" field="coCitingCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -1076,7 +1092,7 @@
               <span class="button is-static" style="border-radius: 0 4px 4px 0">{{ coCitedArticlesFiltered.length + " / " + coCitedArticles.length }}</span>
             </b-field>
             <b-table ref="coCitedArticlesTabTable" :data="coCitedArticlesFiltered" :selected.sync="selectedCoCitedArticle" :current-page.sync="coCitedArticlesTabTablePage"
-              default-sort="coCitedCount" default-sort-direction="desc"
+              :default-sort="['coCitedCount', 'desc']"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
               @keydown.native.arrow-up.capture="tableArrowUpChangePage"
@@ -1160,7 +1176,8 @@
                 </template>
               </template>
               
-              <b-table-column label="Title" v-slot="props" :visible="showColumns.includes('title')">
+              <b-table-column label="Title" v-slot="props" :visible="showColumns.includes('title')"
+                sortable field="title">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
                   {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : (seedArticlesIds.includes(props.row.id) ? 'Seed Article: ' : (citedArticlesIds.includes(props.row.id) ? 'Cited: ' : (citingArticlesIds.includes(props.row.id) ? 'Citing: ' : ''))) }}
@@ -1168,12 +1185,14 @@
                   <span v-else v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></span>
                 </span>
               </b-table-column>
-              <b-table-column field="authors" label="Author" v-slot="props" :visible="showColumns.includes('author')">
+              <b-table-column label="Authors" v-slot="props" :visible="showColumns.includes('author')"
+                sortable :custom-sort="sortAuthorsWrapper">
                 <b-tooltip dashed multilined :label="authorString(props.row.authors)" position="is-left" type="is-dark">
                   {{ props.row.authors[0]?.LN }}
                 </b-tooltip>
               </b-table-column>
-              <b-table-column field="year" label="Year" meta="Hover year to see journal" sortable :visible="showColumns.includes('year')">
+              <b-table-column label="Year" meta="Hover year to see journal" :visible="showColumns.includes('year')"
+                sortable field="year">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -1185,12 +1204,14 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="journal" label="Journal" sortable :visible="showColumns.includes('journal')">
+              <b-table-column label="Journal" :visible="showColumns.includes('journal')"
+                sortable field="journal">
                 <template v-slot="props">
                   {{ props.row.journal }}
                 </template>
               </b-table-column>
-              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita' && showColumns.includes('totalCitedCount')" sortable>
+              <b-table-column label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita' && showColumns.includes('totalCitedCount')" 
+                sortable field="citationsCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -1225,8 +1246,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citedCount" label="Cited" meta="In-Degree: Cited by how many Seed Articles" :visible="showColumns.includes('citedCount')"
-                sortable :custom-sort="sortCitedWrapper">
+              <b-table-column label="Cited" meta="In-Degree: Cited by how many Seed Articles" :visible="showColumns.includes('citedCount')"
+                sortable :custom-sort="sortCitedWrapper" field="citedCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -1238,8 +1259,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citingCount" label="Citing" meta="Out-Degree: Citing how many Seed Articles" :visible="showColumns.includes('citingCount')"
-                sortable :custom-sort="sortCitingWrapper">
+              <b-table-column label="Citing" meta="Out-Degree: Citing how many Seed Articles" :visible="showColumns.includes('citingCount')"
+                sortable :custom-sort="sortCitingWrapper" field="citingCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -1251,8 +1272,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="coCitedCount" label="Co-Cited" meta="Co-Cited by alongside how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitedCount')"
-                sortable :custom-sort="sortCoCitedWrapper">
+              <b-table-column label="Co-Cited" meta="Co-Cited by alongside how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitedCount')"
+                sortable :custom-sort="sortCoCitedWrapper" field="coCitedCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -1264,8 +1285,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="coCitingCount" label="Co-Citing" meta="Co-Citing alongside with how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitingCount')"
-                sortable :custom-sort="sortCoCitingWrapper">
+              <b-table-column label="Co-Citing" meta="Co-Citing alongside with how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitingCount')"
+                sortable :custom-sort="sortCoCitingWrapper" field="coCitingCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -1339,7 +1360,7 @@
               <span class="button is-static" style="border-radius: 0 4px 4px 0">{{ coCitingArticlesFiltered.length + " / " + coCitingArticles.length }}</span>
             </b-field>
             <b-table ref="coCitingArticlesTabTable" :data="coCitingArticlesFiltered" :selected.sync="selectedCoCitingArticle" :current-page.sync="coCitingArticlesTabTablePage"
-              default-sort="coCitingCount" default-sort-direction="desc"
+              :default-sort="['coCitingCount', 'desc']"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
               @keydown.native.arrow-up.capture="tableArrowUpChangePage"
@@ -1423,7 +1444,8 @@
                 </template>
               </template>
               
-              <b-table-column label="Title" v-slot="props" :visible="showColumns.includes('title')">
+              <b-table-column label="Title" v-slot="props" :visible="showColumns.includes('title')"
+                sortable field="title">
                 <!-- id is for scrolling to row when network node is clicked -->
                 <span :id="props.row.id" :class="{ retracted: props.row.isRetracted }">
                   {{ (props.row.id === currentGraph.source?.id) ? 'Source: ' : (seedArticlesIds.includes(props.row.id) ? 'Seed Article: ' : (citedArticlesIds.includes(props.row.id) ? 'Cited: ' : (citingArticlesIds.includes(props.row.id) ? 'Citing: ' : (coCitedArticlesIds.includes(props.row.id) ? 'Co-Cited: ' : '')))) }}
@@ -1431,12 +1453,14 @@
                   <span v-else v-html="formatTags(props.row.title) || props.row.doi || props.row.id"></span>
                 </span>
               </b-table-column>
-              <b-table-column field="authors" label="Author" v-slot="props" :visible="showColumns.includes('author')">
+              <b-table-column label="Authors" v-slot="props" :visible="showColumns.includes('author')"
+                sortable :custom-sort="sortAuthorsWrapper">
                 <b-tooltip dashed multilined :label="authorString(props.row.authors)" position="is-left" type="is-dark">
                   {{ props.row.authors[0]?.LN }}
                 </b-tooltip>
               </b-table-column>
-              <b-table-column field="year" label="Year" meta="Hover year to see journal" sortable :visible="showColumns.includes('year')">
+              <b-table-column label="Year" meta="Hover year to see journal" :visible="showColumns.includes('year')"
+                sortable field="year">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -1448,12 +1472,14 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="journal" label="Journal" sortable :visible="showColumns.includes('journal')">
+              <b-table-column label="Journal" :visible="showColumns.includes('journal')"
+                sortable field="journal">
                 <template v-slot="props">
                   {{ props.row.journal }}
                 </template>
               </b-table-column>
-              <b-table-column field="citationsCount" label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita' && showColumns.includes('totalCitedCount')" sortable>
+              <b-table-column label="Cit." meta="Number of global citations (cited by how many articles in total)" :visible="currentGraph.API !== 'Zotero Cita' && showColumns.includes('totalCitedCount')" 
+                sortable field="citationsCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -1488,8 +1514,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citedCount" label="Cited" meta="In-Degree: Cited by how many Seed Articles" :visible="showColumns.includes('citedCount')"
-                sortable :custom-sort="sortCitedWrapper">
+              <b-table-column label="Cited" meta="In-Degree: Cited by how many Seed Articles" :visible="showColumns.includes('citedCount')"
+                sortable :custom-sort="sortCitedWrapper" field="citedCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -1501,8 +1527,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="citingCount" label="Citing" meta="Out-Degree: Citing how many Seed Articles" :visible="showColumns.includes('citingCount')"
-                sortable :custom-sort="sortCitingWrapper">
+              <b-table-column label="Citing" meta="Out-Degree: Citing how many Seed Articles" :visible="showColumns.includes('citingCount')"
+                sortable :custom-sort="sortCitingWrapper" field="citingCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -1514,8 +1540,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="coCitedCount" label="Co-Cited" meta="Co-Cited by alongside how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitedCount')"
-                sortable :custom-sort="sortCoCitedWrapper">
+              <b-table-column label="Co-Cited" meta="Co-Cited by alongside how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitedCount')"
+                sortable :custom-sort="sortCoCitedWrapper" field="coCitedCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -1527,8 +1553,8 @@
                   </b-tooltip>
                 </template>
               </b-table-column>
-              <b-table-column field="coCitingCount" label="Co-Citing" meta="Co-Citing alongside with how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitingCount')"
-                sortable :custom-sort="sortCoCitingWrapper">
+              <b-table-column label="Co-Citing" meta="Co-Citing alongside with how many Seed Articles" :visible="currentGraph.API === 'Co*Citation Network via OpenAlex' && showColumns.includes('coCitingCount')"
+                sortable :custom-sort="sortCoCitingWrapper" field="coCitingCount">
                 <template v-slot:header="{ column }">
                   <b-tooltip :label="column.meta" dashed position="is-left" type="is-dark">
                     <span v-html="column.label"></span>
@@ -1805,7 +1831,7 @@
         
           <b-collapse id="about" :open="indexFAQ.includes('about')" @open="indexFAQ = 'about'" animation="none">
             <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">What is this web app about?</h4>
+              <h4 class="card-header-title">What is Local Citation Network about?</h4>
             </div>
             <div class="card-content content">
               <p>
@@ -2086,7 +2112,7 @@
             </div>
             <div class="card-content content">
               <p>
-                I'm Tim Wölfle from Germany and started creating this project 2019 during the literature review for my Master's thesis. I've often manually scanned reference lists of papers to identify seminal articles and thought this must be automized. You can contact me on <a href="https://twitter.com/timwoelfle" target="_blank">Twitter</a> or by <a href="mailto:local-citation-network@timwoelfle.de">e-mail</a>.
+                I'm Tim Woelfle from Germany and started creating this project 2019 during the literature review for my Master's thesis. I've often manually scanned reference lists of papers to identify seminal articles and thought this must be automized. You can contact me on <a href="https://twitter.com/timwoelfle" target="_blank">Twitter</a> or by <a href="mailto:local-citation-network@timwoelfle.de">e-mail</a>.
               </p>
             </div>
           </b-collapse>

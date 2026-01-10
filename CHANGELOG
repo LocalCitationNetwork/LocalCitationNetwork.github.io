@@ -1,5 +1,6 @@
 v1.30
-+ Add "Show Columns" dropdown and add new optional "Journal" column, combine with moved "Show X Rows / Page" select in table-props "top-left" slot.
++ Add "Show Columns" dropdown and add new optional "Journal" column, combine with moved "Show X Rows / Page" select in b-table-slot "top-left".
++ Make "Title" and "Authors" columns sortable alphabetically, harmonize sorting to secondarily always sort by title in case of tie in main sorting column.
 * Deactivate OpenCitations option in API Options for now as this endpoint seems to have been discontinued: https://opencitations.net/index/api/v1#/metadata/{dois} (the example link does also not work)
 
 15.03.2025 v1.29

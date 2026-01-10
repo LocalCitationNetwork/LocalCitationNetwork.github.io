@@ -1447,6 +1447,7 @@ const vm = new Vue({
     setNewSourceResponse: function (data, API, customListOfReferences) {
       const source = this.responseToArray(data, API)[0]
       source.isSource = true
+      source.numberInSourceReferences = 0
 
       if (source && customListOfReferences) {
         source.references = customListOfReferences
@@ -1773,25 +1774,28 @@ const vm = new Vue({
       return this.citedCount(id) + this.citingCount(id) + this.coCitedCount(id) + this.coCitingCount(id)
     },
     // Wrapper for Buefy tables with third argument "ascending"
+    sortAuthorsWrapper: function (a, b, ascending) {
+      return this.sortWrapper(a, b, ascending, x => x.authors[0]?.LN, x => x.title)
+    },
     sortReferencesWrapper: function (a, b, ascending) {
-      return this.sortWrapper(a, b, ascending, x => x.referencesCount ?? x.references?.length, x => this.citedCount(x.id), x => x.year)
+      return this.sortWrapper(a, b, ascending, x => x.referencesCount ?? x.references?.length, x => x.title)
     },
     sortCitedWrapper: function (a, b, ascending) {
-      return this.sortWrapper(a, b, ascending, x => this.citedCount(x.id), x => this.citingCount(x.id), x => x.year)
+      return this.sortWrapper(a, b, ascending, x => this.citedCount(x.id), x => x.title)
     },
     sortCitingWrapper: function (a, b, ascending) {
-      return this.sortWrapper(a, b, ascending, x => this.citingCount(x.id), x => this.citedCount(x.id), x => x.year)
+      return this.sortWrapper(a, b, ascending, x => this.citingCount(x.id), x => x.title)
     },
     sortCoCitedWrapper: function (a, b, ascending) {
-      return this.sortWrapper(a, b, ascending, x => x.coCited?.length, x => this.citedCount(x.id), x => x.year)
+      return this.sortWrapper(a, b, ascending, x => x.coCited?.length, x => x.title)
     },
     sortCoCitingWrapper: function (a, b, ascending) {
-      return this.sortWrapper(a, b, ascending, x => x.coCiting?.length, x => this.citingCount(x.id), x => x.year)
+      return this.sortWrapper(a, b, ascending, x => x.coCiting?.length, x => x.title)
     },
     sortRankWrapper: function (a, b, ascending) {
-      return this.sortWrapper(a, b, ascending, x => this.citedCount(x.id) + this.citingCount(x.id) + (x.coCited?.length) + (x.coCiting?.length), x => this.citedCount(x.id), x => x.year)
+      return this.sortWrapper(a, b, ascending, x => this.citedCount(x.id) + this.citingCount(x.id) + (x.coCited?.length) + (x.coCiting?.length), x => x.title)
     },
-    sortWrapper: function (a, b, ascending, firstSortColumn, secondSortColumn, thirdSortColumn) {
+    sortWrapper: function (a, b, ascending, firstSortColumn, secondSortColumn) {
       // compareFunction for array.sort(), in this case descending by default (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort)
       function compare (articleA, articleB) {
         // Sort by firstSortColumn
@@ -1802,12 +1806,7 @@ const vm = new Vue({
           a = secondSortColumn(articleA)
           b = secondSortColumn(articleB)
         }
-        // In case of another tie sort by thirdSortColumn
-        if (a === b && thirdSortColumn) {
-          a = thirdSortColumn(articleA)
-          b = thirdSortColumn(articleB)
-        }
-        return (a ?? 0) - (b ?? 0)
+        return (a ?? ((typeof(b) === 'string') ? '0' : 0)) > (b ?? ((typeof(a) === 'string') ? '0' : 0))
       }
       return (ascending) ? compare(a, b) : compare(b, a)
     },
