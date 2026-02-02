@@ -97,10 +97,19 @@
         color: #000000;
       }
 
-      /* Table */
+      /* Dropdowns */
 
-      .table.is-narrow th {
+      button.button.select {
+        padding-left: 0.75em;
+        padding-right: 2.5em;
+        text-align: left;
       }
+
+      .dropdown + .dropdown {
+        margin-left: 0;
+      }
+
+      /* Table */
 
       .table.is-narrow td {
         vertical-align: middle;
@@ -239,20 +248,49 @@
               </p>
             </div>
             <b-field>
-              <b-select v-model="filterColumn">
-                <option value="titleAbstract">Title, Abstract, ID</option>
-                <option value="authors">Authors</option>
-                <option value="year">Year</option>
-                <option value="journal">Journal</option>
-                <option value="citedById">Cited by ID</option>
-                <option value="citingId">Citing ID</option>
-              </b-select>
-            
-              <b-input v-model="filterString" icon="magnify" placeholder="Filter Articles…" expanded
-                :icon-right="filterString ? 'close' : undefined"
-                icon-right-clickable
-                @icon-right-click="filterString=''"></b-input>
-              <span class="button is-static" style="border-radius: 0 4px 4px 0">{{ seedArticlesFiltered.length + " / " + seedArticles.length }}</span>
+              <b-dropdown append-to-body :trigger-tabindex="-1" animation="" @active-change="active => active && setTimeout(() => document.getElementById('filterTitleAbstract').focus(), 1)">
+                <template #trigger>
+                  <b-button class="select" style="width: 150px; border-radius: 4px 0 0 4px">
+                    Filter Articles
+                  </b-button>
+                </template>
+                <b-dropdown-item :focusable="false" custom paddingless>
+                  <div class="modal-card" style="width:740px;">
+                    <section class="modal-card-body" style="padding-right: 40px">
+                      <b-field label="Title & Abstract" horizontal>
+                        <b-input id="filterTitleAbstract" lazy v-model="filterTitleAbstract" :icon-right="filterTitleAbstract ? 'close' : undefined" icon-right-clickable @icon-right-click.stop="filterTitleAbstract=''"></b-input>
+                      </b-field>
+                      <b-field label="Authors" horizontal>
+                        <b-input lazy v-model="filterAuthors" :icon-right="filterAuthors ? 'close' : undefined" icon-right-clickable @icon-right-click.stop="filterAuthors=''"></b-input>
+                      </b-field>
+                      <b-field label="Year Range" horizontal>
+                        <b-slider lazy v-model="filterYearRange" :min="yearRangeDefault[0]" :max="yearRangeDefault[1]" size="is-medium" indicator :custom-formatter="(x) => String(x)"></b-slider>
+                      </b-field>
+                      <b-field label="Journal" horizontal>
+                        <b-input lazy v-model="filterJournal" :icon-right="filterJournal ? 'close' : undefined" icon-right-clickable @icon-right-click.stop="filterJournal=''"></b-input>
+                      </b-field>
+                    </section>
+                  </div>
+                </b-dropdown-item>
+              </b-dropdown>
+              <div class="input is-static control has-icons-right is-expanded" style="padding-left: calc(.75em - 1px); border: 1px solid #dbdbdb; border-left: 0; border-radius: 0; background-color: #f4f4f4; color: #353535; overflow: hidden">
+                <template v-if="uiFilterId || filterTitleAbstract || filterAuthors || ((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1])) || filterJournal">
+                  <template v-if="uiFilterId">
+                    {{ ['citedById', 'citedBySeedArticleId'].includes(uiFilterType) ? 'Cited by' : 'Citing' }}:&nbsp;<a @click="let id=uiFilterId; uiFilterId=''; setTimeout(() => selectId(id), 1)">{{ articleIdToObject(uiFilterId).authors[0]?.LN + ' ' + articleIdToObject(uiFilterId).year }}</a>;
+                  </template>
+                  {{ ((filterTitleAbstract) ? 'Title / Abstract: ' +  filterTitleAbstract + "; ": '' ) }}
+                  {{ ((filterAuthors) ? 'Authors: ' +  filterAuthors + "; ": '' ) }}
+                  {{ (((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1]))) ? 'Year Range: ' + filterYearRange[0] + " - " + filterYearRange[1] + '; ' : '' }}
+                  {{ ((filterJournal) ? 'Journal: ' +  filterJournal + "; ": '' ) }}
+                  <span class="icon is-right is-clickable" @click="uiFilterId=''; filterTitleAbstract=''; filterAuthors=''; filterYearRange=[]; filterJournal=''"><i class="mdi mdi-close mdi-24px" style="color: #494949"></i></span>
+                </template>
+                <template v-else>
+                  No filters applied
+                </template>
+              </div>
+              <div class="button is-static" style="border-radius: 0 4px 4px 0">
+                {{ seedArticlesFiltered.length + " / " + seedArticles.length }}
+              </div>
             </b-field>
             <b-table ref="seedArticlesTabTable" :data="seedArticlesFiltered" :selected.sync="selectedSeedArticle" :current-page.sync="seedArticlesTabTablePage"
               :default-sort="(showNumberInSourceReferences) ? ['numberInSourceReferences', 'asc'] : ['year', 'desc']"
@@ -266,9 +304,9 @@
               <template slot="top-left">
                 <b-field grouped>
                   <b-field>
-                    <b-dropdown multiple v-model="showColumns">
+                    <b-dropdown multiple v-model="showColumns" :trigger-tabindex="-1" animation="">
                       <template #trigger>
-                        <b-button class="select" style="width: 146.65px; padding-left: calc(.75em - 1px); padding-right: 2.5em; text-align: left; border-radius: 4px 0 0 4px; border-right: 0px">
+                        <b-button class="select" style="width: 150px; border-radius: 4px 0 0 4px">
                           Show Columns
                         </b-button>
                       </template>
@@ -285,15 +323,19 @@
                       <b-dropdown-item value="coCitingCount" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Citing</b-dropdown-item>
                       <b-dropdown-item value="rank" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Rank</b-dropdown-item>
                     </b-dropdown>
-                  
-                    <b-select v-model="articlesPerPage">
-                      <option value="10">Show 10 Rows / Page</option>
-                      <option value="20">Show 20 Rows / Page</option>
-                      <option value="50">Show 50 Rows / Page</option>
-                      <option value="100">Show 100 Rows / Page</option>
-                      <option value="200">Show 200 Rows / Page</option>
-                      <option value="500">Show 500 Rows / Page</option>
-                    </b-select>
+                    <b-dropdown v-model="articlesPerPage" :trigger-tabindex="-1" animation="">
+                      <template #trigger>
+                        <b-button class="select" style="border-radius: 0 4px 4px 0; border-left: 0">
+                          Show {{ articlesPerPage }} Rows / Page
+                        </b-button>
+                      </template>
+                      <b-dropdown-item :value="10">Show 10 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="20">Show 20 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="50">Show 50 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="100">Show 100 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="200">Show 200 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="500">Show 500 Rows / Page</b-dropdown-item>
+                    </b-dropdown>
                   </b-field>
                 </b-field>
               </template>
@@ -305,11 +347,11 @@
                     Add network for references
                   </b-button>
                   <b-button v-if="citedArticles.length && ((currentGraph.allCited) ? (props.row.referencesCount || props.row.references?.length) : citedBySeedArticleId(citedArticles, props.row.id).length)" 
-                    @click="showArticlesTab='citedArticlesTab'; filterColumn='citedBySeedArticleId'; filterString=props.row.id">
+                    @click="showArticlesTab='citedArticlesTab'; uiFilterType='citedBySeedArticleId'; uiFilterId=props.row.id">
                     Filter Cited ({{ citedBySeedArticleId(citedArticles, props.row.id).length }})
                   </b-button>
                   <b-button v-if="citingArticles.length && ((currentGraph.allCiting) ? props.row.citationsCount : citingSeedArticleId(citingArticles, props.row.id).length)"
-                    @click="showArticlesTab='citingArticlesTab'; filterColumn='citingSeedArticleId'; filterString=props.row.id">
+                    @click="showArticlesTab='citingArticlesTab'; uiFilterType='citingSeedArticleId'; uiFilterId=props.row.id">
                     Filter Citing ({{ citingSeedArticleId(citingArticles, props.row.id).length }})
                   </b-button>
                 </p>
@@ -439,7 +481,7 @@
                 </template>
                 <template v-slot="props">
                   <b-tooltip label="Cited by how many Seed Articles (incoming local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
-                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citingId'; filterString=props.row.id">
+                    <a @click.stop="showArticlesTab='seedArticlesTab'; uiFilterType='citingId'; uiFilterId=props.row.id">
                       {{ citedCount(props.row.id) }}
                     </a>
                   </b-tooltip>
@@ -454,7 +496,7 @@
                 </template>
                 <template v-slot="props">
                   <b-tooltip label="Citing how many Seed Articles (outgoing local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
-                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citedById'; filterString=props.row.id">
+                    <a @click.stop="showArticlesTab='seedArticlesTab'; uiFilterType='citedById'; uiFilterId=props.row.id">
                       {{ citingCount(props.row.id) }}
                     </a>
                   </b-tooltip>
@@ -537,18 +579,49 @@
               </p>
             </div>
             <b-field>
-              <b-select v-model="filterColumn" >
-                <option value="titleAbstract">Title, Abstract, ID</option>
-                <option value="authors">Authors</option>
-                <option value="year">Year</option>
-                <option value="journal">Journal</option>
-                <option value="citedBySeedArticleId">Cited by ID</option>
-              </b-select>
-              <b-input v-model="filterString" icon="magnify" placeholder="Filter Articles…" expanded
-                :icon-right="filterString ? 'close' : undefined"
-                icon-right-clickable
-                @icon-right-click="filterString=''"></b-input>
-              <span class="button is-static" style="border-radius: 0 4px 4px 0">{{ citedArticlesFiltered.length + " / " + citedArticles.length }}</span>
+              <b-dropdown append-to-body :trigger-tabindex="-1" animation="" @active-change="active => active && setTimeout(() => document.getElementById('filterTitleAbstract').focus(), 1)">
+                <template #trigger>
+                  <b-button class="select" style="width: 150px; border-radius: 4px 0 0 4px">
+                    Filter Articles
+                  </b-button>
+                </template>
+                <b-dropdown-item :focusable="false" custom paddingless>
+                  <div class="modal-card" style="width:740px;">
+                    <section class="modal-card-body" style="padding-right: 40px">
+                      <b-field label="Title & Abstract" horizontal>
+                        <b-input id="filterTitleAbstract" lazy v-model="filterTitleAbstract" :icon-right="filterTitleAbstract ? 'close' : undefined" icon-right-clickable @icon-right-click.stop="filterTitleAbstract=''"></b-input>
+                      </b-field>
+                      <b-field label="Authors" horizontal>
+                        <b-input lazy v-model="filterAuthors" :icon-right="filterAuthors ? 'close' : undefined" icon-right-clickable @icon-right-click.stop="filterAuthors=''"></b-input>
+                      </b-field>
+                      <b-field label="Year Range" horizontal>
+                        <b-slider lazy v-model="filterYearRange" :min="yearRangeDefault[0]" :max="yearRangeDefault[1]" size="is-medium" indicator :custom-formatter="(x) => String(x)"></b-slider>
+                      </b-field>
+                      <b-field label="Journal" horizontal>
+                        <b-input lazy v-model="filterJournal" :icon-right="filterJournal ? 'close' : undefined" icon-right-clickable @icon-right-click.stop="filterJournal=''"></b-input>
+                      </b-field>
+                    </section>
+                  </div>
+                </b-dropdown-item>
+              </b-dropdown>
+              <div class="input is-static control has-icons-right is-expanded" style="padding-left: calc(.75em - 1px); border: 1px solid #dbdbdb; border-left: 0; border-radius: 0; background-color: #f4f4f4; color: #353535; overflow: hidden">
+                <template v-if="uiFilterId || filterTitleAbstract || filterAuthors || ((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1])) || filterJournal">
+                  <template v-if="uiFilterId">
+                    {{ ['citedById', 'citedBySeedArticleId'].includes(uiFilterType) ? 'Cited by' : 'Citing' }}:&nbsp;<a @click="let id=uiFilterId; uiFilterId=''; setTimeout(() => selectId(id), 1)">{{ articleIdToObject(uiFilterId).authors[0]?.LN + ' ' + articleIdToObject(uiFilterId).year }}</a>;
+                  </template>
+                  {{ ((filterTitleAbstract) ? 'Title / Abstract: ' +  filterTitleAbstract + "; ": '' ) }}
+                  {{ ((filterAuthors) ? 'Authors: ' +  filterAuthors + "; ": '' ) }}
+                  {{ (((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1]))) ? 'Year Range: ' + filterYearRange[0] + " - " + filterYearRange[1] + '; ' : '' }}
+                  {{ ((filterJournal) ? 'Journal: ' +  filterJournal + "; ": '' ) }}
+                  <span class="icon is-right is-clickable" @click="uiFilterId=''; filterTitleAbstract=''; filterAuthors=''; filterYearRange=[]; filterJournal=''"><i class="mdi mdi-close mdi-24px" style="color: #494949"></i></span>
+                </template>
+                <template v-else>
+                  No filters applied
+                </template>
+              </div>
+              <div class="button is-static" style="border-radius: 0 4px 4px 0">
+                {{ citedArticlesFiltered.length + " / " + citedArticles.length }}
+              </div>
             </b-field>
             <b-table ref="citedArticlesTabTable" :data="citedArticlesFiltered" :selected.sync="selectedCitedArticle" :current-page.sync="citedArticlesTabTablePage"
               :default-sort="['citedCount', 'desc']"
@@ -561,9 +634,9 @@
               <template slot="top-left">
                 <b-field grouped>
                   <b-field>
-                    <b-dropdown multiple v-model="showColumns">
+                    <b-dropdown multiple v-model="showColumns" :trigger-tabindex="-1" animation="">
                       <template #trigger>
-                        <b-button class="select" style="width: 146.65px; padding-left: calc(.75em - 1px); padding-right: 2.5em; text-align: left; border-radius: 4px 0 0 4px; border-right: 0px">
+                        <b-button class="select" style="width: 150px; border-radius: 4px 0 0 4px">
                           Show Columns
                         </b-button>
                       </template>
@@ -579,15 +652,19 @@
                       <b-dropdown-item value="coCitingCount" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Citing</b-dropdown-item>
                       <b-dropdown-item value="rank" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Rank</b-dropdown-item>
                     </b-dropdown>
-                  
-                    <b-select v-model="articlesPerPage">
-                      <option value="10">Show 10 Rows / Page</option>
-                      <option value="20">Show 20 Rows / Page</option>
-                      <option value="50">Show 50 Rows / Page</option>
-                      <option value="100">Show 100 Rows / Page</option>
-                      <option value="200">Show 200 Rows / Page</option>
-                      <option value="500">Show 500 Rows / Page</option>
-                    </b-select>
+                    <b-dropdown v-model="articlesPerPage" :trigger-tabindex="-1" animation="">
+                      <template #trigger>
+                        <b-button class="select" style="border-radius: 0 4px 4px 0; border-left: 0">
+                          Show {{ articlesPerPage }} Rows / Page
+                        </b-button>
+                      </template>
+                      <b-dropdown-item :value="10">Show 10 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="20">Show 20 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="50">Show 50 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="100">Show 100 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="200">Show 200 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="500">Show 500 Rows / Page</b-dropdown-item>
+                    </b-dropdown>
                   </b-field>
                 </b-field>
               </template>
@@ -708,7 +785,7 @@
                 </template>
                 <template v-slot="props">
                   <b-tooltip label="Cited by how many Seed Articles (incoming local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
-                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citingId'; filterString=props.row.id">
+                    <a @click.stop="showArticlesTab='seedArticlesTab'; uiFilterType='citingId'; uiFilterId=props.row.id">
                       {{ citedCount(props.row.id) }}
                     </a>
                   </b-tooltip>
@@ -723,7 +800,7 @@
                 </template>
                 <template v-slot="props">
                   <b-tooltip label="Citing how many Seed Articles (outgoing local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
-                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citedById'; filterString=props.row.id">
+                    <a @click.stop="showArticlesTab='seedArticlesTab'; uiFilterType='citedById'; uiFilterId=props.row.id">
                       {{ citingCount(props.row.id) }}
                     </a>
                   </b-tooltip>
@@ -806,18 +883,49 @@
               </p>
             </div>
             <b-field>
-              <b-select v-model="filterColumn">
-                <option value="titleAbstract">Title, Abstract, ID</option>
-                <option value="authors">Authors</option>
-                <option value="year">Year</option>
-                <option value="journal">Journal</option>
-                <option value="citingSeedArticleId">Citing ID</option>
-              </b-select>
-              <b-input v-model="filterString" icon="magnify" placeholder="Filter Articles…" expanded
-                :icon-right="filterString ? 'close' : undefined"
-                icon-right-clickable
-                @icon-right-click="filterString=''"></b-input>
-              <span class="button is-static" style="border-radius: 0 4px 4px 0">{{ citingArticlesFiltered.length + " / " + citingArticles.length }}</span>
+              <b-dropdown append-to-body :trigger-tabindex="-1" animation="" @active-change="active => active && setTimeout(() => document.getElementById('filterTitleAbstract').focus(), 1)">
+                <template #trigger>
+                  <b-button class="select" style="width: 150px; border-radius: 4px 0 0 4px">
+                    Filter Articles
+                  </b-button>
+                </template>
+                <b-dropdown-item :focusable="false" custom paddingless>
+                  <div class="modal-card" style="width:740px;">
+                    <section class="modal-card-body" style="padding-right: 40px">
+                      <b-field label="Title & Abstract" horizontal>
+                        <b-input id="filterTitleAbstract" lazy v-model="filterTitleAbstract" :icon-right="filterTitleAbstract ? 'close' : undefined" icon-right-clickable @icon-right-click.stop="filterTitleAbstract=''"></b-input>
+                      </b-field>
+                      <b-field label="Authors" horizontal>
+                        <b-input lazy v-model="filterAuthors" :icon-right="filterAuthors ? 'close' : undefined" icon-right-clickable @icon-right-click.stop="filterAuthors=''"></b-input>
+                      </b-field>
+                      <b-field label="Year Range" horizontal>
+                        <b-slider lazy v-model="filterYearRange" :min="yearRangeDefault[0]" :max="yearRangeDefault[1]" size="is-medium" indicator :custom-formatter="(x) => String(x)"></b-slider>
+                      </b-field>
+                      <b-field label="Journal" horizontal>
+                        <b-input lazy v-model="filterJournal" :icon-right="filterJournal ? 'close' : undefined" icon-right-clickable @icon-right-click.stop="filterJournal=''"></b-input>
+                      </b-field>
+                    </section>
+                  </div>
+                </b-dropdown-item>
+              </b-dropdown>
+              <div class="input is-static control has-icons-right is-expanded" style="padding-left: calc(.75em - 1px); border: 1px solid #dbdbdb; border-left: 0; border-radius: 0; background-color: #f4f4f4; color: #353535; overflow: hidden">
+                <template v-if="uiFilterId || filterTitleAbstract || filterAuthors || ((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1])) || filterJournal">
+                  <template v-if="uiFilterId">
+                    {{ ['citedById', 'citedBySeedArticleId'].includes(uiFilterType) ? 'Cited by' : 'Citing' }}:&nbsp;<a @click="let id=uiFilterId; uiFilterId=''; setTimeout(() => selectId(id), 1)">{{ articleIdToObject(uiFilterId).authors[0]?.LN + ' ' + articleIdToObject(uiFilterId).year }}</a>;
+                  </template>
+                  {{ ((filterTitleAbstract) ? 'Title / Abstract: ' +  filterTitleAbstract + "; ": '' ) }}
+                  {{ ((filterAuthors) ? 'Authors: ' +  filterAuthors + "; ": '' ) }}
+                  {{ (((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1]))) ? 'Year Range: ' + filterYearRange[0] + " - " + filterYearRange[1] + '; ' : '' }}
+                  {{ ((filterJournal) ? 'Journal: ' +  filterJournal + "; ": '' ) }}
+                  <span class="icon is-right is-clickable" @click="uiFilterId=''; filterTitleAbstract=''; filterAuthors=''; filterYearRange=[]; filterJournal=''"><i class="mdi mdi-close mdi-24px" style="color: #494949"></i></span>
+                </template>
+                <template v-else>
+                  No filters applied
+                </template>
+              </div>
+              <div class="button is-static" style="border-radius: 0 4px 4px 0">
+                {{ citingArticlesFiltered.length + " / " + citingArticles.length }}
+              </div>
             </b-field>
             <b-table ref="citingArticlesTabTable" :data="citingArticlesFiltered" :selected.sync="selectedCitingArticle" :current-page.sync="citingArticlesTabTablePage"
               :default-sort="['citingCount', 'desc']"
@@ -830,9 +938,9 @@
               <template slot="top-left">
                 <b-field grouped>
                   <b-field>
-                    <b-dropdown multiple v-model="showColumns">
+                    <b-dropdown multiple v-model="showColumns" :trigger-tabindex="-1" animation="">
                       <template #trigger>
-                        <b-button class="select" style="width: 146.65px; padding-left: calc(.75em - 1px); padding-right: 2.5em; text-align: left; border-radius: 4px 0 0 4px; border-right: 0px">
+                        <b-button class="select" style="width: 150px; border-radius: 4px 0 0 4px">
                           Show Columns
                         </b-button>
                       </template>
@@ -848,15 +956,19 @@
                       <b-dropdown-item value="coCitingCount" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Citing</b-dropdown-item>
                       <b-dropdown-item value="rank" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Rank</b-dropdown-item>
                     </b-dropdown>
-                  
-                    <b-select v-model="articlesPerPage">
-                      <option value="10">Show 10 Rows / Page</option>
-                      <option value="20">Show 20 Rows / Page</option>
-                      <option value="50">Show 50 Rows / Page</option>
-                      <option value="100">Show 100 Rows / Page</option>
-                      <option value="200">Show 200 Rows / Page</option>
-                      <option value="500">Show 500 Rows / Page</option>
-                    </b-select>
+                    <b-dropdown v-model="articlesPerPage" :trigger-tabindex="-1" animation="">
+                      <template #trigger>
+                        <b-button class="select" style="border-radius: 0 4px 4px 0; border-left: 0">
+                          Show {{ articlesPerPage }} Rows / Page
+                        </b-button>
+                      </template>
+                      <b-dropdown-item :value="10">Show 10 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="20">Show 20 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="50">Show 50 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="100">Show 100 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="200">Show 200 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="500">Show 500 Rows / Page</b-dropdown-item>
+                    </b-dropdown>
                   </b-field>
                 </b-field>
               </template>
@@ -977,7 +1089,7 @@
                 </template>
                 <template v-slot="props">
                   <b-tooltip label="Cited by how many Seed Articles (incoming local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
-                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citingId'; filterString=props.row.id">
+                    <a @click.stop="showArticlesTab='seedArticlesTab'; uiFilterType='citingId'; uiFilterId=props.row.id">
                       {{ citedCount(props.row.id) }}
                     </a>
                   </b-tooltip>
@@ -992,7 +1104,7 @@
                 </template>
                 <template v-slot="props">
                   <b-tooltip label="Citing how many Seed Articles (outgoing local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
-                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citedById'; filterString=props.row.id">
+                    <a @click.stop="showArticlesTab='seedArticlesTab'; uiFilterType='citedById'; uiFilterId=props.row.id">
                       {{ citingCount(props.row.id) }}
                     </a>
                   </b-tooltip>
@@ -1074,18 +1186,49 @@
               </p>
             </div>
             <b-field>
-              <b-select v-model="filterColumn">
-                <option value="titleAbstract">Title, Abstract, ID</option>
-                <option value="authors">Authors</option>
-                <option value="year">Year</option>
-                <option value="journal">Journal</option>
-                <option value="citedBySeedArticleId">Cited by ID</option>
-              </b-select>
-              <b-input v-model="filterString" icon="magnify" placeholder="Filter Articles…" expanded
-                :icon-right="filterString ? 'close' : undefined"
-                icon-right-clickable
-                @icon-right-click="filterString=''"></b-input>
-              <span class="button is-static" style="border-radius: 0 4px 4px 0">{{ coCitedArticlesFiltered.length + " / " + coCitedArticles.length }}</span>
+              <b-dropdown append-to-body :trigger-tabindex="-1" animation="" @active-change="active => active && setTimeout(() => document.getElementById('filterTitleAbstract').focus(), 1)">
+                <template #trigger>
+                  <b-button class="select" style="width: 150px; border-radius: 4px 0 0 4px">
+                    Filter Articles
+                  </b-button>
+                </template>
+                <b-dropdown-item :focusable="false" custom paddingless>
+                  <div class="modal-card" style="width:740px;">
+                    <section class="modal-card-body" style="padding-right: 40px">
+                      <b-field label="Title & Abstract" horizontal>
+                        <b-input id="filterTitleAbstract" lazy v-model="filterTitleAbstract" :icon-right="filterTitleAbstract ? 'close' : undefined" icon-right-clickable @icon-right-click.stop="filterTitleAbstract=''"></b-input>
+                      </b-field>
+                      <b-field label="Authors" horizontal>
+                        <b-input lazy v-model="filterAuthors" :icon-right="filterAuthors ? 'close' : undefined" icon-right-clickable @icon-right-click.stop="filterAuthors=''"></b-input>
+                      </b-field>
+                      <b-field label="Year Range" horizontal>
+                        <b-slider lazy v-model="filterYearRange" :min="yearRangeDefault[0]" :max="yearRangeDefault[1]" size="is-medium" indicator :custom-formatter="(x) => String(x)"></b-slider>
+                      </b-field>
+                      <b-field label="Journal" horizontal>
+                        <b-input lazy v-model="filterJournal" :icon-right="filterJournal ? 'close' : undefined" icon-right-clickable @icon-right-click.stop="filterJournal=''"></b-input>
+                      </b-field>
+                    </section>
+                  </div>
+                </b-dropdown-item>
+              </b-dropdown>
+              <div class="input is-static control has-icons-right is-expanded" style="padding-left: calc(.75em - 1px); border: 1px solid #dbdbdb; border-left: 0; border-radius: 0; background-color: #f4f4f4; color: #353535; overflow: hidden">
+                <template v-if="uiFilterId || filterTitleAbstract || filterAuthors || ((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1])) || filterJournal">
+                  <template v-if="uiFilterId">
+                    {{ ['citedById', 'citedBySeedArticleId'].includes(uiFilterType) ? 'Cited by' : 'Citing' }}:&nbsp;<a @click="let id=uiFilterId; uiFilterId=''; setTimeout(() => selectId(id), 1)">{{ articleIdToObject(uiFilterId).authors[0]?.LN + ' ' + articleIdToObject(uiFilterId).year }}</a>;
+                  </template>
+                  {{ ((filterTitleAbstract) ? 'Title / Abstract: ' +  filterTitleAbstract + "; ": '' ) }}
+                  {{ ((filterAuthors) ? 'Authors: ' +  filterAuthors + "; ": '' ) }}
+                  {{ (((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1]))) ? 'Year Range: ' + filterYearRange[0] + " - " + filterYearRange[1] + '; ' : '' }}
+                  {{ ((filterJournal) ? 'Journal: ' +  filterJournal + "; ": '' ) }}
+                  <span class="icon is-right is-clickable" @click="uiFilterId=''; filterTitleAbstract=''; filterAuthors=''; filterYearRange=[]; filterJournal=''"><i class="mdi mdi-close mdi-24px" style="color: #494949"></i></span>
+                </template>
+                <template v-else>
+                  No filters applied
+                </template>
+              </div>
+              <div class="button is-static" style="border-radius: 0 4px 4px 0">
+                {{ coCitedArticlesFiltered.length + " / " + coCitedArticles.length }}
+              </div>
             </b-field>
             <b-table ref="coCitedArticlesTabTable" :data="coCitedArticlesFiltered" :selected.sync="selectedCoCitedArticle" :current-page.sync="coCitedArticlesTabTablePage"
               :default-sort="['coCitedCount', 'desc']"
@@ -1098,9 +1241,9 @@
               <template slot="top-left">
                 <b-field grouped>
                   <b-field>
-                    <b-dropdown multiple v-model="showColumns">
+                    <b-dropdown multiple v-model="showColumns" :trigger-tabindex="-1" animation="">
                       <template #trigger>
-                        <b-button class="select" style="width: 146.65px; padding-left: calc(.75em - 1px); padding-right: 2.5em; text-align: left; border-radius: 4px 0 0 4px; border-right: 0px">
+                        <b-button class="select" style="width: 150px; border-radius: 4px 0 0 4px">
                           Show Columns
                         </b-button>
                       </template>
@@ -1116,15 +1259,19 @@
                       <b-dropdown-item value="coCitingCount" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Citing</b-dropdown-item>
                       <b-dropdown-item value="rank" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Rank</b-dropdown-item>
                     </b-dropdown>
-                  
-                    <b-select v-model="articlesPerPage">
-                      <option value="10">Show 10 Rows / Page</option>
-                      <option value="20">Show 20 Rows / Page</option>
-                      <option value="50">Show 50 Rows / Page</option>
-                      <option value="100">Show 100 Rows / Page</option>
-                      <option value="200">Show 200 Rows / Page</option>
-                      <option value="500">Show 500 Rows / Page</option>
-                    </b-select>
+                    <b-dropdown v-model="articlesPerPage" :trigger-tabindex="-1" animation="">
+                      <template #trigger>
+                        <b-button class="select" style="border-radius: 0 4px 4px 0; border-left: 0">
+                          Show {{ articlesPerPage }} Rows / Page
+                        </b-button>
+                      </template>
+                      <b-dropdown-item :value="10">Show 10 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="20">Show 20 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="50">Show 50 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="100">Show 100 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="200">Show 200 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="500">Show 500 Rows / Page</b-dropdown-item>
+                    </b-dropdown>
                   </b-field>
                 </b-field>
               </template>
@@ -1245,7 +1392,7 @@
                 </template>
                 <template v-slot="props">
                   <b-tooltip label="Cited by how many Seed Articles (incoming local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
-                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citingId'; filterString=props.row.id">
+                    <a @click.stop="showArticlesTab='seedArticlesTab'; uiFilterType='citingId'; uiFilterId=props.row.id">
                       {{ citedCount(props.row.id) }}
                     </a>
                   </b-tooltip>
@@ -1260,7 +1407,7 @@
                 </template>
                 <template v-slot="props">
                   <b-tooltip label="Citing how many Seed Articles (outgoing local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
-                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citedById'; filterString=props.row.id">
+                    <a @click.stop="showArticlesTab='seedArticlesTab'; uiFilterType='citedById'; uiFilterId=props.row.id">
                       {{ citingCount(props.row.id) }}
                     </a>
                   </b-tooltip>
@@ -1342,18 +1489,49 @@
               </p>
             </div>
             <b-field>
-              <b-select v-model="filterColumn">
-                <option value="titleAbstract">Title, Abstract, ID</option>
-                <option value="authors">Authors</option>
-                <option value="year">Year</option>
-                <option value="journal">Journal</option>
-                <option value="citedBySeedArticleId">Cited by ID</option>
-              </b-select>
-              <b-input v-model="filterString" icon="magnify" placeholder="Filter Articles…" expanded
-                :icon-right="filterString ? 'close' : undefined"
-                icon-right-clickable
-                @icon-right-click="filterString=''"></b-input>
-              <span class="button is-static" style="border-radius: 0 4px 4px 0">{{ coCitingArticlesFiltered.length + " / " + coCitingArticles.length }}</span>
+              <b-dropdown append-to-body :trigger-tabindex="-1" animation="" @active-change="active => active && setTimeout(() => document.getElementById('filterTitleAbstract').focus(), 1)">
+                <template #trigger>
+                  <b-button class="select" style="width: 150px; border-radius: 4px 0 0 4px">
+                    Filter Articles
+                  </b-button>
+                </template>
+                <b-dropdown-item :focusable="false" custom paddingless>
+                  <div class="modal-card" style="width:740px;">
+                    <section class="modal-card-body" style="padding-right: 40px">
+                      <b-field label="Title & Abstract" horizontal>
+                        <b-input id="filterTitleAbstract" lazy v-model="filterTitleAbstract" :icon-right="filterTitleAbstract ? 'close' : undefined" icon-right-clickable @icon-right-click.stop="filterTitleAbstract=''"></b-input>
+                      </b-field>
+                      <b-field label="Authors" horizontal>
+                        <b-input lazy v-model="filterAuthors" :icon-right="filterAuthors ? 'close' : undefined" icon-right-clickable @icon-right-click.stop="filterAuthors=''"></b-input>
+                      </b-field>
+                      <b-field label="Year Range" horizontal>
+                        <b-slider lazy v-model="filterYearRange" :min="yearRangeDefault[0]" :max="yearRangeDefault[1]" size="is-medium" indicator :custom-formatter="(x) => String(x)"></b-slider>
+                      </b-field>
+                      <b-field label="Journal" horizontal>
+                        <b-input lazy v-model="filterJournal" :icon-right="filterJournal ? 'close' : undefined" icon-right-clickable @icon-right-click.stop="filterJournal=''"></b-input>
+                      </b-field>
+                    </section>
+                  </div>
+                </b-dropdown-item>
+              </b-dropdown>
+              <div class="input is-static control has-icons-right is-expanded" style="padding-left: calc(.75em - 1px); border: 1px solid #dbdbdb; border-left: 0; border-radius: 0; background-color: #f4f4f4; color: #353535; overflow: hidden">
+                <template v-if="uiFilterId || filterTitleAbstract || filterAuthors || ((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1])) || filterJournal">
+                  <template v-if="uiFilterId">
+                    {{ ['citedById', 'citedBySeedArticleId'].includes(uiFilterType) ? 'Cited by' : 'Citing' }}:&nbsp;<a @click="let id=uiFilterId; uiFilterId=''; setTimeout(() => selectId(id), 1)">{{ articleIdToObject(uiFilterId).authors[0]?.LN + ' ' + articleIdToObject(uiFilterId).year }}</a>;
+                  </template>
+                  {{ ((filterTitleAbstract) ? 'Title / Abstract: ' +  filterTitleAbstract + "; ": '' ) }}
+                  {{ ((filterAuthors) ? 'Authors: ' +  filterAuthors + "; ": '' ) }}
+                  {{ (((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1]))) ? 'Year Range: ' + filterYearRange[0] + " - " + filterYearRange[1] + '; ' : '' }}
+                  {{ ((filterJournal) ? 'Journal: ' +  filterJournal + "; ": '' ) }}
+                  <span class="icon is-right is-clickable" @click="uiFilterId=''; filterTitleAbstract=''; filterAuthors=''; filterYearRange=[]; filterJournal=''"><i class="mdi mdi-close mdi-24px" style="color: #494949"></i></span>
+                </template>
+                <template v-else>
+                  No filters applied
+                </template>
+              </div>
+              <div class="button is-static" style="border-radius: 0 4px 4px 0">
+                {{ coCitingArticlesFiltered.length + " / " + coCitingArticles.length }}
+              </div>
             </b-field>
             <b-table ref="coCitingArticlesTabTable" :data="coCitingArticlesFiltered" :selected.sync="selectedCoCitingArticle" :current-page.sync="coCitingArticlesTabTablePage"
               :default-sort="['coCitingCount', 'desc']"
@@ -1366,9 +1544,9 @@
               <template slot="top-left">
                 <b-field grouped>
                   <b-field>
-                    <b-dropdown multiple v-model="showColumns">
+                    <b-dropdown multiple v-model="showColumns" :trigger-tabindex="-1" animation="">
                       <template #trigger>
-                        <b-button class="select" style="width: 146.65px; padding-left: calc(.75em - 1px); padding-right: 2.5em; text-align: left; border-radius: 4px 0 0 4px; border-right: 0px">
+                        <b-button class="select" style="width: 150px; border-radius: 4px 0 0 4px">
                           Show Columns
                         </b-button>
                       </template>
@@ -1384,15 +1562,19 @@
                       <b-dropdown-item value="coCitingCount" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Citing</b-dropdown-item>
                       <b-dropdown-item value="rank" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Rank</b-dropdown-item>
                     </b-dropdown>
-                  
-                    <b-select v-model="articlesPerPage">
-                      <option value="10">Show 10 Rows / Page</option>
-                      <option value="20">Show 20 Rows / Page</option>
-                      <option value="50">Show 50 Rows / Page</option>
-                      <option value="100">Show 100 Rows / Page</option>
-                      <option value="200">Show 200 Rows / Page</option>
-                      <option value="500">Show 500 Rows / Page</option>
-                    </b-select>
+                    <b-dropdown v-model="articlesPerPage" :trigger-tabindex="-1" animation="">
+                      <template #trigger>
+                        <b-button class="select" style="border-radius: 0 4px 4px 0; border-left: 0">
+                          Show {{ articlesPerPage }} Rows / Page
+                        </b-button>
+                      </template>
+                      <b-dropdown-item :value="10">Show 10 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="20">Show 20 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="50">Show 50 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="100">Show 100 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="200">Show 200 Rows / Page</b-dropdown-item>
+                      <b-dropdown-item :value="500">Show 500 Rows / Page</b-dropdown-item>
+                    </b-dropdown>
                   </b-field>
                 </b-field>
               </template>
@@ -1513,7 +1695,7 @@
                 </template>
                 <template v-slot="props">
                   <b-tooltip label="Cited by how many Seed Articles (incoming local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
-                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citingId'; filterString=props.row.id">
+                    <a @click.stop="showArticlesTab='seedArticlesTab'; uiFilterType='citingId'; uiFilterId=props.row.id">
                       {{ citedCount(props.row.id) }}
                     </a>
                   </b-tooltip>
@@ -1528,7 +1710,7 @@
                 </template>
                 <template v-slot="props">
                   <b-tooltip label="Citing how many Seed Articles (outgoing local citations) - Click to filter Seed Articles" dashed position="is-left" type="is-dark">
-                    <a @click="showArticlesTab='seedArticlesTab'; filterColumn='citedById'; filterString=props.row.id">
+                    <a @click.stop="showArticlesTab='seedArticlesTab'; uiFilterType='citedById'; uiFilterId=props.row.id">
                       {{ citingCount(props.row.id) }}
                     </a>
                   </b-tooltip>
@@ -1584,7 +1766,7 @@
             <b-loading :is-full-page="false" :active="citationNetworkIsLoading"></b-loading>
             <div id="citationNetwork" style="height: 100%; cursor: pointer;" :loading="true"></div>
             <span style="position:absolute; top: 0; left: 1rem">
-              <a @click="fullscreenNetwork = !fullscreenNetwork; setTimeout(function () { citationNetwork.fit() }, 1)" title="Toggle network fullscreen">{{ (fullscreenNetwork) ? 'show tables' : 'fullscreen network' }}</a> /
+              <a @click="fullscreenNetwork = !fullscreenNetwork; setTimeout(() => citationNetwork.fit(), 1)" title="Toggle network fullscreen">{{ (fullscreenNetwork) ? 'show tables' : 'fullscreen network' }}</a> /
               <a @click="indexFAQ = 'citation-network'; showFAQ = true;" href="#citation-network">how to read this network</a> /
               <a @click="showCitationNetworkSettings = true">network settings</a> /
               <a @click="$set(currentGraph, 'citationNetworkTurned', !currentGraph.citationNetworkTurned); changeCurrentNetworkSettings()" title="Rotate network 90°">{{ (currentGraph.citationNetworkTurned) ? '↺' : '↻'}}</a>
@@ -1607,7 +1789,7 @@
             <b-loading :is-full-page="false" :active="authorNetworkIsLoading"></b-loading>
             <div id="authorNetwork" style="height: 100%; cursor: pointer;"></div>
             <span style="position:absolute; top: 0; left: 1rem">
-              <a @click="fullscreenNetwork = !fullscreenNetwork; setTimeout(function () { authorNetwork.fit() }, 1)" title="Toggle network fullscreen">{{ (fullscreenNetwork) ? 'show tables' : 'fullscreen network' }}</a> /
+              <a @click="fullscreenNetwork = !fullscreenNetwork; setTimeout(() => authorNetwork.fit(), 1)" title="Toggle network fullscreen">{{ (fullscreenNetwork) ? 'show tables' : 'fullscreen network' }}</a> /
               <a @click="indexFAQ = 'author-network'; showFAQ = true;" href="#author-network">how to read this network</a> /
               <a @click="showAuthorNetworkSettings = true">network settings</a>
             </span>
@@ -1800,6 +1982,7 @@
             <p class="content">
               Articles are de-duplicated, which is why the numbers are not necessarily the same as on the main page.
             </p>
+            <b-field><b-checkbox v-model="exportFilteredArticles">Apply Filters</b-checkbox></b-field>
             <b-field><b-checkbox v-model="exportArticles" native-value="seedArticles">Seed Articles ({{ seedArticles?.length }})</b-checkbox></b-field>
             <b-field><b-checkbox v-model="exportArticles" native-value="citedArticlesDeDuplicated">Cited Articles ({{ citedArticlesDeDuplicated?.length }})</b-checkbox></b-field>
             <b-field><b-checkbox v-model="exportArticles" native-value="citingArticlesDeDuplicated">Citing Articles ({{ citingArticlesDeDuplicated?.length }})</b-checkbox></b-field>
@@ -1941,7 +2124,7 @@
             </div>
             <div class="card-content content">
               <p>
-                Zoom by scrolling and pan by dragging. Each node (= vertex) represents an article. They are ordered by year from top (newer) to bottom (older), with each year colored differently. Alternatively, nodes can also be colored by the article's journal in 'network settings'. The size of the nodes depends on the sum 'Cited', the number of incoming local citations the paper received from the Seed Articles, and 'Citing', the number of Seed Articles they cite (outgoing local citations). The numbers of local citations are not always proportional to the numbers of global citations. Seed Articles are circle-shaped (●), except for the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, which is diamond-shaped (◆). Up-pointing triangles (▲) represent <a @click="indexFAQ = 'top-cited'" href="#top-cited">'Top Cited'</a>, which are cited by the Seed Articles. Down-pointing triangles (▼) are <a @click="indexFAQ = 'top-citing'" href="#top-citing">'Top Citing'</a>, which are citing the Seed Articles.
+                Zoom by scrolling and pan by dragging. Each node (= vertex) represents an article. They are ordered by year from top (newer) to bottom (older), with each year colored differently. Alternatively, nodes can also be colored by the article's journal in 'network settings'. The size of the nodes depends on the sum of 'Cited', the number of incoming local citations the paper received from the Seed Articles, and 'Citing', the number of Seed Articles they cite (outgoing local citations). The numbers of local citations are not always proportional to the numbers of global citations. Seed Articles are circle-shaped (●), except for the <a @click="indexFAQ = 'how-to-use'" href="#how-to-use">source article (if applicable)</a>, which is diamond-shaped (◆). Up-pointing triangles (▲) represent <a @click="indexFAQ = 'top-cited'" href="#top-cited">'Top Cited'</a>, which are cited by the Seed Articles. Down-pointing triangles (▼) represent <a @click="indexFAQ = 'top-citing'" href="#top-citing">'Top Citing'</a>, which are citing the Seed Articles.
               </p>
               <p>
                 Each edge (= link / arrow) represents a reference and citation at the same time: They are references (=outgoing citations) for their source nodes and (incoming) citations for their target nodes. Usually papers can only cite older papers, hence edges tend to point downwards (or sidewards for citations of the same year). Technically a citation network is a <a href="https://en.wikipedia.org/wiki/Directed_acyclic_graph" target="_blank">directed acyclic graph</a>.

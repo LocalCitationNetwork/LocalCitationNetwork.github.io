@@ -73,7 +73,7 @@ describe('Load examples from scratch', () => {
     })
   })
 
-  it('Load example from scratch: Statistics (OC)', () => {
+  /*it('Load example from scratch: Statistics (OC)', () => {
     cy.visit('./index.html?API=OpenCitations&source=10.1038/D41586-019-00857-9&listOfIds=10.1038/136474B0,10.1016/J.IJCARD.2014.09.205,10.1080/00031305.2019.1583913,10.1080/00031305.2018.1543616,10.1007/0-387-27605-X,10.1177/2515245918771329,10.1093/AJE/KWX259,10.1080/00031305.2018.1527253,10.1511/2014.111.460,10.1080/00031305.2018.1543137&bookmarkletURL=https://www.nature.com/articles/d41586-019-00857-9')
     
     cy.get('button').contains('Import').click()
@@ -108,5 +108,5 @@ describe('Load examples from scratch', () => {
     cy.get('#app').should(($app) => {
       expect($app[0].__vue__.currentGraph.citingArticles.length).to.equal(10);
     })
-  })
+  })*/
 })

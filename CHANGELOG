@@ -1,17 +1,22 @@
+02.02.2026 v1.31
++ More elaborate "Filter Articles" options: Filter separately by Title & Abstract, Authors, Year Range, and Journal.
+* Convert former filterColumn and articlesPerPage b-select to b-dropdown.
+! Fix table-colummn sorting in Chromium-based browsers (the issue was introduced in v1.30 in sortWrapper function).
+
 10.01.2026 v1.30
 + Add "Show Columns" dropdown and add new optional "Journal" column, combine with moved "Show X Rows / Page" select in b-table-slot "top-left".
 + Make "Title" and "Authors" columns sortable alphabetically, harmonize sorting to secondarily always sort by title in case of tie in main sorting column.
 * Removed buttons "Filter Seed Articles cited by this / citing this" in b-table-slot "detail", instead make numbers in "Cited" and "Citing" columns clickable directly to filter Seed Articles.
-* Deactivate OpenCitations option in API Options for now as this endpoint seems to have been discontinued: https://opencitations.net/index/api/v1#/metadata/{dois} (the example link does also not work)
-* Allow showing up to 500 rows / page in tables
-* Remove newlines from titles when fetching data
-* Update FAQ
+* Deactivate OpenCitations option in API Options for now as this endpoint seems to have been discontinued: https://opencitations.net/index/api/v1#/metadata/{dois} (the example link does also not work).
+* Allow showing up to 500 rows / page in tables.
+* Remove newlines from titles when fetching data.
+* Update FAQ.
 
 15.03.2025 v1.29
 * Slightly increased standard font size from 9pt to 10pt for better readability.
 * Made CSS layout more flexible by replacing most px measures in rem.
 * Bumped vis.js Network to newest versions.
-! Fixed bugmarklet, in rare cases decodeURIComponent(x.innerHTML) caused an "URIError: malformed URI sequence" (e.g. on https://doi.org/10.1177/13524585251316242)
+! Fixed bookmarklet, in rare cases decodeURIComponent(x.innerHTML) caused an "URIError: malformed URI sequence" (e.g. on https://doi.org/10.1177/13524585251316242).
 
 02.02.2025 v1.28
 * Some adaptations for better integration with the awesome Zotero Cita plugin: https://github.com/zotero-cita/zotero-cita.
