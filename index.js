@@ -1051,9 +1051,6 @@ const vm = new Vue({
       if (this.currentGraph.deDuplicate) return this.coCitingArticlesDeDuplicated
       return this.currentGraph.coCitingArticles ?? []
     },
-    seedArticlesDeDuplicated: function () {
-      return this.seedArticles
-    },
     citedArticlesDeDuplicated: function () {
       return (this.currentGraph.citedArticles ?? []).filter(x => !this.seedArticlesIds.includes(x.id))
     },
@@ -1121,7 +1118,7 @@ const vm = new Vue({
       return this.currentGraph.API === 'Crossref' || (this.currentGraph.source.customListOfReferences !== undefined) || !this.currentGraph.source.id
     },
     exportArticlesArray: function () {
-      return this.exportArticles.map(x => this[x + ((this.exportArticlesFiltered) ? 'Filtered' : 'DeDuplicated')]).flat()
+      return this.exportArticles.map(x => this[x + ((this.exportArticlesFiltered) ? 'Filtered' : '')]).flat()
     },
     yearRangeDefault: function () {
       const years = this.seedArticles.concat(this.citedArticles).concat(this.citingArticles).map(article => article.year).filter(year => year)
@@ -1468,7 +1465,7 @@ const vm = new Vue({
         localCitationNetworkVersion
       }
       this.pushGraph(newGraph)
-      vm.saveState()
+      vm.saveState(true, false)
       this.isLoading = false
       this.listName = undefined
       this.bookmarkletURL = undefined
@@ -1494,7 +1491,7 @@ const vm = new Vue({
       // Careful: Array/object item setting can't be picked up by Vue (https://vuejs.org/v2/guide/list.html#Caveats)
       deepFreeze(citedArticles)
       this.$set(newGraph, 'citedArticles', citedArticles)
-      this.saveState()
+      this.saveState(true, false)
       if (this.currentGraph === newGraph) this.init()
 
       /* Perform API call for All / Top Citing (formerly Citations / Outgoing suggestions) */
@@ -1521,17 +1518,19 @@ const vm = new Vue({
       // Careful: Array/object item setting can't be picked up by Vue (https://vuejs.org/v2/guide/list.html#Caveats)
       deepFreeze(citingArticles)
       this.$set(newGraph, 'citingArticles', citingArticles)
-      this.saveState()
+      this.saveState(true, false)
 
       if (this.currentGraph === newGraph) this.init()
     },
     pushGraph: function (newGraph) {
-      // Freeze these large article objects for performance (happens on the first call of init, is ignored afterwards)
+      // Freeze these large objects for performance (happens on the first call of init, is ignored afterwards)
       deepFreeze(newGraph.source)
       deepFreeze(newGraph.seedArticles)
       deepFreeze(newGraph.citedArticles)
       deepFreeze(newGraph.citingArticles)
-      if (Object.keys(newGraph).includes('customConfigCitationNetwork')) deepFreeze(newGraph.customConfigCitationNetwork)
+      deepFreeze(newGraph.coCitedArticles)
+      deepFreeze(newGraph.coCitingArticles)
+      deepFreeze(newGraph.customConfigCitationNetwork)
       this.graphs.push(newGraph)
 
       // Don't keep more articles in tab-bar than maxTabs
@@ -1578,7 +1577,7 @@ const vm = new Vue({
         if (this.currentTabIndex === 0) this.setCurrentTabIndex(undefined)
         else this.setCurrentTabIndex(this.currentTabIndex - 1)
       }
-      this.saveState()
+      this.saveState(true, false)
     },
     clickCloseAllTabs: function () {
       this.$buefy.dialog.confirm({
@@ -1588,7 +1587,7 @@ const vm = new Vue({
         onConfirm: () => {
           this.setCurrentTabIndex(undefined)
           this.graphs = []
-          this.saveState()
+          this.saveState(true, false)
           this.resetBothNetworks()
         }
       })
@@ -1840,30 +1839,26 @@ const vm = new Vue({
       this.$buefy.toast.open({
         message: String(message),
         type: 'is-danger',
-        duration: 6000,
+        duration: 10000,
         queue: false,
         pauseOnHover: true
       })
     },
     saveState: function (saveGraphs = true, saveSettings = true) {
       if (this.autosaveResults) {
-        const maxCitedCiting = 100
         if (saveGraphs) {
-          const copiedGraphs = JSON.parse(JSON.stringify(this.graphs))
-          localStorage.graphs = JSON.stringify(copiedGraphs.map(graph => {
-            // Delete these two possibly existing flags so that only "Top Cited" / "Top Citing" instead of "All Cited" (i.e. references) / "All Citing" (i.e. citations) will be shown
-            if (graph.citedArticles === undefined || graph.citedArticles.length > maxCitedCiting) delete graph.allCited
-            if (graph.citingArticles === undefined || graph.citingArticles.length > maxCitedCiting) delete graph.allCiting
-            // Don't save suggestions still in loading phase
-            // Otherwise suggestions would be saved in loading state (undefined) but after reload they do not continue to load!
+          const copiedGraphs = JSON.parse(JSON.stringify(this.graphs)).map(graph => {
+            // Don't save Cited / Citing still in loading phase (undefined), otherwise they the loading wheel would be shown eternally on reload
             if (graph.citedArticles === undefined) graph.citedArticles = []
-            // Only save up to 100 de-duplicated citedArticles (References) & citingArticles (Citations) for space constraints
-            else graph.citedArticles = graph.citedArticles.filter(article => !graph.seedArticles.map(x => x.id).includes(article.id)).slice(0, maxCitedCiting)
             if (graph.citingArticles === undefined) graph.citingArticles = []
-            else graph.citingArticles = graph.citingArticles.filter(article => !graph.seedArticles.map(x => x.id).includes(article.id) && !graph.citedArticles.map(x => x.id).includes(article.id)).slice(0, maxCitedCiting)
 
             return graph
-          }))
+          })
+          try {
+            localStorage.graphs = JSON.stringify(copiedGraphs)
+          } catch(e) {
+            this.errorMessage('Could not cache networks in browser local storage, likely due to space constraints. Use \'download full network as JSON\' instead. Error message: ' + e)
+          }
         }
         if (saveSettings) {
           localStorage.autosaveResults = true
@@ -1899,9 +1894,9 @@ const vm = new Vue({
       }
       
       // User-defined filters
-      const reTitleAbstract = new RegExp(this.filterTitleAbstract, 'i')
-      const reAuthors = new RegExp(this.filterAuthors, 'i')
-      const reJournal = new RegExp(this.filterJournal, 'i')
+      const reTitleAbstract = new RegExp(this.filterTitleAbstract.trim(), 'i')
+      const reAuthors = new RegExp(this.filterAuthors.trim(), 'i')
+      const reJournal = new RegExp(this.filterJournal.trim(), 'i')
 
       return articles.filter(article =>
         (!this.filterTitleAbstract || (
@@ -1941,7 +1936,7 @@ const vm = new Vue({
       this.autosaveResults = !this.autosaveResults
       this.saveState()
       this.$buefy.toast.open({
-        message: (this.autosaveResults) ? 'Local autosave on' : 'Local autosave off',
+        message: (this.autosaveResults) ? 'Local cache on' : 'Local cache off',
         type: (this.autosaveResults) ? 'is-success' : 'is-danger',
         queue: false
       })
@@ -1975,6 +1970,7 @@ const vm = new Vue({
           this.errorMessage("Tab with name '" + graph.tabLabel + "' already exists!")
         }
       }
+      this.saveState(true, false)
     },
     loadGraphsFromJSON: function (path) {
       this.isLoading = true
@@ -1984,7 +1980,6 @@ const vm = new Vue({
       }
       fetch(path).then(data => data.json()).then(graphs => {
         this.addGraphs(graphs)
-        vm.saveState()
         this.isLoading = false
       }).catch(e => {
         this.isLoading = false
@@ -2069,7 +2064,7 @@ const vm = new Vue({
       if (this.fullscreenTable) return false
       this.resetCurrentNetwork()
       this.initCurrentNetwork()
-      this.saveState(false)
+      this.saveState(false, true)
     },
     downloadCSVData: function (articlesArray, filenameSuffix = '') {
       function prepareCell (text) {
@@ -2139,12 +2134,13 @@ const vm = new Vue({
 
     // Load locally saved networks / settings from localStorage
     try {
-      if (localStorage.graphs) this.addGraphs(JSON.parse(localStorage.graphs))
       if (localStorage.autosaveResults) this.autosaveResults = localStorage.autosaveResults === 'true'
       if (localStorage.API && possibleAPIs.includes(localStorage.API)) this.API = localStorage.API
       if (!isNaN(Number(localStorage.retrieveCitedArticles))) this.retrieveCitedArticles = Number(localStorage.retrieveCitedArticles)
       if (!isNaN(Number(localStorage.retrieveCitingArticles))) this.retrieveCitingArticles = Number(localStorage.retrieveCitingArticles)
       if (localStorage.semanticScholarAPIKey) this.semanticScholarAPIKey = localStorage.semanticScholarAPIKey
+
+      if (localStorage.graphs) this.addGraphs(JSON.parse(localStorage.graphs))
     } catch (e) {
       localStorage.clear()
       this.errorMessage('Could not load locally saved networks / settings: ' + e)

@@ -150,7 +150,7 @@
   </head>
   <body>
     <section id="app" v-cloak>
-      <b-navbar style="border-bottom: 1px solid #dbdbdb; overflow-x:auto; overflow-y: hidden;">
+      <b-navbar style="border-bottom: 1px solid #dbdbdb; overflow-x: auto; overflow-y: hidden;">
         <template slot="brand">
           <a class="navbar-item" href="">
             <h1 class="title">{{ (currentGraph?.API === 'Co*Citation Network via OpenAlex' || API === 'Co*Citation Network via OpenAlex') ? 'Co✲Citation Network' : 'Local Citation Network' }}</h1>
@@ -176,9 +176,9 @@
         <template slot="end">
           <ul class="buttons">
             <b-navbar-item tag="li"><b-button @click="clickButtonAdd" rounded type="is-dark" title="Add network based on references from a single source DOI" :disabled="isLoading"><span style="font-size: 1.8em; line-height: 0.9 ">+</span></b-button></b-navbar-item>
-            <b-navbar-item tag="li"><b-upload v-model="file" :disabled="isLoading"><a class="button is-dark is-rounded" title="Reload downloaded network from JSON or scan plain text file for DOIs" :disabled="isLoading" style="margin: 0 0 0.5rem 0"><span style="font-size: 1.2em">File</span></a></b-upload></b-navbar-item>
+            <b-navbar-item tag="li"><b-upload v-model="file" :disabled="isLoading"><a class="button is-dark is-rounded" title="Reload downloaded network from JSON or scan plain text file for DOIs" :disabled="isLoading" style="margin: 0 0 0.5rem 0"><span style="font-size: 1.2em">Load</span></a></b-upload></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="clickCloseAllTabs" rounded type="is-dark" title="Close all tabs" :disabled="!graphs.length"><span style="font-size: 1.2em">Close</span></b-button></b-navbar-item>
-            <b-navbar-item tag="li"><b-button @click="clickToggleAutosave" rounded :type="(autosaveResults) ? '' : 'is-dark'" title="Autosave results locally (only up to 100 References & Citations are kept because of space constraints - if all are needed, use 'download full network as JSON')"><span style="font-size: 1.2em">Save</span></b-button></b-navbar-item>
+            <b-navbar-item tag="li"><b-button @click="clickToggleAutosave" rounded :type="(autosaveResults) ? '' : 'is-dark'" title="Cache networks and settings in browser's local storage (large networks cannot be cached because of space constraints, use 'download full network as JSON' instead)"><span style="font-size: 1.2em">Cache</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="showOptionsAPI = !showOptionsAPI" rounded type="is-dark" title="API Options: OpenAlex (OA) / Semantic Scholar (S2) / Crossref (CR)" :disabled="isLoading"><span  style="font-size: 1.2em">{{ abbreviateAPI(API) }}</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="showFAQ = !showFAQ" rounded type="is-dark" title="Frequently asked questions"><span style="font-size: 1.8em">?</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><a @click="indexFAQ = 'contact'; showFAQ = true;" href="#contact" class="button is-dark is-rounded" title="Contact app creator"><span style="font-size: 1.2em">Mail</span></a></b-navbar-item>
@@ -1872,7 +1872,7 @@
               </b-field>
             </b-field>
             <p class="content">
-              The settings below are provided by the <a href="https://visjs.github.io/vis-network/docs/network/" target="_blank">vis.js network library</a>. They will be saved by using "download full network" and by turning Autosave on ("Save" in the top right). Some settings (including some colors and sizes) do not work properly because they are overwritten by Local Citation Network. Particularly interesting settings are: "layout: hierachical: disable" and "edges: color: inherit: both" (scroll down).
+              The settings below are provided by the <a href="https://visjs.github.io/vis-network/docs/network/" target="_blank">vis.js network library</a>. They will be saved when using 'download full network as JSON'. Some settings (including some colors and sizes) do not work properly because they are overwritten by Local Citation Network. Particularly interesting settings are: "layout: hierachical: disable" and "edges: color: inherit: both" (scroll down).
               <a @click="currentGraph.customConfigCitationNetwork = undefined; resetCurrentNetwork(); initCurrentNetwork(); saveState();">
                 Click here to reset to default.
               </a>
@@ -1905,7 +1905,7 @@
               </b-field>
             </b-field>
             <p class="content">
-              The settings below are provided by the <a href="https://visjs.github.io/vis-network/docs/network/" target="_blank">vis.js network library</a>. They will be saved by using "download full network" and by turning Autosave on ("Save" in the top right). Some settings (including some colors and sizes) do not work properly because they are overwritten by Local Citation Network.
+              The settings below are provided by the <a href="https://visjs.github.io/vis-network/docs/network/" target="_blank">vis.js network library</a>. They will be saved when using 'download full network as JOSN'. Some settings (including some colors and sizes) do not work properly because they are overwritten by Local Citation Network.
               <a @click="currentGraph.customConfigAuthorNetwork = undefined; resetCurrentNetwork(); initCurrentNetwork(); saveState();">
                 Click here to reset to default.
               </a>
@@ -1982,7 +1982,7 @@
         </div>
       </b-modal>
 
-      <b-modal :active.sync="showOptionsExportArticles" :width="460">
+      <b-modal :active.sync="showOptionsExportArticles" :width="320">
         <div class="card">
           <header class="modal-card-head">
             <content>
@@ -1990,15 +1990,14 @@
             </content>
           </header>
           <div class="card-content">
-            <p class="content">
-              Articles are de-duplicated, which is why the numbers are not necessarily the same as on the main page.
-            </p>
-            <b-field><b-checkbox v-model="exportArticlesFiltered">Apply Filters</b-checkbox></b-field>
-            <b-field><b-checkbox v-model="exportArticles" native-value="seedArticles">Seed Articles ({{ this["seedArticles" + ((this.exportArticlesFiltered) ? 'Filtered' : 'DeDuplicated')].length }})</b-checkbox></b-field>
-            <b-field><b-checkbox v-model="exportArticles" native-value="citedArticles">Cited Articles ({{ this["citedArticles" + ((this.exportArticlesFiltered) ? 'Filtered' : 'DeDuplicated')].length }})</b-checkbox></b-field>
-            <b-field><b-checkbox v-model="exportArticles" native-value="citingArticles">Citing Articles ({{ this["citingArticles" + ((this.exportArticlesFiltered) ? 'Filtered' : 'DeDuplicated')].length }})</b-checkbox></b-field>
-            <b-field><b-checkbox v-model="exportArticles" native-value="coCitedArticles" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Cited Articles ({{ this["coCitedArticles" + ((this.exportArticlesFiltered) ? 'Filtered' : 'DeDuplicated')].length }})</b-checkbox></b-field>
-            <b-field><b-checkbox v-model="exportArticles" native-value="coCitingArticles" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Citing Articles ({{ this["coCitingArticles" + ((this.exportArticlesFiltered) ? 'Filtered' : 'DeDuplicated')].length }})</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="currentGraph.deDuplicate" v-if="(currentGraph.API === 'Co*Citation Network via OpenAlex') || (currentGraph.allCited) || (currentGraph.allCited)">De-duplicate articles between tables</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticlesFiltered">Apply filters</b-checkbox></b-field>
+            <p class="content">Articles are always de-duplicated within tables. Export the following tables:</p>
+            <b-field><b-checkbox v-model="exportArticles" native-value="seedArticles">Seed Articles ({{ this["seedArticles" + ((this.exportArticlesFiltered) ? 'Filtered' : '')].length }})</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticles" native-value="citedArticles">Cited Articles ({{ this["citedArticles" + ((this.exportArticlesFiltered) ? 'Filtered' : '')].length }})</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticles" native-value="citingArticles">Citing Articles ({{ this["citingArticles" + ((this.exportArticlesFiltered) ? 'Filtered' : '')].length }})</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticles" native-value="coCitedArticles" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Cited Articles ({{ this["coCitedArticles" + ((this.exportArticlesFiltered) ? 'Filtered' : '')].length }})</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticles" native-value="coCitingArticles" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Citing Articles ({{ this["coCitingArticles" + ((this.exportArticlesFiltered) ? 'Filtered' : '')].length }})</b-checkbox></b-field>
           </div>
           <footer class="modal-card-foot">
             <b-button type="is-primary" title="Open in spreadsheet editor (e.g. Microsoft Excel)" @click="downloadCSVData(exportArticlesArray)">Export CSV ({{ exportArticlesArray.length }})</b-button>
@@ -2012,7 +2011,7 @@
           <div class="card-header-title">
             <content>
               <h3 class="title is-3">Instructions</h3>
-              <a @click="indexFAQ = ['about', 'how-to-use', 'bookmarklet', 'top-cited', 'top-citing', 'citation-network', 'author-network', 'switch-api', 'autosave', 'supported-browsers', 'slow-queries', 'completeness', 'original-order', 'bibliometrics', 'google-scholar', 'idea', 'open-source', 'privacy', 'technicalities', 'contact']">open all</a> / 
+              <a @click="indexFAQ = ['about', 'how-to-use', 'bookmarklet', 'top-cited', 'top-citing', 'citation-network', 'author-network', 'switch-api', 'cache', 'supported-browsers', 'slow-queries', 'completeness', 'original-order', 'bibliometrics', 'google-scholar', 'idea', 'open-source', 'privacy', 'technicalities', 'contact']">open all</a> / 
               <a @click="indexFAQ = []">collapse all</a>
             </content>
           </div>
@@ -2178,13 +2177,13 @@
               <p>Thanks to the formidable <a href="https://i4oc.org/" target="_blank">Initiative for Open Citations (I4OC)</a>, the coverage of all of these services has increased vastly. However, some journals still do not support these ideals - feel free to write them, in case you find one!</p>
             </div>
           </b-collapse>
-          <b-collapse class="card" id="autosave" :open="indexFAQ.includes('autosave')" @open="indexFAQ = 'autosave'" animation="none">
+          <b-collapse class="card" id="cache" :open="indexFAQ.includes('cache')" @open="indexFAQ = 'cache'" animation="none">
             <div slot="trigger" slot-scope="props" class="card-header" role="buton">
-              <h4 class="card-header-title">What does 'Autosave results locally' do?</h4>
+              <h4 class="card-header-title">What does the button 'Cache' in the top right do?</h4>
             </div>
             <div class="card-content content">
               <p>
-                When activated, this option caches your recent networks (up to 5 tabs) and your preferred API locally in your browser in the so-called localStorage. When you revisit this web app, you can pick up where you left. When deactivated, this data is deleted. <a @click="indexFAQ = 'privacy'" href="#privacy">See privacy.</a>
+                When activated, this option tries to cache your networks (up to 5 tabs) and your settings locally in your browser's local storage. When you revisit this web app, you can pick up where you left. When deactivated, this data is deleted, <a @click="indexFAQ = 'privacy'" href="#privacy">see privacy.</a> Large networks cannot be cached because of space constraints, use 'download full network as JSON' instead.
               </p>
             </div>
           </b-collapse>
@@ -2211,7 +2210,7 @@
                 APIs are public with varying response speeds depending on their overall usage and workload. In addition, they might be throttling individual users (as identified by IP address) when they perform too many queries in a row. Checking your internet connection, only querying what's really important, <a @click="indexFAQ = 'switch-api'" href="#switch-api">switching to another API</a> and trying again later might help!
               </p>
               <p>
-                Sometimes (particularly with unstable internet connections) queries seem to run forever. In case you want to cancel loading, activate 'Autosave results locally' (<a @click="indexFAQ = 'autosave'" href="#autosave">see autosave</a>) and refresh the page. You can deactivate autosave afterwards again.
+                Sometimes (particularly with unstable internet connections) queries seem to run forever. In case you want to cancel loading, activate 'Cache' (top right, <a @click="indexFAQ = 'cache'" href="#cache">see caching</a>) and refresh the page. You can deactivate Cache afterwards again.
               </p>
             </div>
           </b-collapse>
@@ -2302,7 +2301,7 @@
             </div>
             <div class="card-content content">
               <p>
-                No, this web app doesn't use any cookies. No user-tracking or fingerprinting is performed and no usage-data is collected by the author of this web app. Optionally, so-called localStorage can be used to cache results and settings locally when "Autosave results locally" is manually turned on (<a @click="indexFAQ = 'autosave'" href="#autosave">see autosave</a>).
+                No, this web app doesn't use any cookies. No user-tracking or fingerprinting is performed and no usage-data is collected by the author of this web app. Optionally, the browser's local storage can be used to cache networks and settings locally when 'Cache' is manually turned on (<a @click="indexFAQ = 'cache'" href="#cache">see caching</a>).
               </p>
               <p>
                 This web app is running locally on your computer and only contacts the API servers during runtime. Crossref has a <a href="https://www.crossref.org/privacy/" target="_blank">general privacy statement</a>. This web app is hosted by GitHub pages, see their <a href="https://help.github.com/en/github/site-policy/github-privacy-statement#github-pages" target="_blank">privacy statement here</a>.
