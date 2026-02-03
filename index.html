@@ -228,7 +228,7 @@
                   {{ authorStringShort(currentGraph.source.authors) }}.
                 </template>
                 <a :href="currentGraph.bookmarkletURL || articleLink(currentGraph.source)" target="_blank"><em :class="{ retracted: currentGraph.source.isRetracted }">{{ currentGraph.source.title }}</em></a>. {{ currentGraph.source.journal }}. {{ currentGraph.source.year }}.
-                <a @click="selected = seedArticles.filter(x => x.isSource)[0]">(select)</a>
+                <a @click="selectId(currentGraph.source.id)">(select)</a>
               </p>
               <p>
                 Data retrieved through <a @click="indexFAQ = 'switch-api'; showFAQ = true;" href="#switch-api">{{ currentGraph.API + ((abbreviateAPI(currentGraph.API)) ? ' (' + abbreviateAPI(currentGraph.API) + ')' : '') }}</a> on {{ new Date(currentGraph.timestamp).toLocaleString(undefined, {"day": "numeric", "month": "long", "year": "numeric"}) }}
@@ -291,13 +291,13 @@
                 {{ seedArticlesFiltered.length + " / " + seedArticles.length }}
               </div>
             </b-field>
-            <b-table ref="seedArticlesTabTable" :data="seedArticlesFiltered" :selected.sync="selectedSeedArticle" :current-page.sync="seedArticlesTabTablePage"
+            <b-table ref="seedArticlesTabTable" :data="seedArticlesFiltered" :selected.sync="selectedArticle" :current-page.sync="seedArticlesTabTablePage"
               :default-sort="(showNumberInSourceReferences) ? ['numberInSourceReferences', 'asc'] : ['year', 'desc']"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
               @keydown.native.arrow-up.capture="tableArrowUpChangePage"
               @keydown.native.arrow-down.capture="tableArrowDownChangePage"
-              detailed :has-detailed-visible="row => (row.authors.length || citedCount(row.id) || citingCount(row.id) || row.abstract || row.tldr)"
+              detailed :has-detailed-visible="row => (row.authors.length || row.abstract || row.tldr)"
               hoverable striped narrowed focusable
               paginated :per-page="articlesPerPage" pagination-position="both">
               <template slot="top-left">
@@ -624,13 +624,14 @@
                 {{ citedArticlesFiltered.length + " / " + citedArticles.length }}
               </div>
             </b-field>
-            <b-table ref="citedArticlesTabTable" :data="citedArticlesFiltered" :selected.sync="selectedCitedArticle" :current-page.sync="citedArticlesTabTablePage"
+            <b-table ref="citedArticlesTabTable" :data="citedArticlesFiltered" :selected.sync="selectedArticle" :current-page.sync="citedArticlesTabTablePage"
               :default-sort="['citedCount', 'desc']"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
               @keydown.native.arrow-up.capture="tableArrowUpChangePage"
               @keydown.native.arrow-down.capture="tableArrowDownChangePage"
-              detailed hoverable striped narrowed focusable
+              detailed :has-detailed-visible="row => (row.authors.length || row.abstract || row.tldr)"
+              hoverable striped narrowed focusable
               paginated :per-page="articlesPerPage" pagination-position="both">
               <template slot="top-left">
                 <b-field grouped>
@@ -930,13 +931,14 @@
                 {{ citingArticlesFiltered.length + " / " + citingArticles.length }}
               </div>
             </b-field>
-            <b-table ref="citingArticlesTabTable" :data="citingArticlesFiltered" :selected.sync="selectedCitingArticle" :current-page.sync="citingArticlesTabTablePage"
+            <b-table ref="citingArticlesTabTable" :data="citingArticlesFiltered" :selected.sync="selectedArticle" :current-page.sync="citingArticlesTabTablePage"
               :default-sort="['citingCount', 'desc']"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
               @keydown.native.arrow-up.capture="tableArrowUpChangePage"
               @keydown.native.arrow-down.capture="tableArrowDownChangePage"
-              detailed hoverable striped narrowed focusable
+              detailed :has-detailed-visible="row => (row.authors.length || row.abstract || row.tldr)"
+              hoverable striped narrowed focusable
               paginated :per-page="articlesPerPage" pagination-position="both">
               <template slot="top-left">
                 <b-field grouped>
@@ -1235,13 +1237,14 @@
                 {{ coCitedArticlesFiltered.length + " / " + coCitedArticles.length }}
               </div>
             </b-field>
-            <b-table ref="coCitedArticlesTabTable" :data="coCitedArticlesFiltered" :selected.sync="selectedCoCitedArticle" :current-page.sync="coCitedArticlesTabTablePage"
+            <b-table ref="coCitedArticlesTabTable" :data="coCitedArticlesFiltered" :selected.sync="selectedArticle" :current-page.sync="coCitedArticlesTabTablePage"
               :default-sort="['coCitedCount', 'desc']"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
               @keydown.native.arrow-up.capture="tableArrowUpChangePage"
               @keydown.native.arrow-down.capture="tableArrowDownChangePage"
-              detailed hoverable striped narrowed focusable
+              detailed :has-detailed-visible="row => (row.authors.length || row.abstract || row.tldr)"
+              hoverable striped narrowed focusable
               paginated :per-page="articlesPerPage" pagination-position="both">
               <template slot="top-left">
                 <b-field grouped>
@@ -1540,13 +1543,14 @@
                 {{ coCitingArticlesFiltered.length + " / " + coCitingArticles.length }}
               </div>
             </b-field>
-            <b-table ref="coCitingArticlesTabTable" :data="coCitingArticlesFiltered" :selected.sync="selectedCoCitingArticle" :current-page.sync="coCitingArticlesTabTablePage"
+            <b-table ref="coCitingArticlesTabTable" :data="coCitingArticlesFiltered" :selected.sync="selectedArticle" :current-page.sync="coCitingArticlesTabTablePage"
               :default-sort="['coCitingCount', 'desc']"
               @keyup.native.arrow-left="toggleArticle"
               @keyup.native.arrow-right="toggleArticle"
               @keydown.native.arrow-up.capture="tableArrowUpChangePage"
               @keydown.native.arrow-down.capture="tableArrowDownChangePage"
-              detailed hoverable striped narrowed focusable
+              detailed :has-detailed-visible="row => (row.authors.length || row.abstract || row.tldr)"
+              hoverable striped narrowed focusable
               paginated :per-page="articlesPerPage" pagination-position="both">
               <template slot="top-left">
                 <b-field grouped>

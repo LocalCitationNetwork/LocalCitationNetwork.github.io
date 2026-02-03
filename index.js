@@ -754,7 +754,7 @@ function initCitationNetwork (app, minDegreeCitedArticles = 1, minDegreeCitingAr
       app.selectId(selectedNodeId)
     // Don't select edges
     } else {
-      app.selected = undefined
+      app.selectedArticle = undefined
       citationNetwork.setSelection({
         nodes: [],
         edges: []
@@ -765,7 +765,7 @@ function initCitationNetwork (app, minDegreeCitedArticles = 1, minDegreeCitingAr
   function networkOnDoubleClick (params) {
     // Open article in new tab
     if (params.nodes.length > 0) {
-      window.open(app.articleLink(app.selected), '_blank')
+      window.open(app.articleLink(app.selectedArticle), '_blank')
     } else {
       citationNetwork.fit()
     }
@@ -934,7 +934,7 @@ function initAuthorNetwork (app, minPublications = undefined) {
         app.filterAuthors = '(?=.*' + allAuthors[edge.from].name + ')(?=.*' + allAuthors[edge.to].name + ')'
         // Otherwise reset uiFilterId
       } else {
-        app.selected = undefined
+        app.selectedArticle = undefined
         app.filterAuthors = ''
       }
     // If just one node is selected perform simple filter for that author
@@ -998,11 +998,7 @@ const vm = new Vue({
     filterYearMin: undefined,
     filterYearMax: undefined,
     filterJournal: '',
-    selectedSeedArticle: undefined,
-    selectedCitedArticle: undefined,
-    selectedCitingArticle: undefined,
-    selectedCoCitedArticle: undefined,
-    selectedCoCitingArticle: undefined,
+    selectedArticle: undefined,
     articlesPerPage: 20,
     seedArticlesTabTablePage: 1,
     citedArticlesTabTablePage: 1,
@@ -1108,42 +1104,6 @@ const vm = new Vue({
       // Reduce referenced Object to items with key in articles.id
       referenced = articles.map(x => x.id).filter(x => Object.keys(referenced).includes(x)).reduce((reducedReferenced, id) => { reducedReferenced[id] = referenced[id]; return reducedReferenced }, {})
       return { referenced, citing }
-    },
-    selected: {
-      get: function () {
-        switch (this.showArticlesTab) {
-          case 'seedArticlesTab': return this.selectedSeedArticle
-          case 'citedArticlesTab': return this.selectedCitedArticle
-          case 'citingArticlesTab': return this.selectedCitingArticle
-          case 'coCitedArticlesTab': return this.selectedCoCitedArticle
-          case 'coCitingArticlesTab': return this.selectedCoCitingArticle
-        }
-      },
-      set: function (x) {
-        switch (this.showArticlesTab) {
-          case 'seedArticlesTab':
-            this.selectedSeedArticle = x
-            if (x) this.seedArticlesTabTablePage = Math.ceil((this.$refs.seedArticlesTabTable.newData.indexOf(x) + 1) / vm.articlesPerPage)
-            break
-          case 'citedArticlesTab':
-            this.selectedCitedArticle = x
-            if (x) this.citedArticlesTabTablePage = Math.ceil((this.$refs.citedArticlesTabTable.newData.indexOf(x) + 1) / vm.articlesPerPage)
-            break
-          case 'citingArticlesTab':
-            this.selectedCitingArticle = x
-            if (x) this.citingArticlesTabTablePage = Math.ceil((this.$refs.citingArticlesTabTable.newData.indexOf(x) + 1) / vm.articlesPerPage)
-            break
-          case 'coCitedArticlesTab':
-            this.selectedCoCitedArticle = x
-            if (x) this.coCitedArticlesTabTablePage = Math.ceil((this.$refs.coCitedArticlesTabTable.newData.indexOf(x) + 1) / vm.articlesPerPage)
-            break
-          case 'coCitingArticlesTab':
-            this.selectedCoCitingArticle = x
-            if (x) this.coCitingArticlesTabTablePage = Math.ceil((this.$refs.coCitingArticlesTabTable.newData.indexOf(x) + 1) / vm.articlesPerPage)
-            break
-        }
-        if (x && document.getElementById(x.id)) document.getElementById(x.id).scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }
     },
     linkToShareAppendix: function () {
       let appendix = '?API=' + encodeURIComponent(this.currentGraph.API)
@@ -1370,9 +1330,8 @@ const vm = new Vue({
         this.file = undefined
       })
     },
-    // A different node (reference) in the graph or a different article in the table has been selected
-    selected: function () {
-      // Highlight the right network node
+    // A different node in the network or a different article in a table has been selected
+    selectedArticle: function () {
       this.highlightNodes()
     },
     showAuthorNetwork: function () {
@@ -1390,7 +1349,7 @@ const vm = new Vue({
       this.filterYearMin = undefined
       this.filterYearMax = undefined
       this.filterJournal = ''
-      this.selected = undefined
+      this.selectedArticle = undefined
 
       // Reset table paging
       this.seedArticlesTabTablePage = 1
@@ -1646,10 +1605,10 @@ const vm = new Vue({
         if (selectedAuthorNodeIds) {
           selectedNodeIds = selectedAuthorNodeIds
         // If no nodes are clicked they depend on table selection
-        } else if (this.selected) {
+        } else if (this.selectedArticle) {
           selectedNodeIds = []
           // authorString converts author to full name, as currently used as node id in authorNetwork
-          this.selected.authors.map(x => this.authorString([x])).forEach(author => {
+          this.selectedArticle.authors.map(x => this.authorString([x])).forEach(author => {
             if (network.body.data.nodes.getIds().includes(author)) {
               selectedNodeIds.push(author)
             }
@@ -1659,8 +1618,8 @@ const vm = new Vue({
         }
       // Citation network
       } else {
-        if (this.selected && network.body.data.nodes.getIds().includes(this.selected.id)) {
-          selectedNodeIds = [this.selected.id]
+        if (this.selectedArticle && network.body.data.nodes.getIds().includes(this.selectedArticle.id)) {
+          selectedNodeIds = [this.selectedArticle.id]
         } else {
           selectedNodeIds = []
         }
@@ -1688,7 +1647,7 @@ const vm = new Vue({
           }
         }
         // Show color and label for either highlighted nodes or all nodes if none are highlighted
-        if (selectedNodeIds.includes(node.id) || connectedNodes.includes(node.id) || (!selectedNodeIds.length && !this.selected)) {
+        if (selectedNodeIds.includes(node.id) || connectedNodes.includes(node.id) || (!selectedNodeIds.length && !this.selectedArticle)) {
           node.color = undefined
           if (node.hiddenLabel !== undefined) {
             node.label = node.hiddenLabel
@@ -1710,27 +1669,33 @@ const vm = new Vue({
       // Seed article node was clicked (circle)
       if (this.seedArticlesIds.includes(id)) {
         this.showArticlesTab = 'seedArticlesTab'
-        this.selected = this.seedArticles[this.seedArticlesIds.indexOf(id)]
+        this.selectedArticle = this.seedArticles[this.seedArticlesIds.indexOf(id)]
+        this.seedArticlesTabTablePage = Math.ceil((this.$refs.seedArticlesTabTable.newData.indexOf(this.selectedArticle) + 1) / vm.articlesPerPage)
       // Cited article node was clicked (up-pointing triangle)
       } else if (this.citedArticlesIds.includes(id)) {
         this.showArticlesTab = 'citedArticlesTab'
-        this.selected = this.citedArticles[this.citedArticlesIds.indexOf(id)]
+        this.selectedArticle = this.citedArticles[this.citedArticlesIds.indexOf(id)]
+        this.citedArticlesTabTablePage = Math.ceil((this.$refs.citedArticlesTabTable.newData.indexOf(this.selectedArticle) + 1) / vm.articlesPerPage)
       // Citing article node was clicked (down-pointing triangle)
       } else if (this.citingArticlesIds.includes(id)) {
         this.showArticlesTab = 'citingArticlesTab'
-        this.selected = this.citingArticles[this.citingArticlesIds.indexOf(id)]
+        this.selectedArticle = this.citingArticles[this.citingArticlesIds.indexOf(id)]
+        this.citingArticlesTabTablePage = Math.ceil((this.$refs.citingArticlesTabTable.newData.indexOf(this.selectedArticle) + 1) / vm.articlesPerPage)
       // Co-Cited article node was clicked (diamond)
       } else if (this.coCitedArticlesIds.includes(id)) {
         this.showArticlesTab = 'coCitedArticlesTab'
-        this.selected = this.coCitedArticles[this.coCitedArticlesIds.indexOf(id)]
+        this.selectedArticle = this.coCitedArticles[this.coCitedArticlesIds.indexOf(id)]
+        this.coCitedArticlesTabTablePage = Math.ceil((this.$refs.coCitedArticlesTabTable.newData.indexOf(this.selectedArticle) + 1) / vm.articlesPerPage)
       // Co-Citing article node was clicked (diamond)
       } else if (this.coCitingArticlesIds.includes(id)) {
         this.showArticlesTab = 'coCitingArticlesTab'
-        this.selected = this.coCitingArticles[this.coCitingArticlesIds.indexOf(id)]
+        this.selectedArticle = this.coCitingArticles[this.coCitingArticlesIds.indexOf(id)]
+        this.coCitingArticlesTabTablePage = Math.ceil((this.$refs.coCitingArticlesTabTable.newData.indexOf(this.selectedArticle) + 1) / vm.articlesPerPage)
       // This should not occur
       } else {
         this.errorMessage('Error: Undefined node was clicked')
       }
+      if (document.getElementById(this.selectedArticle.id)) document.getElementById(this.selectedArticle.id).scrollIntoView({ behavior: 'smooth', block: 'center' })
     },
     init: function () {
       this.resetBothNetworks()
@@ -2028,18 +1993,18 @@ const vm = new Vue({
     },
     toggleArticle: function () {
       // Same condition as in :has-detailed-visible
-      if (this.selected.authors.length || this.citedCount(this.selected.id) || this.citingCount(this.selected.id) || this.selected.abstract || this.selected.tldr) {
-        this.$refs[this.showArticlesTab + 'Table'].toggleDetails(this.selected)
+      if (this.selectedArticle.authors.length || this.selectedArticle.abstract || this.selectedArticle.tldr) {
+        this.$refs[this.showArticlesTab + 'Table'].toggleDetails(this.selectedArticle)
       }
     },
     tableArrowUpChangePage: function () {
-      if (this[this.showArticlesTab + 'TablePage'] > 1 && (this.$refs[this.showArticlesTab + 'Table'].newData.indexOf(this.selected) + 1) % vm.articlesPerPage === 1) {
+      if (this[this.showArticlesTab + 'TablePage'] > 1 && (this.$refs[this.showArticlesTab + 'Table'].newData.indexOf(this.selectedArticle) + 1) % vm.articlesPerPage === 1) {
         this[this.showArticlesTab + 'TablePage'] -= 1
       }
     },
     tableArrowDownChangePage: function () {
       const maxPage = Math.ceil(this.$refs[this.showArticlesTab + 'Table'].newData.length / vm.articlesPerPage)
-      if (this[this.showArticlesTab + 'TablePage'] < maxPage && (this.$refs[this.showArticlesTab + 'Table'].newData.indexOf(this.selected) + 1) % vm.articlesPerPage === 0) {
+      if (this[this.showArticlesTab + 'TablePage'] < maxPage && (this.$refs[this.showArticlesTab + 'Table'].newData.indexOf(this.selectedArticle) + 1) % vm.articlesPerPage === 0) {
         this[this.showArticlesTab + 'TablePage'] += 1
       }
     },
