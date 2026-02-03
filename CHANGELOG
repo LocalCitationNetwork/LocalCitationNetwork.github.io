@@ -1,5 +1,6 @@
-02.02.2026 v1.31
+03.02.2026 v1.31
 + More elaborate "Filter Articles" options: Filter separately by Title & Abstract, Authors, Year Range, and Journal.
++ Add options to "Apply Filters" before exporting articles as CSV or RIS.
 * Convert former filterColumn and articlesPerPage b-select to b-dropdown.
 ! Fix table-colummn sorting in Chromium-based browsers (the issue was introduced in v1.30 in sortWrapper function).
 

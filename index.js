@@ -1024,8 +1024,8 @@ const vm = new Vue({
     showAuthorNetworkSettings: false,
     showOptionsAPI: false,
     showOptionsExportArticles: false,
-    exportFilteredArticles: false,
-    exportArticles: ['seedArticles', 'citedArticlesDeDuplicated', 'citingArticlesDeDuplicated', 'coCitedArticlesDeDuplicated', 'coCitingArticlesDeDuplicated']
+    exportArticlesFiltered: false,
+    exportArticles: ['seedArticles', 'citedArticles', 'citingArticles', 'coCitedArticles', 'coCitingArticles']
   },
   computed: {
     editedListOfIds: {
@@ -1054,6 +1054,9 @@ const vm = new Vue({
     coCitingArticles: function () {
       if (this.currentGraph.deDuplicate) return this.coCitingArticlesDeDuplicated
       return this.currentGraph.coCitingArticles ?? []
+    },
+    seedArticlesDeDuplicated: function () {
+      return this.seedArticles
     },
     citedArticlesDeDuplicated: function () {
       return (this.currentGraph.citedArticles ?? []).filter(x => !this.seedArticlesIds.includes(x.id))
@@ -1121,7 +1124,6 @@ const vm = new Vue({
           case 'seedArticlesTab':
             this.selectedSeedArticle = x
             if (x) this.seedArticlesTabTablePage = Math.ceil((this.$refs.seedArticlesTabTable.newData.indexOf(x) + 1) / vm.articlesPerPage)
-            if (x) console.log(Math.ceil((this.$refs.seedArticlesTabTable.newData.indexOf(x) + 1) / vm.articlesPerPage))
             break
           case 'citedArticlesTab':
             this.selectedCitedArticle = x
@@ -1159,7 +1161,7 @@ const vm = new Vue({
       return this.currentGraph.API === 'Crossref' || (this.currentGraph.source.customListOfReferences !== undefined) || !this.currentGraph.source.id
     },
     exportArticlesArray: function () {
-      return this.exportArticles.map(x => this[x + ((this.exportFilteredArticles) ? 'Filtered' : '')]).flat()
+      return this.exportArticles.map(x => this[x + ((this.exportArticlesFiltered) ? 'Filtered' : 'DeDuplicated')]).flat()
     },
     yearRangeDefault: function () {
       const years = this.seedArticles.concat(this.citedArticles).concat(this.citingArticles).map(article => article.year).filter(year => year)
@@ -1380,7 +1382,6 @@ const vm = new Vue({
   methods: {
     // Initialize graph when new tab is opened / tab is changed
     setCurrentTabIndex: function (index) {
-      console.log('setCurrentTabIndex', index)
       // Reset UI elements when tab is changed
       this.showArticlesTab = 'seedArticlesTab'
       this.uiFilterId = ''
@@ -1819,7 +1820,7 @@ const vm = new Vue({
           a = secondSortColumn(articleA)
           b = secondSortColumn(articleB)
         }
-        if (typeof(a) === 'string' || typeof(b) === 'string') return ('' + a).localeCompare('' + b)
+        if (typeof(a) === 'string' || typeof(b) === 'string') return (a ?? '').localeCompare(b ?? '')
         return (a ?? -1) - (b ?? -1)
       }
       return (ascending) ? compare(a, b) : compare(b, a)

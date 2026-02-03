@@ -131,11 +131,6 @@
         font-style: normal;
       }
 
-      .mdi-magnify:before {
-        content: "🔍";
-        font: 1.3em bold sans-serif;
-      }
-
       .mdi-close:before {
         content: "×";
         font: 2.3em bold sans-serif;
@@ -144,6 +139,8 @@
       /* Vis.js Network tooltip */
 
       div.vis-tooltip {
+        font-family: sans-serif;
+        font-size: 1.2rem;
         white-space: normal;
         max-width: 20vw;
         word-wrap: break-word;
@@ -275,13 +272,15 @@
               </b-dropdown>
               <div class="input is-static control has-icons-right is-expanded" style="padding-left: calc(.75em - 1px); border: 1px solid #dbdbdb; border-left: 0; border-radius: 0; background-color: #f4f4f4; color: #353535; overflow: hidden">
                 <template v-if="uiFilterId || filterTitleAbstract || filterAuthors || ((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1])) || filterJournal">
-                  <template v-if="uiFilterId">
-                    {{ ['citedById', 'citedBySeedArticleId'].includes(uiFilterType) ? 'Cited by' : 'Citing' }}:&nbsp;<a @click="let id=uiFilterId; uiFilterId=''; setTimeout(() => selectId(id), 1)">{{ articleIdToObject(uiFilterId).authors[0]?.LN + ' ' + articleIdToObject(uiFilterId).year }}</a>;
-                  </template>
-                  {{ ((filterTitleAbstract) ? 'Title / Abstract: ' +  filterTitleAbstract + "; ": '' ) }}
-                  {{ ((filterAuthors) ? 'Authors: ' +  filterAuthors + "; ": '' ) }}
-                  {{ (((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1]))) ? 'Year Range: ' + filterYearRange[0] + " - " + filterYearRange[1] + '; ' : '' }}
-                  {{ ((filterJournal) ? 'Journal: ' +  filterJournal + "; ": '' ) }}
+                  <span style="display: block; white-space: nowrap; overflow-x: auto; width: 0; min-width: calc(100% - 2.5em);">
+                    <template v-if="uiFilterId">
+                      {{ ['citedById', 'citedBySeedArticleId'].includes(uiFilterType) ? 'Cited by' : 'Citing' }}:&nbsp;<a @click="() => {let id=uiFilterId; uiFilterId=''; setTimeout(() => selectId(id), 1)}">{{ articleIdToObject(uiFilterId).authors[0]?.LN + ' ' + articleIdToObject(uiFilterId).year }}</a>;
+                    </template>
+                    {{ ((filterTitleAbstract) ? 'Title / Abstract: ' +  filterTitleAbstract + "; ": '' ) }}
+                    {{ ((filterAuthors) ? 'Authors: ' +  filterAuthors + "; ": '' ) }}
+                    {{ (((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1]))) ? 'Year Range: ' + filterYearRange[0] + " - " + filterYearRange[1] + '; ' : '' }}
+                    {{ ((filterJournal) ? 'Journal: ' +  filterJournal + "; ": '' ) }}
+                  </span>
                   <span class="icon is-right is-clickable" @click="uiFilterId=''; filterTitleAbstract=''; filterAuthors=''; filterYearRange=[]; filterJournal=''"><i class="mdi mdi-close mdi-24px" style="color: #494949"></i></span>
                 </template>
                 <template v-else>
@@ -606,13 +605,15 @@
               </b-dropdown>
               <div class="input is-static control has-icons-right is-expanded" style="padding-left: calc(.75em - 1px); border: 1px solid #dbdbdb; border-left: 0; border-radius: 0; background-color: #f4f4f4; color: #353535; overflow: hidden">
                 <template v-if="uiFilterId || filterTitleAbstract || filterAuthors || ((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1])) || filterJournal">
-                  <template v-if="uiFilterId">
-                    {{ ['citedById', 'citedBySeedArticleId'].includes(uiFilterType) ? 'Cited by' : 'Citing' }}:&nbsp;<a @click="let id=uiFilterId; uiFilterId=''; setTimeout(() => selectId(id), 1)">{{ articleIdToObject(uiFilterId).authors[0]?.LN + ' ' + articleIdToObject(uiFilterId).year }}</a>;
-                  </template>
-                  {{ ((filterTitleAbstract) ? 'Title / Abstract: ' +  filterTitleAbstract + "; ": '' ) }}
-                  {{ ((filterAuthors) ? 'Authors: ' +  filterAuthors + "; ": '' ) }}
-                  {{ (((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1]))) ? 'Year Range: ' + filterYearRange[0] + " - " + filterYearRange[1] + '; ' : '' }}
-                  {{ ((filterJournal) ? 'Journal: ' +  filterJournal + "; ": '' ) }}
+                  <span style="display: block; white-space: nowrap; overflow-x: auto; width: 0; min-width: calc(100% - 2.5em);">
+                    <template v-if="uiFilterId">
+                      {{ ['citedById', 'citedBySeedArticleId'].includes(uiFilterType) ? 'Cited by' : 'Citing' }}:&nbsp;<a @click="() => {let id=uiFilterId; uiFilterId=''; setTimeout(() => selectId(id), 1)}">{{ articleIdToObject(uiFilterId).authors[0]?.LN + ' ' + articleIdToObject(uiFilterId).year }}</a>;
+                    </template>
+                    {{ ((filterTitleAbstract) ? 'Title / Abstract: ' +  filterTitleAbstract + "; ": '' ) }}
+                    {{ ((filterAuthors) ? 'Authors: ' +  filterAuthors + "; ": '' ) }}
+                    {{ (((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1]))) ? 'Year Range: ' + filterYearRange[0] + " - " + filterYearRange[1] + '; ' : '' }}
+                    {{ ((filterJournal) ? 'Journal: ' +  filterJournal + "; ": '' ) }}
+                  </span>
                   <span class="icon is-right is-clickable" @click="uiFilterId=''; filterTitleAbstract=''; filterAuthors=''; filterYearRange=[]; filterJournal=''"><i class="mdi mdi-close mdi-24px" style="color: #494949"></i></span>
                 </template>
                 <template v-else>
@@ -910,13 +911,15 @@
               </b-dropdown>
               <div class="input is-static control has-icons-right is-expanded" style="padding-left: calc(.75em - 1px); border: 1px solid #dbdbdb; border-left: 0; border-radius: 0; background-color: #f4f4f4; color: #353535; overflow: hidden">
                 <template v-if="uiFilterId || filterTitleAbstract || filterAuthors || ((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1])) || filterJournal">
-                  <template v-if="uiFilterId">
-                    {{ ['citedById', 'citedBySeedArticleId'].includes(uiFilterType) ? 'Cited by' : 'Citing' }}:&nbsp;<a @click="let id=uiFilterId; uiFilterId=''; setTimeout(() => selectId(id), 1)">{{ articleIdToObject(uiFilterId).authors[0]?.LN + ' ' + articleIdToObject(uiFilterId).year }}</a>;
-                  </template>
-                  {{ ((filterTitleAbstract) ? 'Title / Abstract: ' +  filterTitleAbstract + "; ": '' ) }}
-                  {{ ((filterAuthors) ? 'Authors: ' +  filterAuthors + "; ": '' ) }}
-                  {{ (((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1]))) ? 'Year Range: ' + filterYearRange[0] + " - " + filterYearRange[1] + '; ' : '' }}
-                  {{ ((filterJournal) ? 'Journal: ' +  filterJournal + "; ": '' ) }}
+                  <span style="display: block; white-space: nowrap; overflow-x: auto; width: 0; min-width: calc(100% - 2.5em);">
+                    <template v-if="uiFilterId">
+                      {{ ['citedById', 'citedBySeedArticleId'].includes(uiFilterType) ? 'Cited by' : 'Citing' }}:&nbsp;<a @click="() => {let id=uiFilterId; uiFilterId=''; setTimeout(() => selectId(id), 1)}">{{ articleIdToObject(uiFilterId).authors[0]?.LN + ' ' + articleIdToObject(uiFilterId).year }}</a>;
+                    </template>
+                    {{ ((filterTitleAbstract) ? 'Title / Abstract: ' +  filterTitleAbstract + "; ": '' ) }}
+                    {{ ((filterAuthors) ? 'Authors: ' +  filterAuthors + "; ": '' ) }}
+                    {{ (((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1]))) ? 'Year Range: ' + filterYearRange[0] + " - " + filterYearRange[1] + '; ' : '' }}
+                    {{ ((filterJournal) ? 'Journal: ' +  filterJournal + "; ": '' ) }}
+                  </span>
                   <span class="icon is-right is-clickable" @click="uiFilterId=''; filterTitleAbstract=''; filterAuthors=''; filterYearRange=[]; filterJournal=''"><i class="mdi mdi-close mdi-24px" style="color: #494949"></i></span>
                 </template>
                 <template v-else>
@@ -1213,13 +1216,15 @@
               </b-dropdown>
               <div class="input is-static control has-icons-right is-expanded" style="padding-left: calc(.75em - 1px); border: 1px solid #dbdbdb; border-left: 0; border-radius: 0; background-color: #f4f4f4; color: #353535; overflow: hidden">
                 <template v-if="uiFilterId || filterTitleAbstract || filterAuthors || ((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1])) || filterJournal">
-                  <template v-if="uiFilterId">
-                    {{ ['citedById', 'citedBySeedArticleId'].includes(uiFilterType) ? 'Cited by' : 'Citing' }}:&nbsp;<a @click="let id=uiFilterId; uiFilterId=''; setTimeout(() => selectId(id), 1)">{{ articleIdToObject(uiFilterId).authors[0]?.LN + ' ' + articleIdToObject(uiFilterId).year }}</a>;
-                  </template>
-                  {{ ((filterTitleAbstract) ? 'Title / Abstract: ' +  filterTitleAbstract + "; ": '' ) }}
-                  {{ ((filterAuthors) ? 'Authors: ' +  filterAuthors + "; ": '' ) }}
-                  {{ (((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1]))) ? 'Year Range: ' + filterYearRange[0] + " - " + filterYearRange[1] + '; ' : '' }}
-                  {{ ((filterJournal) ? 'Journal: ' +  filterJournal + "; ": '' ) }}
+                  <span style="display: block; white-space: nowrap; overflow-x: auto; width: 0; min-width: calc(100% - 2.5em);">
+                    <template v-if="uiFilterId">
+                      {{ ['citedById', 'citedBySeedArticleId'].includes(uiFilterType) ? 'Cited by' : 'Citing' }}:&nbsp;<a @click="() => {let id=uiFilterId; uiFilterId=''; setTimeout(() => selectId(id), 1)}">{{ articleIdToObject(uiFilterId).authors[0]?.LN + ' ' + articleIdToObject(uiFilterId).year }}</a>;
+                    </template>
+                    {{ ((filterTitleAbstract) ? 'Title / Abstract: ' +  filterTitleAbstract + "; ": '' ) }}
+                    {{ ((filterAuthors) ? 'Authors: ' +  filterAuthors + "; ": '' ) }}
+                    {{ (((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1]))) ? 'Year Range: ' + filterYearRange[0] + " - " + filterYearRange[1] + '; ' : '' }}
+                    {{ ((filterJournal) ? 'Journal: ' +  filterJournal + "; ": '' ) }}
+                  </span>
                   <span class="icon is-right is-clickable" @click="uiFilterId=''; filterTitleAbstract=''; filterAuthors=''; filterYearRange=[]; filterJournal=''"><i class="mdi mdi-close mdi-24px" style="color: #494949"></i></span>
                 </template>
                 <template v-else>
@@ -1516,13 +1521,15 @@
               </b-dropdown>
               <div class="input is-static control has-icons-right is-expanded" style="padding-left: calc(.75em - 1px); border: 1px solid #dbdbdb; border-left: 0; border-radius: 0; background-color: #f4f4f4; color: #353535; overflow: hidden">
                 <template v-if="uiFilterId || filterTitleAbstract || filterAuthors || ((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1])) || filterJournal">
-                  <template v-if="uiFilterId">
-                    {{ ['citedById', 'citedBySeedArticleId'].includes(uiFilterType) ? 'Cited by' : 'Citing' }}:&nbsp;<a @click="let id=uiFilterId; uiFilterId=''; setTimeout(() => selectId(id), 1)">{{ articleIdToObject(uiFilterId).authors[0]?.LN + ' ' + articleIdToObject(uiFilterId).year }}</a>;
-                  </template>
-                  {{ ((filterTitleAbstract) ? 'Title / Abstract: ' +  filterTitleAbstract + "; ": '' ) }}
-                  {{ ((filterAuthors) ? 'Authors: ' +  filterAuthors + "; ": '' ) }}
-                  {{ (((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1]))) ? 'Year Range: ' + filterYearRange[0] + " - " + filterYearRange[1] + '; ' : '' }}
-                  {{ ((filterJournal) ? 'Journal: ' +  filterJournal + "; ": '' ) }}
+                  <span style="display: block; white-space: nowrap; overflow-x: auto; width: 0; min-width: calc(100% - 2.5em);">
+                    <template v-if="uiFilterId">
+                      {{ ['citedById', 'citedBySeedArticleId'].includes(uiFilterType) ? 'Cited by' : 'Citing' }}:&nbsp;<a @click="() => {let id=uiFilterId; uiFilterId=''; setTimeout(() => selectId(id), 1)}">{{ articleIdToObject(uiFilterId).authors[0]?.LN + ' ' + articleIdToObject(uiFilterId).year }}</a>;
+                    </template>
+                    {{ ((filterTitleAbstract) ? 'Title / Abstract: ' +  filterTitleAbstract + "; ": '' ) }}
+                    {{ ((filterAuthors) ? 'Authors: ' +  filterAuthors + "; ": '' ) }}
+                    {{ (((filterYearRange[0] != yearRangeDefault[0]) || (filterYearRange[1] != yearRangeDefault[1]))) ? 'Year Range: ' + filterYearRange[0] + " - " + filterYearRange[1] + '; ' : '' }}
+                    {{ ((filterJournal) ? 'Journal: ' +  filterJournal + "; ": '' ) }}
+                  </span>
                   <span class="icon is-right is-clickable" @click="uiFilterId=''; filterTitleAbstract=''; filterAuthors=''; filterYearRange=[]; filterJournal=''"><i class="mdi mdi-close mdi-24px" style="color: #494949"></i></span>
                 </template>
                 <template v-else>
@@ -1982,12 +1989,12 @@
             <p class="content">
               Articles are de-duplicated, which is why the numbers are not necessarily the same as on the main page.
             </p>
-            <b-field><b-checkbox v-model="exportFilteredArticles">Apply Filters</b-checkbox></b-field>
-            <b-field><b-checkbox v-model="exportArticles" native-value="seedArticles">Seed Articles ({{ seedArticles?.length }})</b-checkbox></b-field>
-            <b-field><b-checkbox v-model="exportArticles" native-value="citedArticlesDeDuplicated">Cited Articles ({{ citedArticlesDeDuplicated?.length }})</b-checkbox></b-field>
-            <b-field><b-checkbox v-model="exportArticles" native-value="citingArticlesDeDuplicated">Citing Articles ({{ citingArticlesDeDuplicated?.length }})</b-checkbox></b-field>
-            <b-field><b-checkbox v-model="exportArticles" native-value="coCitedArticlesDeDuplicated" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Cited Articles ({{ coCitedArticlesDeDuplicated?.length }})</b-checkbox></b-field>
-            <b-field><b-checkbox v-model="exportArticles" native-value="coCitingArticlesDeDuplicated" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Citing Articles ({{ coCitingArticlesDeDuplicated?.length }})</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticlesFiltered">Apply Filters</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticles" native-value="seedArticles">Seed Articles ({{ this["seedArticles" + ((this.exportArticlesFiltered) ? 'Filtered' : 'DeDuplicated')].length }})</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticles" native-value="citedArticles">Cited Articles ({{ this["citedArticles" + ((this.exportArticlesFiltered) ? 'Filtered' : 'DeDuplicated')].length }})</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticles" native-value="citingArticles">Citing Articles ({{ this["citingArticles" + ((this.exportArticlesFiltered) ? 'Filtered' : 'DeDuplicated')].length }})</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticles" native-value="coCitedArticles" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Cited Articles ({{ this["coCitedArticles" + ((this.exportArticlesFiltered) ? 'Filtered' : 'DeDuplicated')].length }})</b-checkbox></b-field>
+            <b-field><b-checkbox v-model="exportArticles" native-value="coCitingArticles" v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">Co-Citing Articles ({{ this["coCitingArticles" + ((this.exportArticlesFiltered) ? 'Filtered' : 'DeDuplicated')].length }})</b-checkbox></b-field>
           </div>
           <footer class="modal-card-foot">
             <b-button type="is-primary" title="Open in spreadsheet editor (e.g. Microsoft Excel)" @click="downloadCSVData(exportArticlesArray)">Export CSV ({{ exportArticlesArray.length }})</b-button>
