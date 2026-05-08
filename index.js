@@ -6,24 +6,24 @@
 
 'use strict'
 
-const localCitationNetworkVersion = 1.31
+const localCitationNetworkVersion = 1.32
 
 const arrSum = arr => arr.reduce((a, b) => a + b, 0)
 const arrAvg = arr => arrSum(arr) / arr.length
 
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze#examples
-function deepFreeze (object) {
+function deepSeal (object) {
   if (typeof object !== 'object') return object
 
   for (const name of Reflect.ownKeys(object)) {
     const value = object[name]
 
     if ((value && typeof value === 'object') || typeof value === 'function') {
-      deepFreeze(value)
+      deepSeal(value)
     }
   }
 
-  return Object.freeze(object)
+  return Object.seal(object)
 }
 
 function deepMerge (target, source) {
@@ -333,7 +333,26 @@ function revertAbstractFromInvertedIndex (abstract_inverted_index) {
   return abstract.join(' ').replaceAll('  ', ' ').trim()
 }
 
-/* Future Co*Citation Network API */
+/* Experimental Co*Citation Network API (University of Basel internal) */
+
+async function coCitationNetworkAPI (ids) {
+  return fetch('https://openalex-query-api.scicore.unibas.ch/queries', {
+    method: "POST",
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ dois: ids, seed_set_title: vm.listName, rics_rank_cutoff: vm.ricsRankCutoff })
+  }).then(async response => {
+    if (!response.ok) throw(response)
+		const data = await response.json()
+    vm.$buefy.dialog.alert({
+      title: 'Co*Citation Network job submitted',
+      message: 'Save and check these links periodically: <a href="https://openalex-query-api.scicore.unibas.ch/queries/' + data?.job_id + '" target="_blank">status link</a> / <a href="https://openalex-query-api.scicore.unibas.ch/queries/' + data?.job_id + '/result" target="_blank">result link</a> (when finished, open resulting JSON file with button Load on the top right)'
+    })
+    vm.isLoading = false
+  }).catch(async response => {
+    const data = await response.json()
+    vm.errorMessage('Error while processing data through Co*Citation Network API: ' + JSON.stringify(data.detail))
+  })
+}
 
 function coCitationNetworkResponseToArticleArray (data) {
   return Object.keys(data).map(articleId => {
@@ -742,7 +761,7 @@ function initCitationNetwork (app, minDegreeCitedArticles = 1, minDegreeCitingAr
 
   citationNetwork.on('configChange', function (config) {
     // Merge new config changes with previous config changes
-    vm.currentGraph.customConfigCitationNetwork = deepFreeze(deepMerge(vm.currentGraph.customConfigCitationNetwork ?? {}, config))
+    vm.currentGraph.customConfigCitationNetwork = deepSeal(deepMerge(vm.currentGraph.customConfigCitationNetwork ?? {}, config))
   })
 
   function networkOnClick (params) {
@@ -985,6 +1004,7 @@ const vm = new Vue({
     file: undefined,
     listOfIds: undefined,
     listName: undefined,
+    ricsRankCutoff: undefined,
     bookmarkletURL: undefined,
 
     // UI
@@ -1275,6 +1295,8 @@ const vm = new Vue({
                 })
               })
 
+              const timestamp = new Date(graphs.snapshot_date.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3')).getTime()
+
               this.addGraphs([{
                 // graphs: graphs, // keep original CCN JSON for debugging reasons
                 source: { references: graphs.seeds },
@@ -1286,7 +1308,7 @@ const vm = new Vue({
                 allCited: true,
                 allCiting: true,
                 API: 'Co*Citation Network via OpenAlex',
-                timestamp: new Date(graphs.snapshot_date.substr(9).split('-').reverse().join('-')).getTime(),
+                timestamp: timestamp,
                 localCitationNetworkVersion
               }])
 
@@ -1302,7 +1324,8 @@ const vm = new Vue({
                 tabTitle: this.file.name.replace('.json', '') + '\nRanked (In)Direct Citation Searching (RICS)',
                 API: 'Co*Citation Network via OpenAlex',
                 ricsRankCutoff: graphs.rics_rank_cutoff,
-                timestamp: new Date(graphs.snapshot_date.substr(9).split('-').reverse().join('-')).getTime(),
+                ricsRankCutoffAnalysis: deepSeal(graphs.rics_rank_cutoff_analysis),
+                timestamp: timestamp,
                 localCitationNetworkVersion
               }])
             } catch (e) {
@@ -1489,7 +1512,7 @@ const vm = new Vue({
       citedArticles = citedArticles.map(article => { delete article.citations; return article })
 
       // Careful: Array/object item setting can't be picked up by Vue (https://vuejs.org/v2/guide/list.html#Caveats)
-      deepFreeze(citedArticles)
+      deepSeal(citedArticles)
       this.$set(newGraph, 'citedArticles', citedArticles)
       this.saveState(true, false)
       if (this.currentGraph === newGraph) this.init()
@@ -1516,7 +1539,7 @@ const vm = new Vue({
       citingArticles = citingArticles.map(article => { delete article.citations; return article })
 
       // Careful: Array/object item setting can't be picked up by Vue (https://vuejs.org/v2/guide/list.html#Caveats)
-      deepFreeze(citingArticles)
+      deepSeal(citingArticles)
       this.$set(newGraph, 'citingArticles', citingArticles)
       this.saveState(true, false)
 
@@ -1524,13 +1547,13 @@ const vm = new Vue({
     },
     pushGraph: function (newGraph) {
       // Freeze these large objects for performance (happens on the first call of init, is ignored afterwards)
-      deepFreeze(newGraph.source)
-      deepFreeze(newGraph.seedArticles)
-      deepFreeze(newGraph.citedArticles)
-      deepFreeze(newGraph.citingArticles)
-      deepFreeze(newGraph.coCitedArticles)
-      deepFreeze(newGraph.coCitingArticles)
-      deepFreeze(newGraph.customConfigCitationNetwork)
+      deepSeal(newGraph.source)
+      deepSeal(newGraph.seedArticles)
+      deepSeal(newGraph.citedArticles)
+      deepSeal(newGraph.citingArticles)
+      deepSeal(newGraph.coCitedArticles)
+      deepSeal(newGraph.coCitingArticles)
+      deepSeal(newGraph.customConfigCitationNetwork)
       this.graphs.push(newGraph)
 
       // Don't keep more articles in tab-bar than maxTabs
@@ -1551,7 +1574,7 @@ const vm = new Vue({
         this.newSourceId = String(article.doi)
       }
     },
-    clickButtonAdd: function () {
+    clickAddNewSource: function () {
       let message = (this.API === 'OpenAlex')
         ? 'Enter <a href="https://docs.openalex.org/api-entities/works/work-object#ids" target="_blank">DOI / PMID / other ID</a> of new source article'
         : ((this.API === 'Semantic Scholar')
@@ -1798,8 +1821,10 @@ const vm = new Vue({
         return openCitationsWrapper(ids, responseFunction, phase)
       } else if (API === 'Crossref') {
         return crossrefWrapper(ids, responseFunction, phase)
+      } else if (API === 'Co*Citation Network via OpenAlex') {
+        return coCitationNetworkAPI(ids)
       } else {
-        return this.errorMessage("Undefined API '" + API + "'. Must be one of 'OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref'.")
+        return this.errorMessage("Undefined API '" + API + "'. Must be one of 'OpenAlex', 'Semantic Scholar', 'OpenCitations', 'Crossref', 'Co*Citation Network via OpenAlex'.")
       }
     },
     responseToArray: function (data, API) {
@@ -1839,7 +1864,7 @@ const vm = new Vue({
       this.$buefy.toast.open({
         message: String(message),
         type: 'is-danger',
-        duration: 10000,
+        duration: 20000,
         queue: false,
         pauseOnHover: true
       })
@@ -2005,7 +2030,7 @@ const vm = new Vue({
     },
     formatTags: function (text) {
       // 'a' tags only without attributes for blue color in network tooltips!
-      const tags = ['a', 'b', 'br', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'i', 'p', 'subtitle', 'sup', 'u']
+      const tags = ['a', 'b', 'br', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'i', 'p', 'subtitle', 'sub', 'sup', 'u']
       text = text.replaceAll('<', '&lt;').replaceAll('>', '&gt;')
       tags.forEach(tag => {
         text = text.replaceAll(new RegExp('&lt;' + tag + '&gt;', 'gi'), '<' + tag + '>')
@@ -2015,12 +2040,12 @@ const vm = new Vue({
       return text
     },
     importList: function () {
-      if (['OpenCitations', 'Crossref'].includes(this.API)) {
+      if (['OpenCitations', 'Crossref', 'Co*Citation Network via OpenAlex'].includes(this.API)) {
         if (!this.listOfIds.filter(Boolean).every(x => x.match(/10\.\d{4,9}\/\S+/))) return this.errorMessage('For ' + this.API + ', all IDs must be valid DOIs, try other API.')
         this.listOfIds = this.listOfIds.map(x => x ? x.match(/10\.\d{4,9}\/\S+/)[0] : undefined)
       }
-      // Remove observer attributes from listOfIds and deepFreeze
-      const listOfIds = deepFreeze(JSON.parse(JSON.stringify(this.listOfIds)))
+      // Remove observer attributes from listOfIds and deepSeal
+      const listOfIds = deepSeal(JSON.parse(JSON.stringify(this.listOfIds)))
       if (this.newSourceId) {
         this.setNewSource(this.newSourceId, listOfIds)
       } else {
@@ -2126,6 +2151,14 @@ const vm = new Vue({
       anchor.download = filename
       anchor.click()
       anchor.remove()
+    },
+    showCountsByRankCutoff: function () {
+      const rows = vm?.currentGraph?.ricsRankCutoffAnalysis.counts_by_cutoff || []
+      const table = '<table class="table is-striped is-fullwidth"><thead><tr><th>Rank Cutoff</th><th>RICS count</th></tr></thead><tbody>' +
+        rows.map(row => '<tr><td>' + row.cutoff + ((vm?.currentGraph?.ricsRankCutoffAnalysis.empirical_cutoff == row.cutoff) ? ' (empirical)' : '') + ((vm?.currentGraph?.ricsRankCutoffAnalysis.selected_cutoff == row.cutoff) ? ' (selected)' : '') + '</td><td>' + row.rics_count + '</td></tr>').join('') +
+        '</tbody></table>'
+
+      this.$buefy.dialog.alert({message: table, canCancel: true})
     }
   },
   mounted: function () {

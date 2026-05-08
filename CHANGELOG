@@ -1,3 +1,7 @@
+08.05.2026 v1.32
++ Implement internal API for experimental Co*Citation Network (compare https://doi.org/10.17605/OSF.IO/NPM2E).
+* Change default behavior of "+" buttons: Now "Import custom list of IDs".
+
 03.02.2026 v1.31
 + More elaborate "Filter Articles" options: Filter separately by Title & Abstract, Authors, Year Range, and Journal.
 + Add options to "De-duplicate articles between tables" and "Apply filters" before exporting articles as CSV or RIS.

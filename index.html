@@ -175,11 +175,11 @@
           
         <template slot="end">
           <ul class="buttons">
-            <b-navbar-item tag="li"><b-button @click="clickButtonAdd" rounded type="is-dark" title="Add network based on references from a single source DOI" :disabled="isLoading"><span style="font-size: 1.8em; line-height: 0.9 ">+</span></b-button></b-navbar-item>
+            <b-navbar-item tag="li"><b-button @click="editListOfIds = true" rounded type="is-dark" title="Add network based on custom list of IDs" :disabled="isLoading"><span style="font-size: 1.8em; line-height: 0.9 ">+</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-upload v-model="file" :disabled="isLoading"><a class="button is-dark is-rounded" title="Reload downloaded network from JSON or scan plain text file for DOIs" :disabled="isLoading" style="margin: 0 0 0.5rem 0"><span style="font-size: 1.2em">Load</span></a></b-upload></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="clickCloseAllTabs" rounded type="is-dark" title="Close all tabs" :disabled="!graphs.length"><span style="font-size: 1.2em">Close</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="clickToggleAutosave" rounded :type="(autosaveResults) ? '' : 'is-dark'" title="Cache networks and settings in browser's local storage (large networks cannot be cached because of space constraints, use 'download full network as JSON' instead)"><span style="font-size: 1.2em">Cache</span></b-button></b-navbar-item>
-            <b-navbar-item tag="li"><b-button @click="showOptionsAPI = !showOptionsAPI" rounded type="is-dark" title="API Options: OpenAlex (OA) / Semantic Scholar (S2) / Crossref (CR)" :disabled="isLoading"><span  style="font-size: 1.2em">{{ abbreviateAPI(API) }}</span></b-button></b-navbar-item>
+            <b-navbar-item tag="li" v-if="API !== 'Co*Citation Network via OpenAlex'"><b-button @click="showOptionsAPI = !showOptionsAPI" rounded type="is-dark" title="API Options: OpenAlex (OA) / Semantic Scholar (S2) / Crossref (CR)" :disabled="isLoading"><span  style="font-size: 1.2em">{{ abbreviateAPI(API) }}</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><b-button @click="showFAQ = !showFAQ" rounded type="is-dark" title="Frequently asked questions"><span style="font-size: 1.8em">?</span></b-button></b-navbar-item>
             <b-navbar-item tag="li"><a @click="indexFAQ = 'contact'; showFAQ = true;" href="#contact" class="button is-dark is-rounded" title="Contact app creator"><span style="font-size: 1.2em">Mail</span></a></b-navbar-item>
           </ul>
@@ -566,9 +566,9 @@
               </p>
               <p>
                 Cited Articles (▲) are cited by the Seed Articles, i.e., Cited Articles are among the Seed Articles' references. They tend to be older than most Seed Articles. They are derived through <a href="https://doi.org/10.1136/bmj-2023-078384" title="Terminology from: Guidance on terminology, application, and reporting of citation searching: the TARCiS statement" target="_blank">direct backward citation searching</a> (backward in time). They are sorted by the number of Seed Articles they are cited by, with the <a @click="indexFAQ = 'top-cited'; showFAQ = true;" href="#top-cited">Top Cited</a> listed at the top.
-                <template v-if="currentGraph.ricsRankCutoff">
-                  Ranked (In)Direct Citation Searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}
-                </template>
+              </p>
+              <p v-if="currentGraph.ricsRankCutoff">
+                <a @click="showCountsByRankCutoff">Ranked (In)Direct Citation Searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}</a>
               </p>
               <p v-if="(currentGraph.API === 'Co*Citation Network via OpenAlex') || (currentGraph.allCited)">
                 <a @click="$set(currentGraph, 'deDuplicate', !currentGraph.deDuplicate)">{{ (!currentGraph.deDuplicate) ? 'Currently not de-duplicated against Seed Articles (click to toggle).' : 'Currently de-duplicated against Seed Articles (click to toggle).' }}</a>
@@ -873,9 +873,9 @@
               </p>
               <p>
                 Citing Articles (▼) are citing the Seed Articles, i.e., Citing Articles are among the Seed Articles' citations. They tend to be newer than most Seed Articles. They are derived through <a href="https://doi.org/10.1136/bmj-2023-078384" title="Terminology from: Guidance on terminology, application, and reporting of citation searching: the TARCiS statement" target="_blank">direct forward citation searching</a> (forward in time). They are sorted by the number of Seed Articles they are citing, with the <a @click="indexFAQ = 'top-citing'; showFAQ = true;" href="#top-citing">Top Citing</a> listed at the top.
-                <template v-if="currentGraph.ricsRankCutoff">
-                  Ranked (In)Direct Citation Searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}
-                </template>
+              </p>
+              <p v-if="currentGraph.ricsRankCutoff">
+                <a @click="showCountsByRankCutoff">Ranked (In)Direct Citation Searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}</a>
               </p>
               <p v-if="(currentGraph.API === 'Co*Citation Network via OpenAlex') || (currentGraph.allCiting)">
                 <a @click="$set(currentGraph, 'deDuplicate', !currentGraph.deDuplicate)">{{ (!currentGraph.deDuplicate) ? 'Currently not de-duplicated against Seed Articles and Cited (click to toggle).' : 'Currently de-duplicated against Seed Articles and Cited (click to toggle).' }}</a>
@@ -1184,7 +1184,9 @@
                     </div>
                   </template>
                 </b-tooltip>. They are sorted by the number of Seed Articles they are cited by alongside.
-                Ranked (In)Direct Citation Searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}
+              </p>
+              <p v-if="currentGraph.ricsRankCutoff">
+                <a @click="showCountsByRankCutoff">Ranked (In)Direct Citation Searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}</a>
               </p>
               <p v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">
                 <a @click="$set(currentGraph, 'deDuplicate', !currentGraph.deDuplicate)">{{ (!currentGraph.deDuplicate) ? 'Currently not de-duplicated against Seed Articles, Cited and Citing (click to toggle).' : 'Currently de-duplicated against Seed Articles, Cited and Citing (click to toggle).' }}</a>
@@ -1490,7 +1492,9 @@
                     </div>
                   </template>
                 </b-tooltip>. They are sorted by the number of Seed Articles they are citing alongside with.
-                Ranked (In)Direct Citation Searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}
+              </p>
+              <p v-if="currentGraph.ricsRankCutoff">
+                <a @click="showCountsByRankCutoff">Ranked (In)Direct Citation Searching (RICS) rank cutoff: {{ currentGraph.ricsRankCutoff }}</a>
               </p>
               <p v-if="currentGraph.API === 'Co*Citation Network via OpenAlex'">
                 <a @click="$set(currentGraph, 'deDuplicate', !currentGraph.deDuplicate)">{{ (!currentGraph.deDuplicate) ? 'Currently not de-duplicated against Seed Articles, Cited, Citing and Co-Cited (click to toggle).' : 'Currently de-duplicated against Seed Articles, Cited, Citing and Co-Cited (click to toggle).' }}</a>
@@ -1822,7 +1826,7 @@
           <div class="container has-text-centered">
             <b-loading :active.sync="isLoading"></b-loading>
             <h2 class="title">
-              Click <b-button @click="clickButtonAdd" rounded type="is-dark" title="Add network based on references from a single source DOI" :disabled="isLoading" style="width: 3.8rem"><span style="font-size: 1.8em; line-height: 0.9">+</span></b-button> to enter source DOI<br>or scan a plain text file for DOIs instead <b-upload v-model="file" :disabled="isLoading"><a class="button is-dark is-rounded" title="Scan plain text file for DOIs" :disabled="isLoading" style="width: 3.8rem"><span style="font-size: 1.2em; font-weight: normal">File</span></a></b-upload>!
+              Click <b-button @click="editListOfIds = true" rounded type="is-dark" title="Add network based on custom list of IDs" :disabled="isLoading"><span style="font-size: 1.8em; line-height: 0.9">+</span></b-button> to enter list of DOIs<br>or scan a plain text file for DOIs instead <b-upload v-model="file" :disabled="isLoading"><a class="button is-dark is-rounded" title="Scan plain text file for DOIs" :disabled="isLoading" style="width: 3.8rem"><span style="font-size: 1.2em; font-weight: normal">File</span></a></b-upload>!
             </h2>
             (<a @click="loadGraphsFromJSON('examples.json')">Load examples</a> or see <a @click="showFAQ=true">Frequently asked questions</a>)
           </div>
@@ -1920,7 +1924,13 @@
           <header class="modal-card-head">
             <content>
               <h3 class="modal-card-title">Import custom list of IDs</h3>
-              <p>One ID per row, usually DOI. Use OpenAlex / Semantic Scholar for PMIDs (with prefix "pmid:"). Empty rows are placeholders in order to help preserve original numbering.</p>
+              <template v-if="API !== 'Co*Citation Network via OpenAlex'">
+                <p>One ID per row, usually DOI. Use OpenAlex / Semantic Scholar for PMIDs (with prefix "pmid:"). Empty rows are placeholders in order to help preserve original numbering.</p>
+                <a @click="editListOfIds = false; clickAddNewSource()">Enter source DOI instead and use its references as seed articles.</a>
+              </template>
+              <p v-else>
+                One DOI per row.
+              </p>
             </content>
           </header>
           <section style="position: relative; height: 50vh">
@@ -1928,10 +1938,11 @@
             <textarea id="DOIs" style="height: 100%; width: calc(100% - 4rem); position: absolute; left: 4rem; padding: 0 0.2rem; resize: none; border: solid 1px lightgray" spellcheck="false" onscroll="document.getElementById('rownumber').scrollTop = this.scrollTop" v-model="editedListOfIds"></textarea>
           </section>
           <footer class="modal-card-foot">
-            <b-button @click="showOptionsAPI = !showOptionsAPI" style="width: 100%">API: {{ API }} ({{ abbreviateAPI(API) }})</b-button>
-            <b-button @click="clickButtonAdd" style="width: 100%">{{ newSourceId ? 'Source: ' + newSourceId.substr(0, 20) : 'No source' }}</b-button>
+            <b-button @click="showOptionsAPI = !showOptionsAPI" style="width: 100%" v-if="API !== 'Co*Citation Network via OpenAlex'">API: {{ API }} ({{ abbreviateAPI(API) }})</b-button>
+            <b-button @click="clickAddNewSource" style="width: 100%" v-if="API !== 'Co*Citation Network via OpenAlex'">{{ newSourceId ? 'Source: ' + newSourceId.substr(0, 20) : 'No source' }}</b-button>
             <b-button class="is-primary" @click="importList" :disabled="!(listOfIds || []).filter(Boolean).length" style="width: 100%">{{ newSourceId ? 'Import': 'Import with list name: '}}</b-button>
-            <b-input v-if="!newSourceId" v-model.lazy="listName" maxlength="100" :has-counter="false" style="width: 100%"></b-input>
+            <b-input v-if="!newSourceId" v-model.lazy="listName" maxlength="100" :has-counter="false" style="width: 100%" placeholder="Name"></b-input>
+            <b-input v-if="API === 'Co*Citation Network via OpenAlex'" v-model.lazy="ricsRankCutoff" maxlength="2" :has-counter="false" style="width: 200px; margin-left: 0.5em" placeholder="Cutoff" type="number" min="0" max="99"></b-input>
           </footer>
         </div>
       </b-modal>
@@ -2016,6 +2027,29 @@
             </content>
           </div>
         
+          <b-collapse id="about" :open="indexFAQ.includes('about')" @open="indexFAQ = 'about'" animation="none" v-if="API === 'Co*Citation Network via OpenAlex'">
+            <div slot="trigger" slot-scope="props" class="card-header" role="buton">
+              <h4 class="card-header-title">What is Co*Citation Network about?</h4>
+            </div>
+            <div class="card-content content">
+              <p>
+                Co*Citation Network is an experimental implementation of ranked 
+                <b-tooltip dashed position="is-bottom" type="is-dark" append-to-body>
+                  <a href="https://doi.org/10.1136/bmj-2023-078384" target="_blank">(in)direct citation searching</a>
+                  <template v-slot:content>
+                    <div style="text-align: center">
+                      <p>Guidance on terminology, application, and reporting of citation searching: the TARCiS statement</p>
+                      <img src="img/Hirt.2024.BMJ.TARCiS.F1.large.jpg" style="width: 476px; height: 605px;">
+                    </div>
+                  </template>
+                </b-tooltip>
+                (RICS). It is faciliated by a custom internal API processing <a href="https://openalex.org/" target="_blank">OpenAlex citation data</a>. For details please read our <a href="https://doi.org/10.17605/OSF.IO/NPM2E" target="_blank">study protocol</a>.
+              </p>
+              <p>
+                The frontend is based on <a href="https://localcitationnetwork.github.io">Local Citation Network</a>, an existing open source web app for direct citation searching. Below is its FAQ.
+              </p>
+            </div>
+          </b-collapse>
           <b-collapse id="about" :open="indexFAQ.includes('about')" @open="indexFAQ = 'about'" animation="none">
             <div slot="trigger" slot-scope="props" class="card-header" role="buton">
               <h4 class="card-header-title">What is Local Citation Network about?</h4>
